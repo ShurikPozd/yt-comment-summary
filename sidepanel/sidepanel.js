@@ -428,14 +428,15 @@ let globalSearchResults = [];
 function renderSearchResults() {
   const wrap = $("search-results");
   const info = $("search-info");
-  if (!globalSearchResults.length) {
+  const items = (globalSearchResults && globalSearchResults.items) || [];
+  if (!items.length) {
     wrap.innerHTML = '<div class="placeholder">Введи запрос и нажми «Найти».</div>';
     info.textContent = "";
     return;
   }
   const q = $("search-input").value.trim();
   info.textContent = globalSearchResults.info || "";
-  wrap.innerHTML = globalSearchResults.items
+  wrap.innerHTML = items
     .map(
       (c) => `<div class="comment-card">
         <img class="avatar" src="${esc(c.avatar || "")}" onerror="this.style.visibility='hidden'" alt="" loading="lazy" />
