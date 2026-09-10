@@ -572,20 +572,28 @@ async function refreshFromActiveTab() {
     renderBottomMatters();
     return;
   }
-  try {
-    const reply = await chrome.tabs.sendMessage(tab.id, { type: "yt:meta-query" });
-    if (reply?.videoId) {
-      await loadFor(reply.videoId);
-      if (reply.meta) {
-        state.meta = reply.meta;
-        await chrome.storage.session.set({ [`meta:${reply.videoId}`]: reply.meta });
-        renderHeader();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const reply = await chrome.tabs.sendMessage(tab.id, { type: "yt:meta-query" });
+      if (reply?.videoId) {
+        await loadFor(reply.videoId);
+        if (reply.meta) {
+          state.meta = reply.meta;
+          await chrome.storage.session.set({ [`meta:${reply.videoId}`]: reply.meta });
+          renderHeader();
+        }
+        return;
       }
+    } catch (e) {
+      // контент-скрипт ещё не инициализирован — пробуем ещё пару раз
+      await sleep(700);
     }
-  } catch (e) {
-    // контент-скрипт ещё не инициализирован — попробуем позже
-    setTimeout(refreshFromActiveTab, 800);
   }
+  // контент-скрипт так и не ответил: расширение установлено/обновлено после открытия вкладки
+  renderBottomMatters();
+  const el = $("empty-state");
+  el.innerHTML =
+    'Контент-скрипт не подключился к этой вкладке.<br>Перезагрузи страницу видео (F5), чтобы начать сбор комментариев.';
 }
 
 // ---------------- Инициализация ----------------
