@@ -31,11 +31,18 @@
   }
 
   async function sessionGet(keys) {
-    const obj = await chrome.storage.session.get(keys);
-    return obj;
+    try {
+      return await chrome.storage.session.get(keys);
+    } catch (e) {
+      return await chrome.storage.local.get(keys);
+    }
   }
   async function sessionSet(patch) {
-    await chrome.storage.session.set(patch);
+    try {
+      await chrome.storage.session.set(patch);
+    } catch (e) {
+      await chrome.storage.local.set(patch);
+    }
   }
 
   // ---------------- Метаданные видео/канала из DOM ----------------
