@@ -131,7 +131,7 @@ function renderBottomMatters() {
   $("empty-state").classList.toggle("hidden", Boolean(state.videoId));
   $("video-header").classList.toggle("hidden", !state.videoId);
   $("collect-bar").classList.toggle("hidden", !state.videoId);
-  $("tabs").classList.toggle("hidden", !state.videoId);
+  $("tabs").classList.remove("hidden");
   if (!state.videoId) return;
   $("btn-analyze").disabled = state.analyzing;
 }
@@ -181,6 +181,7 @@ function setTab(name) {
   if (name === "summary") renderSummary();
   if (name === "comments") renderComments();
   if (name === "search") renderSearchResults();
+  if (name === "settings") fillSettingsFields();
 }
 
 // ---------------- Сводка ----------------
