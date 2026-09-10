@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="video-header" class="hidden">
+        <div class="thumb-wrap">
+          <img id="thumbnail" alt="превью" />
+          <div class="thumb-actions">
+            <button id="btn-download-thumb" title="Скачать превью (имя по шаблону)">⬇</button>
+            <button id="btn-open-video" title="Открыть видео">↗</button>
+          </div>
+        </div>
+        <div class="video-info">
+          <div id="video-title" class="video-title"></div>
+          <div id="channel-row" class="channel-row">
+            <img id="channel-avatar" alt="" />
+            <a id="channel-name" class="channel-name" href="#" target="_blank" rel="noreferrer"></a>
+            <span id="channel-subs" class="channel-subs"></span>
+          </div>
+        </div>
+      </header>
+
+      <div id="empty-state" class="empty">
+        <div class="empty-icon">💬</div>
+        Открой страницу с видео на YouTube, и комментарии появятся здесь.
+      </div>
+
+      <section id="collect-bar" class="toolbar hidden">
+        <button id="btn-analyze" class="primary">🧠 Анализировать</button>
+        <button id="btn-restart" title="Собрать комментарии заново">🔄</button>
+        <span id="collect-status" class="status"></span>
+      </section>
+
+      <nav id="tabs" class="tabs hidden">
+        <button data-tab="summary" class="tab active">Сводка</button>
+        <button data-tab="topics" class="tab">Темы</button>
+        <button data-tab="search" class="tab">Поиск</button>
+        <button data-tab="comments" class="tab">Комментарии</button>
+        <button id="btn-settings" class="tab settings-tab" title="Настройки">⚙️</button>
+      </nav>
+
+      <main id="content">
+        <div id="view-summary" class="view active">
+          <div id="summary-placeholder" class="placeholder">Нажми «Анализировать», чтобы получить сводку обсуждения.</div>
+          <div id="summary-sentiment" class="hidden"></div>
+          <div id="summary-text" class="summary-text"></div>
+          <div id="summary-points"></div>
+          <div id="summary-notable"></div>
+        </div>
+
+        <div id="view-topics" class="view">
+          <div id="topics-empty" class="placeholder">Темы появятся после анализа.</div>
+          <div id="topics-list"></div>
+        </div>
+
+        <div id="view-search" class="view">
+          <div class="search-row">
+            <input id="search-input" type="text" placeholder="Тема или ключевое слово…" autocomplete="off" />
+            <button id="btn-search" class="primary">Найти</button>
+          </div>
+          <div class="search-modes">
+            <label><input type="radio" name="mode" value="text" checked /> по тексту</label>
+            <label><input type="radio" name="mode" value="ai" /> по смыслу (ИИ)</label>
+          </div>
+          <div id="search-info" class="hint"></div>
+          <div id="search-results"></div>
+        </div>
+
+        <div id="view-comments" class="view">
+          <div class="comments-tools">
+            <span id="comments-count" class="hint"></span>
+            <div class="chip-row">
+              <button id="chip-all" class="chip active">Все</button>
+              <button id="chip-popular" class="chip">По лайкам</button>
+            </div>
+          </div>
+          <div id="comments-list"></div>
+        </div>
+
+        <div id="view-settings" class="view">
+          <div class="settings-block">
+            <h3>Прокси (твой сервер)</h3>
+            <label>URL сервера
+              <input id="set-base-url" type="text" placeholder="https://my-bot.onrender.com" spellcheck="false" />
+            </label>
+            <label>Секрет (EXT_SECRET из .env бота)
+              <input id="set-token" type="password" spellcheck="false" />
+            </label>
+            <label>Модель Groq
+              <input id="set-model" type="text" value="qwen/qwen3.6-27b" spellcheck="false" />
+            </label>
+            <p class="hint">Расширение зовёт <code>{URL}/api/chat</code> с заголовком <code>X-Sec-Token</code>. Ключ Groq хранится на сервере и не попадает в браузер.</p>
+            <button id="btn-test" class="ghost">Проверить связь</button>
+            <span id="test-result"></span>
+          </div>
+
+          <div class="settings-block">
+            <h3>Сбор и анализ</h3>
+            <label>Максимум комментариев
+              <input id="set-max" type="number" min="10" max="2000" step="10" value="300" />
+            </label>
+            <label>Язык сводки
+              <select id="set-lang">
+                <option value="ru">Русский</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>Режим сбора
+              <select id="set-mode">
+                <option value="auto">Авто (API → DOM)</option>
+                <option value="innerTube">Только API (InnerTube)</option>
+                <option value="dom">Только со страницы (DOM)</option>
+              </select>
+            </label>
+            <label>Шаблон имени превью
+              <input id="set-thumb-template" type="text" value="{title} - {channel}" spellcheck="false" />
+              <span class="hint">Доступно: <code>{title}</code> <code>{channel}</code> <code>{videoid}</code>. Кнопка помечает «(1)», «(2)» при повторах.</span>
+            </label>
+          </div>
+
+          <div class="settings-block">
+            <button id="btn-save-settings" class="primary">Сохранить</button>
+            <button id="btn-settings-back" class="ghost">Назад</button>
+            <span id="settings-status"></span>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
