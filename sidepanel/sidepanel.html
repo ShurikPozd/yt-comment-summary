@@ -102,7 +102,7 @@
           <div class="settings-block">
             <h3>Сбор и анализ</h3>
             <label>Максимум комментариев
-              <input id="set-max" type="number" min="10" max="2000" step="10" value="300" />
+              <input id="set-max" type="number" min="10" max="2000" step="10" value="120" />
             </label>
             <label>Язык сводки
               <select id="set-lang">
@@ -121,6 +121,16 @@
               <input id="set-thumb-template" type="text" value="{title} - {channel}" spellcheck="false" />
               <span class="hint">Доступно: <code>{title}</code> <code>{channel}</code> <code>{videoid}</code>. Кнопка помечает «(1)», «(2)» при повторах.</span>
             </label>
+            <label>Качество скачивания видео
+              <select id="set-quality">
+                <option value="best">Лучшее из доступных</option>
+                <option value="1080">1080p</option>
+                <option value="720" selected>720p</option>
+                <option value="480">480p</option>
+                <option value="360">360p</option>
+              </select>
+              <span class="hint">Через сервер скачивается с потолком ~300 МБ; если сервер недоступен — прямой поток с YouTube (poToken может ограничить).</span>
+            </label>
           </div>
 
           <div class="settings-block">
@@ -132,6 +142,7 @@
       </main>
     </div>
 
+    <script src="../local-config.js"></script>
     <script type="module" src="sidepanel.js"></script>
   </body>
 </html>

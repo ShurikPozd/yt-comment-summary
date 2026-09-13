@@ -10,7 +10,7 @@
     comments: (id) => `comments:${id}`,
     state: (id) => `collect:${id}`,
   };
-  const DEFAULT_MAX = 300;
+  const DEFAULT_MAX = 120;
 
   let currentVideoId = null;
   let collector = null; // активный сборщик (для отмены)

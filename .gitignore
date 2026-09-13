@@ -2,6 +2,8 @@
 .env
 *.pem
 *.key
+# секрет доступа к /api (EXT_SECRET) — только локально
+local-config.js
 
 # системное
 Thumbs.db

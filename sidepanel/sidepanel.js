@@ -13,6 +13,10 @@ import {
   SEARCH_SYSTEM,
   searchUser,
 } from "../prompts.js";
+import { DEFAULTS } from "../config.js";
+
+const LOCAL_CONFIG =
+  (typeof window !== "undefined" && window.__EXT_LOCAL_CONFIG__) || {};
 
 const $ = (id) => document.getElementById(id);
 const CHUNK_SIZE = 120;
@@ -54,36 +58,39 @@ async function loadSettings() {
   const obj = await chrome.storage.local.get("settings");
   state.settings = Object.assign(
     {
-      baseUrl: "",
-      token: "",
-      model: "qwen/qwen3.6-27b",
-      maxComments: 300,
-      lang: "ru",
-      collectMode: "auto",
-      thumbTemplate: "{title} - {channel}",
+      baseUrl: LOCAL_CONFIG.baseUrl || DEFAULTS.baseUrl,
+      token: LOCAL_CONFIG.token || "",
+      model: LOCAL_CONFIG.model || DEFAULTS.model,
+      maxComments: DEFAULTS.maxComments,
+      lang: DEFAULTS.lang,
+      collectMode: DEFAULTS.collectMode,
+      thumbTemplate: DEFAULTS.thumbTemplate,
+      quality: DEFAULTS.quality,
     },
     obj.settings || {}
   );
 }
 
 function fillSettingsFields() {
-  $("set-base-url").value = state.settings.baseUrl || "";
+  $("set-base-url").value = state.settings.baseUrl || DEFAULTS.baseUrl;
   $("set-token").value = state.settings.token || "";
-  $("set-model").value = state.settings.model || "";
+  $("set-model").value = state.settings.model || DEFAULTS.model;
   $("set-max").value = state.settings.maxComments;
   $("set-lang").value = state.settings.lang || "ru";
   $("set-mode").value = state.settings.collectMode || "auto";
   $("set-thumb-template").value = state.settings.thumbTemplate || "";
+  $("set-quality").value = state.settings.quality || "720";
 }
 
 function readSettingsFromFields() {
-  state.settings.baseUrl = $("set-base-url").value.trim();
+  state.settings.baseUrl = $("set-base-url").value.trim() || DEFAULTS.baseUrl;
   state.settings.token = $("set-token").value.trim();
-  state.settings.model = $("set-model").value.trim() || "qwen/qwen3.6-27b";
-  state.settings.maxComments = Math.min(2000, Math.max(10, parseInt($("set-max").value, 10) || 300));
+  state.settings.model = $("set-model").value.trim() || DEFAULTS.model;
+  state.settings.maxComments = Math.min(2000, Math.max(10, parseInt($("set-max").value, 10) || DEFAULTS.maxComments));
   state.settings.lang = $("set-lang").value;
   state.settings.collectMode = $("set-mode").value;
   state.settings.thumbTemplate = $("set-thumb-template").value.trim() || "{title} - {channel}";
+  state.settings.quality = $("set-quality").value || "720";
 }
 
 async function saveSettings(showFeedback = true) {
