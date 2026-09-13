@@ -498,6 +498,13 @@ async function runSearch() {
 
 // ---------------- Превью и канал ----------------
 
+function viewThumb() {
+  const m = state.meta;
+  if (!m?.thumbs) return;
+  const url = m.thumbs.maxres || m.thumbs.sd || m.thumbs.hq;
+  if (url) chrome.tabs.create({ url });
+}
+
 async function downloadThumb() {
   if (!state.meta) return;
   const m = state.meta;
@@ -577,8 +584,24 @@ async function tryServerDownload() {
   const qs = `id=${encodeURIComponent(state.videoId)}&quality=${encodeURIComponent(state.settings.quality || "720")}${session ? `&session=${encodeURIComponent(session)}` : ""}`;
   const url = `${baseUrl}/api/download?${qs}`;
   try {
-    const filename = sanitizeFilename(state.meta?.title || state.videoId || "video") + ".mp4";
-    await chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false });
+    // С сессией токен не нужен (session == авторизация) — chrome.downloads не умеет headers.
+    // Без сессии используем fetch+blob, чтобы передать X-Sec-Token.
+    if (session) {
+      const filename = sanitizeFilename(state.meta?.title || state.videoId || "video") + ".mp4";
+      await chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false });
+      return null;
+    }
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      return `Сервер: ${resp.status} ${detail}`;
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename="?([^";]+)"?/i);
+    const filename = sanitizeFilename(m ? m[1].replace(/\.mp4$/i, "") : (state.meta?.title || "video")) + ".mp4";
+    const dataUrl = await blobToDataURL(blob);
+    await chrome.downloads.download({ url: dataUrl, filename, conflictAction: "uniquify", saveAs: false });
     return null;
   } catch (e) {
     return "Сервер недоступен: " + (e.message || e);
@@ -715,6 +738,7 @@ function bindEvents() {
     }
   });
   $("btn-download-thumb").addEventListener("click", downloadThumb);
+  $("btn-view-thumb").addEventListener("click", viewThumb);
   $("btn-download-video").addEventListener("click", downloadVideo);
   $("btn-open-video").addEventListener("click", () => {
     if (state.meta) chrome.tabs.create({ url: state.meta.pageUrl });
