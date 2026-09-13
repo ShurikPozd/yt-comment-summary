@@ -3,7 +3,7 @@
   "name": "Сводка комментариев YouTube",
   "version": "0.1.0",
   "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео и инфо о канале.",
-  "permissions": ["storage", "sidePanel", "downloads", "tabs"],
+  "permissions": ["storage", "sidePanel", "downloads", "tabs", "cookies"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",

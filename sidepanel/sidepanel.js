@@ -544,19 +544,41 @@ async function tryServerDownload() {
   const baseUrl = (state.settings?.baseUrl || "").replace(/\/+$/, "");
   const token = state.settings?.token || "";
   if (!baseUrl || !token) return "Не задан сервер/секрет — пробую напрямую";
-  const url = `${baseUrl}/api/download?id=${encodeURIComponent(state.videoId)}&quality=${encodeURIComponent(state.settings.quality || "720")}`;
+  const headers = { "X-Sec-Token": token };
+  let session = "";
   try {
-    const resp = await fetch(url, { headers: { "X-Sec-Token": token } });
-    if (!resp.ok) {
-      const detail = await resp.text().catch(() => "");
-      return `Сервер: ${resp.status} ${detail}`;
+    // Отдаём серверу браузерные cookies YouTube (одноразовая сессия, ~30 мин) —
+    // через них yt-dlp обходит ботозащиту и скачивает даже с IP датацентра.
+    const ck = await chrome.cookies.getAll({ url: "https://www.youtube.com" });
+    if (ck.length) {
+      const r0 = await fetch(`${baseUrl}/api/download-cookies`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cookies: ck.map((c) => ({
+            name: c.name,
+            value: c.value,
+            domain: c.domain,
+            path: c.path,
+            secure: Boolean(c.secure),
+            httpOnly: Boolean(c.httpOnly),
+            expirationDate: c.expirationDate || undefined,
+          })),
+        }),
+      });
+      if (r0.ok) {
+        const j = await r0.json().catch(() => ({}));
+        session = j.session || "";
+      }
     }
-    const blob = await resp.blob();
-    const cd = resp.headers.get("Content-Disposition") || "";
-    const m = cd.match(/filename="?([^";]+)"?/i);
-    const filename = sanitizeFilename(m ? m[1].replace(/\.mp4$/i, "") : (state.meta?.title || "video")) + ".mp4";
-    const dataUrl = await blobToDataURL(blob);
-    await chrome.downloads.download({ url: dataUrl, filename, conflictAction: "uniquify", saveAs: false });
+  } catch (e) {
+    // cookies не получилось отдать (нет permission) — попробуем без них
+  }
+  const qs = `id=${encodeURIComponent(state.videoId)}&quality=${encodeURIComponent(state.settings.quality || "720")}${session ? `&session=${encodeURIComponent(session)}` : ""}`;
+  const url = `${baseUrl}/api/download?${qs}`;
+  try {
+    const filename = sanitizeFilename(state.meta?.title || state.videoId || "video") + ".mp4";
+    await chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false });
     return null;
   } catch (e) {
     return "Сервер недоступен: " + (e.message || e);
