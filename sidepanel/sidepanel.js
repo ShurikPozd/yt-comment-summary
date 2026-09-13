@@ -526,6 +526,65 @@ async function downloadThumb() {
   }
 }
 
+// ---------------- Скачивание видео ----------------
+
+async function downloadVideo() {
+  if (!state.videoId) return;
+  const q = state.settings?.quality || "720";
+  const label = q === "best" ? "лучшее качество" : `${q}p`;
+  showToast(`Готовлю видео (${label})…`);
+  const err = await tryServerDownload();
+  if (!err) return;
+  const ok = await fallbackDirectDownload(err);
+  if (!ok) showToast("Не удалось скачать видео: " + ok.message);
+  else showToast("Скачано");
+}
+
+async function tryServerDownload() {
+  const baseUrl = (state.settings?.baseUrl || "").replace(/\/+$/, "");
+  const token = state.settings?.token || "";
+  if (!baseUrl || !token) return "Не задан сервер/секрет — пробую напрямую";
+  const url = `${baseUrl}/api/download?id=${encodeURIComponent(state.videoId)}&quality=${encodeURIComponent(state.settings.quality || "720")}`;
+  try {
+    const resp = await fetch(url, { headers: { "X-Sec-Token": token } });
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => "");
+      return `Сервер: ${resp.status} ${detail}`;
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename="?([^";]+)"?/i);
+    const filename = sanitizeFilename(m ? m[1].replace(/\.mp4$/i, "") : (state.meta?.title || "video")) + ".mp4";
+    const dataUrl = await blobToDataURL(blob);
+    await chrome.downloads.download({ url: dataUrl, filename, conflictAction: "uniquify", saveAs: false });
+    return null;
+  } catch (e) {
+    return "Сервер недоступен: " + (e.message || e);
+  }
+}
+
+async function fallbackDirectDownload(hint) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return "нет активной вкладки";
+    const reply = await chrome.tabs.sendMessage(tab.id, {
+      type: "yt:player-stream",
+      videoId: state.videoId,
+      quality: state.settings?.quality || "720",
+    });
+    if (!reply?.streamUrl) return "прямой поток не найден (" + (hint || "") + ")";
+    await chrome.downloads.download({
+      url: reply.streamUrl,
+      filename: sanitizeFilename(state.meta?.title || state.videoId) + ".mp4",
+      conflictAction: "uniquify",
+      saveAs: false,
+    });
+    return true;
+  } catch (e) {
+    return "прямой поток: " + (e.message || e);
+  }
+}
+
 function blobToDataURL(blob) {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -576,7 +635,7 @@ function onRuntimeMessage(msg) {
 
 async function refreshFromActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id || !/^https:\/\/(www|m)\.youtube\.com\/watch/.test(tab.url || "")) {
+  if (!tab?.id || !/^https:\/\/(www|m)\.youtube\.com\/(watch|shorts)/.test(tab.url || "")) {
     renderBottomMatters();
     return;
   }
@@ -634,6 +693,7 @@ function bindEvents() {
     }
   });
   $("btn-download-thumb").addEventListener("click", downloadThumb);
+  $("btn-download-video").addEventListener("click", downloadVideo);
   $("btn-open-video").addEventListener("click", () => {
     if (state.meta) chrome.tabs.create({ url: state.meta.pageUrl });
   });

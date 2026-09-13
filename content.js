@@ -19,7 +19,10 @@
 
   function videoIdFromUrl() {
     const m = location.pathname.match(/^\/watch/) && new URLSearchParams(location.search).get("v");
-    return m || null;
+    if (m) return m;
+    const s = location.pathname.match(/^\/shorts\/([A-Za-z0-9_-]{6,20})/);
+    if (s) return s[1];
+    return null;
   }
 
   function send(payload) {
@@ -52,13 +55,18 @@
     if (!id) return null;
     const titleEl =
       document.querySelector("ytd-watch-metadata h1 yt-formatted-string") ||
-      document.querySelector("h1.title.style-scope");
+      document.querySelector("h1.title.style-scope") ||
+      document.querySelector("ytd-reel-video-renderer h1 yt-formatted-string") ||
+      document.querySelector("ytd-reel-video-renderer h1");
     const title = (titleEl?.textContent || document.title.replace(" - YouTube", "") || "").trim();
 
     const owner = document.querySelector("#owner") || document.querySelector("ytd-watch-metadata #owner");
     const nameEl =
       owner?.querySelector("ytd-channel-name a") ||
-      document.querySelector("ytd-channel-name a");
+      document.querySelector("ytd-channel-name a") ||
+      document.querySelector("ytd-reel-video-renderer ytd-channel-name a") ||
+      document.querySelector("#channel-name a") ||
+      document.querySelector("#channel-name");
     const channelName = (nameEl?.textContent || "").trim();
     const channelUrl = (nameEl?.getAttribute("href") || "").trim() || null;
 
@@ -70,7 +78,9 @@
     const avatarEl =
       owner?.querySelector("ytd-video-owner-renderer #img") ||
       owner?.querySelector("yt-avatar img") ||
-      document.querySelector("#owner yt-avatar img");
+      document.querySelector("#owner yt-avatar img") ||
+      document.querySelector("ytd-reel-video-renderer yt-avatar img") ||
+      document.querySelector("yt-avatar img");
     const channelAvatar = (avatarEl?.getAttribute("src") || "").split("=")[0] || null;
 
     const thumbs = {
@@ -276,6 +286,38 @@
     }
     if (!resp.ok) throw new Error("innerTube:" + resp.status);
     return resp.json();
+  }
+
+  async function fetchPlayerStream(videoId, quality) {
+    const resp = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-YouTube-Client-Name": "1",
+        "X-YouTube-Client-Version": CLIENT_VERSION,
+      },
+      credentials: "include",
+      body: JSON.stringify({ context: baseContext(), videoId }),
+    });
+    if (!resp.ok) throw new Error("player:" + resp.status);
+    const data = await resp.json();
+    const formats = (data.streamingData?.formats || []).concat(data.streamingData?.adaptiveFormats || []);
+    if (!formats.length) throw new Error("noFormats");
+    const want = quality === "best" ? 999999 : Number(quality) || 999999;
+    const withAudio = formats
+      .filter((f) => f.url && f.mimeType && f.mimeType.includes("audio"))
+      .sort((a, b) => heightOf(b) - heightOf(a));
+    const any = formats
+      .filter((f) => f.url && f.mimeType && f.mimeType.includes("mp4"))
+      .sort((a, b) => heightOf(b) - heightOf(a));
+    const pool = withAudio.length ? withAudio : any;
+    if (!pool.length) throw new Error("noStream");
+    const target = pool.find((f) => heightOf(f) <= want) || pool[pool.length - 1];
+    return target.url || null;
+
+    function heightOf(f) {
+      return Number(f.height) || 0;
+    }
   }
 
   async function collectViaInnerTube(videoId, limit, onBatch) {
@@ -496,6 +538,12 @@
         void storeMeta(meta);
         sendResponse({ ok: true, meta });
         return false;
+      }
+      case "yt:player-stream": {
+        void fetchPlayerStream(msg.videoId, msg.quality || "720")
+          .then((streamUrl) => sendResponse({ ok: Boolean(streamUrl), streamUrl: streamUrl || "" }))
+          .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true; // async
       }
       default:
         break;
