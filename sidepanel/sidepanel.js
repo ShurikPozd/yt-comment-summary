@@ -557,7 +557,10 @@ function downloadWithStatus({ url, filename }) {
       if (delta.id !== dlId) return;
       if (delta.state?.current === "complete") finish({ ok: true });
       else if (delta.state?.current === "interrupted") {
-        finish({ ok: false, error: delta.error?.current ? "загрузка прервана сервером" : "загрузка прервана" });
+        const why = delta.error?.current
+          ? "загрузка прервана: " + (delta.error.current === "SERVER_BAD_CONTENT" ? "сервер вернул не-видео" : delta.error.current)
+          : "загрузка прервана";
+        finish({ ok: false, error: why });
       }
     };
     let dlId;
@@ -577,17 +580,19 @@ async function downloadVideo() {
   const label = q === "best" ? "лучшее качество" : `${q}p`;
   showToast(`Готовлю видео (${label})…`);
   const filename = sanitizeFilename(state.meta?.title || state.videoId) + ".mp4";
-  const sr = await tryServerDownload(filename);
-  if (sr.ok) {
-    showToast("Скачано");
-    return;
-  }
-  const dr = await fallbackDirectDownload(filename, sr.error);
+  // Сначала прямой путь: форматы берём из живого playerResponse страницы —
+  // там уже есть poToken, поэтому потоки валидные и качаются мгновенно.
+  const dr = await fallbackDirectDownload(filename);
   if (dr.ok) {
     showToast("Скачано (напрямую)");
     return;
   }
-  showToast("Видео не скачалось: " + (dr.error || sr.error));
+  const sr = await tryServerDownload(filename);
+  if (sr.ok) {
+    showToast("Скачано (сервер)");
+    return;
+  }
+  showToast("Видео не скачалось: " + (sr.error || dr.error));
 }
 
 async function tryServerDownload(filename) {
@@ -645,6 +650,15 @@ async function tryServerDownload(filename) {
         : "не найдены cookies YouTube (открой видео будучи залогиненным в YouTube)";
       return { ok: false, error: why };
     }
+    // Probe: узнаём у сервера наличие/файл ДО скачивания. Если сервер вернёт
+    // ошибку — у chrome.downloads не будет возможности сохранить JSON как файл.
+    const probe = await fetch(`${url}&probe=1`, { signal: AbortSignal.timeout(90000) });
+    if (!probe.ok) {
+      const body = await probe.json().catch(() => ({}));
+      const reason = body?.detail || body?.error || `HTTP ${probe.status}`;
+      return { ok: false, error: `сервер: ${reason}` };
+    }
+    const meta = await probe.json().catch(() => ({}));
     return await downloadWithStatus({ url, filename });
   } catch (e) {
     return { ok: false, error: "Сервер недоступен: " + (e.message || e) };
