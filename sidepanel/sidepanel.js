@@ -551,6 +551,11 @@ function downloadWithStatus({ url, filename }) {
       done = true;
       chrome.downloads.onChanged.removeListener(onChange);
       clearTimeout(timer);
+      // При неудаче подчищаем сохранённый stub (ботозащита/ошибка сервера),
+      // чтобы на диске не оставался мусорный .txt/.json.
+      if (!r.ok && typeof dlId === "number") {
+        chrome.downloads.erase({ id: dlId }).catch(() => {});
+      }
       resolve(r);
     };
     const onChange = (delta) => {
@@ -637,7 +642,9 @@ async function tryServerDownload(filename) {
       }
     }
   } catch (e) {
-    // cookies не получилось отдать (нет permission) — попробуем без них
+    // cookies API недоступен — перезагрузи расширение в chrome://extensions,
+    // чтобы Chrome перечитал permission "cookies"/host_permissions.
+    cookiesFound = false;
   }
   const qs = `id=${encodeURIComponent(state.videoId)}&quality=${encodeURIComponent(state.settings.quality || "720")}${session ? `&session=${encodeURIComponent(session)}` : ""}`;
   const url = `${baseUrl}/api/download?${qs}`;
@@ -647,7 +654,7 @@ async function tryServerDownload(filename) {
     if (!session) {
       const why = cookiesFound
         ? "сервер не выдал сессию (попробуй ещё раз; если повторяется — проверь «Проверить связь»)"
-        : "не найдены cookies YouTube (открой видео будучи залогиненным в YouTube)";
+        : "расширению не доступны cookies YouTube — перезагрузи его в chrome://extensions (кнопка ↻), открой видео, будучи залогиненным, и нажми 🎬 ещё раз";
       return { ok: false, error: why };
     }
     // Probe: узнаём у сервера наличие/файл ДО скачивания. Если сервер вернёт
@@ -665,7 +672,7 @@ async function tryServerDownload(filename) {
   }
 }
 
-async function fallbackDirectDownload(filename, hint) {
+async function fallbackDirectDownload(filename) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return { ok: false, error: "нет активной вкладки" };
@@ -674,11 +681,20 @@ async function fallbackDirectDownload(filename, hint) {
       videoId: state.videoId,
       quality: state.settings?.quality || "720",
     });
-    if (!reply?.streamUrl) {
-      const why = reply?.error ? `причина: ${reply.error}` : hint ? `(${hint})` : "";
+    const streams = Array.isArray(reply?.streams) ? reply.streams : [];
+    if (!streams.length) {
+      const why = reply?.error ? `причина: ${reply.error}` : "";
       return { ok: false, error: "прямой поток не найден" + (why ? " — " + why : "") };
     }
-    return await downloadWithStatus({ url: reply.streamUrl, filename });
+    // Пробуем кандидатов по очереди: часть из них YouTube может отдавать
+    // заглушкой (ботозащита), тогда пробуем следующий. Мусорные файлы чистим.
+    for (let i = 0; i < streams.length; i++) {
+      const r = await downloadWithStatus({ url: streams[i], filename });
+      if (r.ok) return { ok: true };
+      if (r.error && r.error.includes("BAD_CONTENT")) continue;
+      return { ok: false, error: r.error };
+    }
+    return { ok: false, error: "все потоки вернули bot-заглушку" };
   } catch (e) {
     return { ok: false, error: "прямой поток: " + (e.message || e) };
   }

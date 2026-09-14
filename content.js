@@ -315,12 +315,19 @@
   }
 
   async function fetchPlayerStream(videoId, quality) {
+    // Собираем список кандидатов-URL из всех доступных источников.
+    // YouTube может дать ботозащиту (текст/HTML) на один URL, а на другой — работать.
+    const candidates = [];
+    const push = (url) => {
+      if (url && !candidates.includes(url)) candidates.push(url);
+    };
+
     // 1) Прямой путь: форматы уже лежат в playerResponse открытой страницы.
-    const pageFormats = await getPageFormatsFor(videoId);
-    if (pageFormats.length) {
-      const stream = pickStream(pageFormats, quality);
-      if (stream?.url) return stream.url;
-    }
+    try {
+      const pageFormats = await getPageFormatsFor(videoId);
+      const pageBest = pickStreams(pageFormats, quality);
+      pageBest.forEach((s) => push(s?.url));
+    } catch (e) {}
 
     // 2) Fallback клиенты Innertube (WEB/ANDROID/TVHTML5) — обход без poToken.
     const clients = [
@@ -367,22 +374,23 @@
         const data = await resp.json();
         const formats = (data.streamingData?.formats || []).concat(data.streamingData?.adaptiveFormats || []);
         if (!formats.length) throw new Error("noFormats");
-        const stream = pickStream(formats, quality);
-        if (!stream?.url) throw new Error("noStream");
-        return stream.url;
+        pickStreams(formats, quality).forEach((s) => push(s?.url));
       } catch (e) {
         lastErr = String(e?.message || e);
       }
     }
-    throw new Error(lastErr);
+
+    if (!candidates.length) throw new Error(lastErr);
+    return candidates;
 
     function heightOf(f) {
       return Number(f.height) || 0;
     }
   }
 
-  // Выбирает лучший поток под качество: предпочитает аудио-совмещённый (mp4).
-  function pickStream(formats, quality) {
+  // Возвращает до 2 лучших потоков под качество (аудио-совмещённый mp4 основным,
+  // запасной — любой mp4), чтобы при ботозащите был альтернативный URL.
+  function pickStreams(formats, quality) {
     const want = quality === "best" ? 999999 : Number(quality) || 999999;
     const withAudio = formats
       .filter((f) => f.url && f.mimeType && f.mimeType.includes("audio"))
@@ -391,8 +399,14 @@
       .filter((f) => f.url && f.mimeType && f.mimeType.includes("mp4"))
       .sort((a, b) => heightOf(b) - heightOf(a));
     const pool = withAudio.length ? withAudio : any;
-    if (!pool.length) return null;
-    return pool.find((f) => heightOf(f) <= want) || pool[pool.length - 1];
+    const out = [];
+    if (pool.length) {
+      const first = pool.find((f) => heightOf(f) <= want) || pool[pool.length - 1];
+      out.push(first);
+      const second = pool.find((f) => f !== first && heightOf(f) !== heightOf(first));
+      if (second) out.push(second);
+    }
+    return out;
 
     function heightOf(f) {
       return Number(f.height) || 0;
@@ -620,7 +634,7 @@
       }
       case "yt:player-stream": {
         void fetchPlayerStream(msg.videoId, msg.quality || "720")
-          .then((streamUrl) => sendResponse({ ok: Boolean(streamUrl), streamUrl: streamUrl || "" }))
+          .then((streams) => sendResponse({ ok: streams.length > 0, streams }))
           .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
         return true; // async
       }
