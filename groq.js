@@ -152,15 +152,20 @@ export class GroqProxy {
           }
           if (resp.status === 502) {
             const data = await resp.json().catch(() => ({}));
-            throw new Error(data.error || "LLM не ответил (502) — возможно rate-limit Groq.");
+            const reason = data.detail ? ` (${data.detail})` : "";
+            throw new Error((data.error || "LLM не ответил (502)") + reason);
           }
           if (!resp.ok) throw new Error("Прокси ответил " + resp.status);
           const data = await resp.json();
           if (!data || typeof data.content !== "string") throw new Error("Пустой ответ прокси.");
           return data.content;
         } catch (e) {
-          lastErr = e;
-          await sleep(900 * (attempt + 1));
+          lastErr = /Failed to fetch|fetch failed/i.test(String(e?.message || e))
+            ? new Error(
+                "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй."
+              )
+            : e;
+          await sleep(3000 * (attempt + 1));
         }
       }
       throw lastErr;

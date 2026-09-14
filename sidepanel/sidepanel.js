@@ -596,29 +596,39 @@ async function tryServerDownload(filename) {
   if (!baseUrl || !token) return { ok: false, error: "Не задан сервер/секрет" };
   const headers = { "X-Sec-Token": token };
   let session = "";
+  let cookiesFound = false;
   try {
     // Отдаём серверу браузерные cookies YouTube (одноразовая сессия, ~30 мин) —
     // через них yt-dlp обходит ботозащиту и скачивает даже с IP датацентра.
     const ck = await chrome.cookies.getAll({ url: "https://www.youtube.com" });
+    cookiesFound = Boolean(ck.length);
     if (ck.length) {
-      const r0 = await fetch(`${baseUrl}/api/download-cookies`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cookies: ck.map((c) => ({
-            name: c.name,
-            value: c.value,
-            domain: c.domain,
-            path: c.path,
-            secure: Boolean(c.secure),
-            httpOnly: Boolean(c.httpOnly),
-            expirationDate: c.expirationDate || undefined,
-          })),
-        }),
-      });
-      if (r0.ok) {
-        const j = await r0.json().catch(() => ({}));
-        session = j.session || "";
+      // Cold-start Render держится до ~50 с, поэтому пробуем до 3 раз.
+      for (let attempt = 0; attempt < 3 && !session; attempt++) {
+        try {
+          const r0 = await fetch(`${baseUrl}/api/download-cookies`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              cookies: ck.map((c) => ({
+                name: c.name,
+                value: c.value,
+                domain: c.domain,
+                path: c.path,
+                secure: Boolean(c.secure),
+                httpOnly: Boolean(c.httpOnly),
+                expirationDate: c.expirationDate || undefined,
+              })),
+            }),
+          });
+          if (r0.ok) {
+            const j = await r0.json().catch(() => ({}));
+            session = j.session || "";
+          }
+        } catch (e) {
+          // transient-сбой сети — повторим
+        }
+        if (!session) await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
       }
     }
   } catch (e) {
@@ -629,7 +639,12 @@ async function tryServerDownload(filename) {
   try {
     // С сессией токен не нужен (session == авторизация) — chrome.downloads не умеет headers.
     // Без session сервер ответит 403, поэтому сразу считаем ошибкой.
-    if (!session) return { ok: false, error: "не удалось получить сессию сервера" };
+    if (!session) {
+      const why = cookiesFound
+        ? "сервер не выдал сессию (попробуй ещё раз; если повторяется — проверь «Проверить связь»)"
+        : "не найдены cookies YouTube (открой видео будучи залогиненным в YouTube)";
+      return { ok: false, error: why };
+    }
     return await downloadWithStatus({ url, filename });
   } catch (e) {
     return { ok: false, error: "Сервер недоступен: " + (e.message || e) };
@@ -645,7 +660,10 @@ async function fallbackDirectDownload(filename, hint) {
       videoId: state.videoId,
       quality: state.settings?.quality || "720",
     });
-    if (!reply?.streamUrl) return { ok: false, error: "прямой поток не найден (" + (hint || "") + ")" };
+    if (!reply?.streamUrl) {
+      const why = reply?.error ? `причина: ${reply.error}` : hint ? `(${hint})` : "";
+      return { ok: false, error: "прямой поток не найден" + (why ? " — " + why : "") };
+    }
     return await downloadWithStatus({ url: reply.streamUrl, filename });
   } catch (e) {
     return { ok: false, error: "прямой поток: " + (e.message || e) };
