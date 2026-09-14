@@ -686,17 +686,50 @@ async function fallbackDirectDownload(filename) {
       const why = reply?.error ? `причина: ${reply.error}` : "";
       return { ok: false, error: "прямой поток не найден" + (why ? " — " + why : "") };
     }
-    // Пробуем кандидатов по очереди: часть из них YouTube может отдавать
-    // заглушкой (ботозащита), тогда пробуем следующий. Мусорные файлы чистим.
+    // Пробуем кандидатов по очереди. Если googlevideo отклонил прямой
+    // chrome.downloads (SERVER_FORBIDDEN) или отдал заглушку — тот же URL
+    // качаем через fetch в контексте расширения и сохраняем blob-URL.
+    let lastErr = "";
     for (let i = 0; i < streams.length; i++) {
       const r = await downloadWithStatus({ url: streams[i], filename });
       if (r.ok) return { ok: true };
-      if (r.error && r.error.includes("BAD_CONTENT")) continue;
-      return { ok: false, error: r.error };
+      lastErr = r.error;
+      if (r.error && (r.error.includes("FORBIDDEN") || r.error.includes("BAD_CONTENT") || r.error.includes("не-видео"))) {
+        const viaBlob = await downloadStreamViaBlob(streams[i], filename);
+        if (viaBlob.ok) return { ok: true };
+        lastErr = viaBlob.error;
+      } else {
+        return { ok: false, error: r.error };
+      }
     }
-    return { ok: false, error: "все потоки вернули bot-заглушку" };
+    return { ok: false, error: lastErr || "все потоки недоступны" };
   } catch (e) {
     return { ok: false, error: "прямой поток: " + (e.message || e) };
+  }
+}
+
+// Скачивает поток через fetch (контекст расширения, есть host_permissions на
+// *.googlevideo.com) и сохраняет его как blob-URL. googlevideo часто принимает
+// fetch, но отворачивается от прямого chrome.downloads.
+async function downloadStreamViaBlob(url, filename) {
+  try {
+    const resp = await fetch(url, {
+      credentials: "include",
+      referrer: "https://www.youtube.com/",
+      signal: AbortSignal.timeout(600000),
+    });
+    if (!resp.ok) return { ok: false, error: `fetch потока: HTTP ${resp.status}` };
+    const blob = await resp.blob();
+    if (!blob.size) return { ok: false, error: "поток пустой" };
+    const blobUrl = URL.createObjectURL(blob);
+    try {
+      const r = await downloadWithStatus({ url: blobUrl, filename });
+      return r;
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    }
+  } catch (e) {
+    return { ok: false, error: "fetch потока: " + (e.message || e) };
   }
 }
 
