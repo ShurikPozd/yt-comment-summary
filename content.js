@@ -288,9 +288,41 @@
     return resp.json();
   }
 
+  // Просит мост (main world) вернуть streamingData текущего видео со страницы.
+  // Там уже есть poToken/сигнатуры, выданные реальному плееру — это самым
+  // надёжный и легальный способ получить рабочие URL форматов.
+  function getPageFormatsFor(videoId, timeoutMs = 3000) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (val) => {
+        if (done) return;
+        done = true;
+        window.removeEventListener("message", onMsg);
+        clearTimeout(timer);
+        resolve(val);
+      };
+      const onMsg = (e) => {
+        if (e.source !== window || !e.data) return;
+        if (e.data.type !== "ytc:streams") return;
+        const sd = e.data.data;
+        const list = sd ? (sd.formats || []).concat(sd.adaptiveFormats || []) : [];
+        finish(list);
+      };
+      const timer = setTimeout(() => finish([]), timeoutMs);
+      window.addEventListener("message", onMsg);
+      window.postMessage({ type: "ytc:get-streams", videoId }, "*");
+    });
+  }
+
   async function fetchPlayerStream(videoId, quality) {
-    // Ботозащита YouTube: веб-клиент WEB без poToken может не отдать форматы.
-    // Пробуем по очереди разных клиентов Innertube (известные обходы в расширениях).
+    // 1) Прямой путь: форматы уже лежат в playerResponse открытой страницы.
+    const pageFormats = await getPageFormatsFor(videoId);
+    if (pageFormats.length) {
+      const stream = pickStream(pageFormats, quality);
+      if (stream?.url) return stream.url;
+    }
+
+    // 2) Fallback клиенты Innertube (WEB/ANDROID/TVHTML5) — обход без poToken.
     const clients = [
       {
         clientName: "WEB",
@@ -335,22 +367,32 @@
         const data = await resp.json();
         const formats = (data.streamingData?.formats || []).concat(data.streamingData?.adaptiveFormats || []);
         if (!formats.length) throw new Error("noFormats");
-        const want = quality === "best" ? 999999 : Number(quality) || 999999;
-        const withAudio = formats
-          .filter((f) => f.url && f.mimeType && f.mimeType.includes("audio"))
-          .sort((a, b) => heightOf(b) - heightOf(a));
-        const any = formats
-          .filter((f) => f.url && f.mimeType && f.mimeType.includes("mp4"))
-          .sort((a, b) => heightOf(b) - heightOf(a));
-        const pool = withAudio.length ? withAudio : any;
-        if (!pool.length) throw new Error("noStream");
-        const target = pool.find((f) => heightOf(f) <= want) || pool[pool.length - 1];
-        return target.url || null;
+        const stream = pickStream(formats, quality);
+        if (!stream?.url) throw new Error("noStream");
+        return stream.url;
       } catch (e) {
         lastErr = String(e?.message || e);
       }
     }
     throw new Error(lastErr);
+
+    function heightOf(f) {
+      return Number(f.height) || 0;
+    }
+  }
+
+  // Выбирает лучший поток под качество: предпочитает аудио-совмещённый (mp4).
+  function pickStream(formats, quality) {
+    const want = quality === "best" ? 999999 : Number(quality) || 999999;
+    const withAudio = formats
+      .filter((f) => f.url && f.mimeType && f.mimeType.includes("audio"))
+      .sort((a, b) => heightOf(b) - heightOf(a));
+    const any = formats
+      .filter((f) => f.url && f.mimeType && f.mimeType.includes("mp4"))
+      .sort((a, b) => heightOf(b) - heightOf(a));
+    const pool = withAudio.length ? withAudio : any;
+    if (!pool.length) return null;
+    return pool.find((f) => heightOf(f) <= want) || pool[pool.length - 1];
 
     function heightOf(f) {
       return Number(f.height) || 0;

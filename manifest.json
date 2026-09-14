@@ -18,6 +18,12 @@
       "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
+      "js": ["content-bridge.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
     }
   ],
   "side_panel": {
