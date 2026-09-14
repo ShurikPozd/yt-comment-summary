@@ -181,4 +181,94 @@ export class GroqProxy {
     );
     return Boolean(out && out.trim());
   }
+
+  /**
+   * Стриминговая версия chat(): сервер отдаёт SSE-события {"delta": "…"},
+   * onDelta вызывается с накопленным текстом по мере поступления.
+   * Возвращает полный текст; при ошибке бросает.
+   */
+  chatStream(messages, { jsonMode = false, maxTokens = 800, temperature = 0.1, timeoutMs = 150000 } = {}, onDelta) {
+    if (!this.configured) throw new Error("Настройки прокси не заполнены (URL/секрет/модель).");
+    return this.queue.push(async () => {
+      let lastErr = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          let resp;
+          try {
+            resp = await fetch(this.endpoint(), {
+              method: "POST",
+              headers: this._headers(),
+              signal: controller.signal,
+              body: JSON.stringify({
+                messages,
+                model: this.model,
+                json_mode: jsonMode,
+                max_tokens: Math.max(1, Math.min(maxTokens, 2000)),
+                temperature,
+                stream: true,
+              }),
+            });
+          } finally {
+            clearTimeout(timer);
+          }
+          if (resp.status === 403) {
+            throw new Error("Отказано прокси (403): проверьте секрет / доступ к серверу.");
+          }
+          if (resp.status === 400 || resp.status === 413) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || "Прокси отклонил запрос (" + resp.status + ").");
+          }
+          if (!resp.ok) throw new Error("Прокси ответил " + resp.status);
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          let full = "";
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buf.indexOf("\n")) >= 0) {
+              const line = buf.slice(0, idx).replace(/\r$/, "").trim();
+              buf = buf.slice(idx + 1);
+              if (!line.startsWith("data:")) continue;
+              const payload = line.slice(5).trim();
+              if (!payload || payload === "[DONE]") continue;
+              let evt;
+              try {
+                evt = JSON.parse(payload);
+              } catch {
+                continue;
+              }
+              if (evt.error) {
+                throw new Error(friendlyLLMError(evt));
+              }
+              if (typeof evt.delta === "string") {
+                full += evt.delta;
+                onDelta?.(full);
+              }
+            }
+          }
+          if (!full) throw new Error("Пустой ответ прокси.");
+          return full;
+        } catch (e) {
+          lastErr = /Failed to fetch|fetch failed/i.test(String(e?.message || e))
+            ? new Error(
+                "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй."
+              )
+            : e;
+          await sleep(3000 * (attempt + 1));
+        }
+      }
+      throw lastErr;
+    });
+  }
+}
+
+function friendlyLLMError(evt) {
+  let msg = "Модель не ответила (временный сбой на сервере). Попробуй ещё раз.";
+  if (evt.detail) msg = `Модель не ответила: ${evt.detail} Попробуй ещё раз.`;
+  return msg;
 }

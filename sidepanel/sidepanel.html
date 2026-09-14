@@ -33,6 +33,9 @@
 
       <section id="collect-bar" class="toolbar hidden">
         <button id="btn-analyze" class="primary">🧠 Анализировать</button>
+        <span class="max-wrap" title="Сколько комментариев собрать">
+          <input id="quick-max" type="number" min="10" max="2000" step="10" value="120" />
+        </span>
         <button id="btn-restart" title="Собрать комментарии заново">🔄</button>
         <span id="collect-status" class="status"></span>
       </section>
@@ -48,11 +51,15 @@
       <main id="content">
         <div id="view-summary" class="view active">
           <div id="summary-placeholder" class="placeholder">Нажми «Анализировать», чтобы получить сводку обсуждения.</div>
+          <div id="summary-topics" class="chip-row hidden"></div>
           <div id="summary-sentiment" class="hidden"></div>
           <div id="summary-text" class="summary-text"></div>
           <div id="summary-points"></div>
           <div id="summary-notable"></div>
-          <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку в буфер">📋 Скопировать сводку</button>
+          <div class="summary-actions">
+            <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку в буфер">📋 Скопировать</button>
+            <button id="btn-export-summary" class="ghost copy-btn hidden" title="Скачать сводку в файл .md">💾 Сохранить</button>
+          </div>
         </div>
 
         <div id="view-topics" class="view">
@@ -110,6 +117,13 @@
               <select id="set-lang">
                 <option value="ru">Русский</option>
                 <option value="en">English</option>
+              </select>
+            </label>
+            <label>Тема интерфейса
+              <select id="set-theme">
+                <option value="dark">Тёмная</option>
+                <option value="light">Светлая</option>
+                <option value="auto">Как в системе</option>
               </select>
             </label>
             <label>Режим сбора

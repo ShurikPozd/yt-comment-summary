@@ -10,10 +10,16 @@
   --chip-bg: #262626;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+body[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-2: #f2f2f2;
+  --bg-3: #e4e4e4;
+  --fg: #1a1a1a;
+  --muted: #666666;
+  --accent: #cc0033;
+  --accent-hover: #a8002a;
+  --border: #cfcfcf;
+  --chip-bg: #ececec;
 }
 
 html,
@@ -27,6 +33,7 @@ body {
   color: var(--fg);
   font-size: 13px;
   overflow: hidden;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 #app {
@@ -189,6 +196,26 @@ button.ghost {
   cursor: pointer;
 }
 
+.max-wrap {
+  flex: 0 0 auto;
+}
+
+.max-wrap input {
+  width: 62px;
+  background: var(--bg-3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 5px 6px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.max-wrap input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* Tabs */
 .tabs {
   display: flex;
@@ -342,7 +369,8 @@ ol.points li::before {
 .sentiment-legend {
   display: flex;
   gap: 14px;
-  margin-top: 6px;
+  margin-top: 8px;
+  margin-bottom: 18px;
   font-size: 11.5px;
   color: var(--muted);
 }
@@ -395,20 +423,37 @@ ol.points li::before {
   margin-left: 4px;
 }
 
+.chips-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 10px 0 8px;
+}
+
+#summary-topics {
+  margin-bottom: 4px;
+}
+
 .topic-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 6px;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .topic-item:hover {
   border-color: var(--accent);
+}
+
+.topic-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
 }
 
 .topic-item .t-name {
@@ -418,6 +463,31 @@ ol.points li::before {
 .topic-item .t-count {
   color: var(--muted);
   font-size: 12px;
+}
+
+.topic-item .t-caret {
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.topic-body {
+  border-top: 1px solid var(--border);
+  padding: 0 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.topic-body .comment-card:last-child {
+  border-bottom: none;
+}
+
+.topic-body .comment-card.secondary {
+  display: none;
+}
+
+.topic-body .comment-card.secondary.show {
+  display: flex;
 }
 
 /* Search */
@@ -537,6 +607,21 @@ ol.points li::before {
 .copy-btn {
   margin-top: 14px;
   width: 100%;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.summary-actions .copy-btn {
+  margin-top: 0;
+  flex: 1;
+}
+
+#summary-topics .chip-row {
+  margin-bottom: 14px;
 }
 
 .summary-title {

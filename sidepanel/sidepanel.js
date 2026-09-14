@@ -21,6 +21,8 @@ const LOCAL_CONFIG =
 const $ = (id) => document.getElementById(id);
 const CHUNK_SIZE = 120;
 
+let expandedTopic = null;
+
 const state = {
   videoId: null,
   meta: null,
@@ -82,9 +84,19 @@ async function loadSettings() {
       lang: DEFAULTS.lang,
       collectMode: DEFAULTS.collectMode,
       thumbTemplate: DEFAULTS.thumbTemplate,
+      theme: "dark",
     },
     obj.settings || {}
   );
+  applyTheme();
+}
+
+function applyTheme() {
+  const t = state.settings?.theme || "dark";
+  let dark = true;
+  if (t === "light") dark = false;
+  else if (t === "auto") dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.body.dataset.theme = dark ? "dark" : "light";
 }
 
 function fillSettingsFields() {
@@ -93,8 +105,10 @@ function fillSettingsFields() {
   $("set-model").value = state.settings.model || DEFAULTS.model;
   $("set-max").value = state.settings.maxComments;
   $("set-lang").value = state.settings.lang || "ru";
+  $("set-theme").value = state.settings.theme || "dark";
   $("set-mode").value = state.settings.collectMode || "auto";
   $("set-thumb-template").value = state.settings.thumbTemplate || "";
+  $("quick-max").value = state.settings.maxComments;
 }
 
 function readSettingsFromFields() {
@@ -103,12 +117,15 @@ function readSettingsFromFields() {
   state.settings.model = $("set-model").value.trim() || DEFAULTS.model;
   state.settings.maxComments = Math.min(2000, Math.max(10, parseInt($("set-max").value, 10) || DEFAULTS.maxComments));
   state.settings.lang = $("set-lang").value;
+  state.settings.theme = $("set-theme").value;
   state.settings.collectMode = $("set-mode").value;
   state.settings.thumbTemplate = $("set-thumb-template").value.trim() || "{title} - {channel}";
+  $("quick-max").value = state.settings.maxComments;
 }
 
 async function saveSettings(showFeedback = true) {
   readSettingsFromFields();
+  applyTheme();
   await chrome.storage.local.set({ settings: state.settings });
   proxy.baseUrl = state.settings.baseUrl;
   proxy.token = state.settings.token;
@@ -292,15 +309,20 @@ async function analyze() {
     }
 
     $("summary-placeholder").textContent = "Собираю итоговую сводку…";
-    const fin = await proxy.chat(
+    $("summary-text").innerHTML = '<div class="summary-title">Что говорят в комментариях</div>';
+    const liveSummary = $("summary-text");
+    const fin = await proxy.chatStream(
       [
         { role: "system", content: FINAL_SYSTEM },
         { role: "user", content: finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang }) },
       ],
-      { jsonMode: true, maxTokens: 700, timeoutMs: 150000 }
+      { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
+      (full) => {
+        liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(full);
+      }
     );
-    const finJson = extractJson(fin);
-    const summary = clean(finJson?.summary) || "Сводка не получена.";
+    const summary = clean(fin) || "Сводка не получена.";
+    liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(summary);
 
     state.summary = {
       summary,
@@ -332,6 +354,8 @@ function renderSummary() {
     ph.textContent = "Нажми «Анализировать», чтобы получить сводку обсуждения.";
     ph.classList.remove("hidden");
     $("btn-copy-summary").classList.add("hidden");
+    $("btn-export-summary").classList.add("hidden");
+    $("summary-topics").classList.add("hidden");
     $("summary-sentiment").classList.add("hidden");
     $("summary-text").textContent = "";
     $("summary-points").innerHTML = "";
@@ -341,6 +365,22 @@ function renderSummary() {
   ph.textContent = "";
   ph.classList.add("hidden");
   $("btn-copy-summary").classList.remove("hidden");
+  $("btn-export-summary").classList.remove("hidden");
+
+  const chips = (s.topics || []).slice(0, 5);
+  const chipWrap = $("summary-topics");
+  if (chips.length) {
+    chipWrap.classList.remove("hidden");
+    chipWrap.innerHTML =
+      '<span class="chips-label">Ключевые темы:</span>' +
+      chips
+        .map(
+          (t) => `<button class="chip" data-topic="${esc(t.name)}">${esc(t.name)} <span class="count">${t.count}</span></button>`
+        )
+        .join("");
+  } else {
+    chipWrap.classList.add("hidden");
+  }
 
   const total = Math.max(1, s.sentiment.positive + s.sentiment.neutral + s.sentiment.negative);
   const pct = (n) => (n ? Math.max(4, Math.round((n / total) * 100)) : 0);
@@ -381,6 +421,37 @@ function renderSummary() {
 
 // ---------------- Темы ----------------
 
+function topicCommentsHtml(name) {
+  const s = state.summary;
+  if (!s) return "";
+  const topic = s.topics.find((t) => t.name === name);
+  if (!topic) return "";
+  const ids = new Set(topic.ids);
+  const list = state.comments.filter((c, i) => ids.has(i)).slice(0, 20);
+  if (!list.length) return '<div class="placeholder">Комментарии по теме не найдены.</div>';
+  return list
+    .map(
+      (c, i) => `<div class="comment-card${i >= 10 ? " secondary" : ""}" data-name="${esc(name)}">
+        <img class="avatar" src="${esc(c.avatar || "")}" onerror="this.style.visibility='hidden'" alt="" loading="lazy" />
+        <div class="c-body">
+          <div class="c-meta">
+            <span class="c-author">${esc(c.author)}</span>
+            <span>${esc(c.time)}</span>
+            <span>♥ ${fmtNum(c.likes)}</span>
+            <span>${c.id ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer">открыть ↗</a>` : ""}</span>
+          </div>
+          <div class="c-text">${esc(c.text)}</div>
+        </div>
+      </div>`
+    )
+    .join("");
+}
+
+function expandTopicInline(name) {
+  expandedTopic = name;
+  renderTopics();
+}
+
 function renderTopics() {
   const wrap = $("topics-list");
   const empty = $("topics-empty");
@@ -394,16 +465,23 @@ function renderTopics() {
   wrap.innerHTML = s.topics
     .map(
       (t, i) =>
-        `<div class="topic-item" data-idx="${i}"><span class="t-name">${esc(t.name)}</span><span class="t-count">${t.count}</span></div>`
+        `<div class="topic-item" data-idx="${i}" data-name="${esc(t.name)}">
+           <div class="topic-head">
+             <span class="t-name">${esc(t.name)}</span>
+             <span class="t-count">${t.count} <span class="t-caret">${t.name === expandedTopic ? "▾" : "▸"}</span></span>
+           </div>
+           <div class="topic-body${t.name === expandedTopic ? "" : " hidden"}">${t.name === expandedTopic ? topicCommentsHtml(t.name) : ""}</div>
+         </div>`
     )
     .join("");
   wrap.querySelectorAll(".topic-item").forEach((el) => {
     el.addEventListener("click", () => {
-      const t = state.summary.topics[Number(el.dataset.idx)];
-      state.activeTopic = t.name;
-      state.popularSort = false;
-      renderComments();
-      setTab("comments");
+      const name = el.dataset.name;
+      const body = el.querySelector(".topic-body");
+      const caret = el.querySelector(".t-caret");
+      const wasOpen = expandedTopic === name;
+      expandedTopic = wasOpen ? null : name;
+      renderTopics();
     });
   });
 }
@@ -608,6 +686,7 @@ function onRuntimeMessage(msg) {
     state.summary = null;
     state.comments = [];
     state.activeTopic = null;
+    expandedTopic = null;
     globalSearchResults = [];
     renderBottomMatters();
   }
@@ -654,9 +733,16 @@ function bindEvents() {
     setTab("settings");
   });
   $("btn-settings-back").addEventListener("click", () => setTab("summary"));
-  $("btn-analyze").addEventListener("click", analyze);
   $("btn-restart").addEventListener("click", async () => {
     if (!state.videoId) return;
+    const quick = parseInt($("quick-max").value, 10);
+    if (Number.isFinite(quick)) {
+      const v = Math.min(2000, Math.max(10, quick));
+      state.settings.maxComments = v;
+      $("set-max").value = v;
+      $("quick-max").value = v;
+      await saveSettings(false);
+    }
     await chrome.storage.session.remove([`comments:${state.videoId}`, `summary:${state.videoId}`, `collect:${state.videoId}`]);
     state.comments = [];
     state.summary = null;
@@ -674,6 +760,32 @@ function bindEvents() {
   });
   $("btn-download-thumb").addEventListener("click", downloadThumb);
   $("btn-view-thumb").addEventListener("click", openThumbTab);
+  $("quick-max").addEventListener("change", async (e) => {
+    let v = parseInt(e.target.value, 10);
+    if (!Number.isFinite(v)) v = DEFAULTS.maxComments;
+    v = Math.min(2000, Math.max(10, v));
+    e.target.value = v;
+    state.settings.maxComments = v;
+    $("set-max").value = v;
+    await saveSettings(false);
+    showToast(`Лимит сбора: ${v} комментариев. Нажми 🔄, чтобы собрать заново.`);
+  });
+  $("btn-analyze").addEventListener("click", () => {
+    const quick = parseInt($("quick-max").value, 10);
+    if (Number.isFinite(quick)) {
+      state.settings.maxComments = Math.min(2000, Math.max(10, quick));
+      $("set-max").value = state.settings.maxComments;
+      void saveSettings(false).then(() => analyze());
+    } else {
+      analyze();
+    }
+  });
+  $("summary-topics").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip?.dataset.topic) return;
+    expandTopicInline(chip.dataset.topic);
+    setTab("topics");
+  });
   $("btn-copy-summary").addEventListener("click", async () => {
     const s = state.summary;
     if (!s) return;
@@ -694,6 +806,36 @@ function bindEvents() {
       showToast("Сводка скопирована в буфер ✓");
     } catch (e) {
       showToast("Не удалось скопировать: " + (e.message || e));
+    }
+  });
+  $("btn-export-summary").addEventListener("click", async () => {
+    const s = state.summary;
+    if (!s) return;
+    const m = state.meta || {};
+    const lines = [
+      `# Сводка: ${m.title || state.videoId || "видео"}`,
+      "",
+      s.summary || "",
+      "",
+      "## Темы",
+      ...(s.topics || []).map((t) => `- ${t.name}: ${t.count}`),
+      "",
+      "## Ключевые мнения",
+      ...(s.points || []).map((p, i) => `${i + 1}. ${p}`),
+    ];
+    if (s.notable?.length) {
+      lines.push("", "## Яркие комментарии", ...s.notable.map((c) => `- ${c.author}: ${c.text}`));
+    }
+    if (m.pageUrl) lines.push("", `Видео: ${m.pageUrl}`);
+    const markdown = lines.join("\n");
+    try {
+      const blob = new Blob([markdown], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const filename = `${sanitizeFilename(m.title || state.videoId || "video")}.md`;
+      await chrome.downloads.download({ url, filename, saveAs: true });
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e) {
+      showToast("Не удалось сохранить: " + (e.message || e));
     }
   });
   $("btn-open-video").addEventListener("click", () => {
