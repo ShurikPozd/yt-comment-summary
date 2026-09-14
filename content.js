@@ -289,31 +289,68 @@
   }
 
   async function fetchPlayerStream(videoId, quality) {
-    const resp = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-YouTube-Client-Name": "1",
-        "X-YouTube-Client-Version": CLIENT_VERSION,
+    // Ботозащита YouTube: веб-клиент WEB без poToken может не отдать форматы.
+    // Пробуем по очереди разных клиентов Innertube (известные обходы в расширениях).
+    const clients = [
+      {
+        clientName: "WEB",
+        clientVersion: CLIENT_VERSION,
+        osName: "Windows",
+        platform: "DESKTOP",
       },
-      credentials: "include",
-      body: JSON.stringify({ context: baseContext(), videoId }),
-    });
-    if (!resp.ok) throw new Error("player:" + resp.status);
-    const data = await resp.json();
-    const formats = (data.streamingData?.formats || []).concat(data.streamingData?.adaptiveFormats || []);
-    if (!formats.length) throw new Error("noFormats");
-    const want = quality === "best" ? 999999 : Number(quality) || 999999;
-    const withAudio = formats
-      .filter((f) => f.url && f.mimeType && f.mimeType.includes("audio"))
-      .sort((a, b) => heightOf(b) - heightOf(a));
-    const any = formats
-      .filter((f) => f.url && f.mimeType && f.mimeType.includes("mp4"))
-      .sort((a, b) => heightOf(b) - heightOf(a));
-    const pool = withAudio.length ? withAudio : any;
-    if (!pool.length) throw new Error("noStream");
-    const target = pool.find((f) => heightOf(f) <= want) || pool[pool.length - 1];
-    return target.url || null;
+      {
+        clientName: "ANDROID",
+        clientVersion: "19.09.37",
+        androidSdkVersion: 30,
+        osName: "Android",
+        platform: "MOBILE",
+        osVersion: "14",
+      },
+      {
+        clientName: "TVHTML5",
+        clientVersion: "7.20241029.00.00",
+        osName: "",
+        platform: "TV",
+      },
+    ];
+
+    let lastErr = "noFormats";
+    for (const c of clients) {
+      try {
+        const payload = {
+          context: { client: { hl: (navigator.language || "ru-RU").replace("-", "_"), gl: "US", ...c } },
+          videoId,
+        };
+        const resp = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-YouTube-Client-Name": c.clientName,
+            "X-YouTube-Client-Version": c.clientVersion,
+          },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) throw new Error("player:" + resp.status);
+        const data = await resp.json();
+        const formats = (data.streamingData?.formats || []).concat(data.streamingData?.adaptiveFormats || []);
+        if (!formats.length) throw new Error("noFormats");
+        const want = quality === "best" ? 999999 : Number(quality) || 999999;
+        const withAudio = formats
+          .filter((f) => f.url && f.mimeType && f.mimeType.includes("audio"))
+          .sort((a, b) => heightOf(b) - heightOf(a));
+        const any = formats
+          .filter((f) => f.url && f.mimeType && f.mimeType.includes("mp4"))
+          .sort((a, b) => heightOf(b) - heightOf(a));
+        const pool = withAudio.length ? withAudio : any;
+        if (!pool.length) throw new Error("noStream");
+        const target = pool.find((f) => heightOf(f) <= want) || pool[pool.length - 1];
+        return target.url || null;
+      } catch (e) {
+        lastErr = String(e?.message || e);
+      }
+    }
+    throw new Error(lastErr);
 
     function heightOf(f) {
       return Number(f.height) || 0;
