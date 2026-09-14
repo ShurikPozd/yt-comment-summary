@@ -977,9 +977,11 @@ function bindEvents() {
         diag += " | cookies API недоступен (перезагрузи расширение)";
       } else {
         const ck = await readYouTubeCookies();
-        const hasSID = ck.some((c) => c.name === "SID" || c.name === "__Secure-1PSID");
-        const hasLogin = ck.some((c) => c.name === "LOGIN_INFO");
-        diag += ` | cookies YouTube: ${ck.length}${hasSID ? " (залогинен ✓)" : hasLogin ? " (login_info)" : ""}`;
+        const names = ck.map((c) => c.name);
+        const key = (n) => names.includes(n);
+        const sess = key("SID") || key("__Secure-1PSID") || key("SSID") || key("__Secure-3PSID");
+        const login = key("LOGIN_INFO") || key("__Secure-YEC");
+        diag += ` | cookies: ${ck.length}${sess ? " (сессия ✓)" : ""}${login ? " (логин ✓)" : ""}`;
       }
       if (typeof chrome.declarativeNetRequest !== "undefined") {
         try {
