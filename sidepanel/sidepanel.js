@@ -498,11 +498,17 @@ async function runSearch() {
 
 // ---------------- Превью и канал ----------------
 
-function viewThumb() {
+function openThumbModal() {
   const m = state.meta;
   if (!m?.thumbs) return;
   const url = m.thumbs.maxres || m.thumbs.sd || m.thumbs.hq;
-  if (url) chrome.tabs.create({ url });
+  if (!url) return;
+  $("thumb-modal-image").src = url;
+  $("thumb-modal").classList.remove("hidden");
+}
+
+function closeThumbModal() {
+  $("thumb-modal").classList.add("hidden");
 }
 
 async function downloadThumb() {
@@ -535,22 +541,59 @@ async function downloadThumb() {
 
 // ---------------- Скачивание видео ----------------
 
+function downloadWithStatus({ url, filename }) {
+  // chrome.downloads.download резолвится сразу (не по завершении),
+  // поэтому реальный исход смотрим через onChanged: complete или interrupted(error).
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      chrome.downloads.onChanged.removeListener(onChange);
+      clearTimeout(timer);
+      resolve(r);
+    };
+    const onChange = (delta) => {
+      if (delta.id !== dlId) return;
+      if (delta.state?.current === "complete") finish({ ok: true });
+      else if (delta.state?.current === "interrupted") {
+        finish({ ok: false, error: delta.error?.current ? "загрузка прервана сервером" : "загрузка прервана" });
+      }
+    };
+    let dlId;
+    const timer = setTimeout(() => finish({ ok: false, error: "таймаут загрузки" }), 300000);
+    chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false })
+      .then((id) => {
+        dlId = id;
+        chrome.downloads.onChanged.addListener(onChange);
+      })
+      .catch((e) => finish({ ok: false, error: (e && e.message) || "не удалось запустить скачивание" }));
+  });
+}
+
 async function downloadVideo() {
   if (!state.videoId) return;
   const q = state.settings?.quality || "720";
   const label = q === "best" ? "лучшее качество" : `${q}p`;
   showToast(`Готовлю видео (${label})…`);
-  const err = await tryServerDownload();
-  if (!err) return;
-  const ok = await fallbackDirectDownload(err);
-  if (!ok) showToast("Не удалось скачать видео: " + ok.message);
-  else showToast("Скачано");
+  const filename = sanitizeFilename(state.meta?.title || state.videoId) + ".mp4";
+  const sr = await tryServerDownload(filename);
+  if (sr.ok) {
+    showToast("Скачано");
+    return;
+  }
+  const dr = await fallbackDirectDownload(filename, sr.error);
+  if (dr.ok) {
+    showToast("Скачано (напрямую)");
+    return;
+  }
+  showToast("Видео не скачалось: " + (dr.error || sr.error));
 }
 
-async function tryServerDownload() {
+async function tryServerDownload(filename) {
   const baseUrl = (state.settings?.baseUrl || "").replace(/\/+$/, "");
   const token = state.settings?.token || "";
-  if (!baseUrl || !token) return "Не задан сервер/секрет — пробую напрямую";
+  if (!baseUrl || !token) return { ok: false, error: "Не задан сервер/секрет" };
   const headers = { "X-Sec-Token": token };
   let session = "";
   try {
@@ -585,48 +628,27 @@ async function tryServerDownload() {
   const url = `${baseUrl}/api/download?${qs}`;
   try {
     // С сессией токен не нужен (session == авторизация) — chrome.downloads не умеет headers.
-    // Без сессии используем fetch+blob, чтобы передать X-Sec-Token.
-    if (session) {
-      const filename = sanitizeFilename(state.meta?.title || state.videoId || "video") + ".mp4";
-      await chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false });
-      return null;
-    }
-    const resp = await fetch(url, { headers });
-    if (!resp.ok) {
-      const detail = await resp.text().catch(() => "");
-      return `Сервер: ${resp.status} ${detail}`;
-    }
-    const blob = await resp.blob();
-    const cd = resp.headers.get("Content-Disposition") || "";
-    const m = cd.match(/filename="?([^";]+)"?/i);
-    const filename = sanitizeFilename(m ? m[1].replace(/\.mp4$/i, "") : (state.meta?.title || "video")) + ".mp4";
-    const dataUrl = await blobToDataURL(blob);
-    await chrome.downloads.download({ url: dataUrl, filename, conflictAction: "uniquify", saveAs: false });
-    return null;
+    // Без session сервер ответит 403, поэтому сразу считаем ошибкой.
+    if (!session) return { ok: false, error: "не удалось получить сессию сервера" };
+    return await downloadWithStatus({ url, filename });
   } catch (e) {
-    return "Сервер недоступен: " + (e.message || e);
+    return { ok: false, error: "Сервер недоступен: " + (e.message || e) };
   }
 }
 
-async function fallbackDirectDownload(hint) {
+async function fallbackDirectDownload(filename, hint) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return "нет активной вкладки";
+    if (!tab?.id) return { ok: false, error: "нет активной вкладки" };
     const reply = await chrome.tabs.sendMessage(tab.id, {
       type: "yt:player-stream",
       videoId: state.videoId,
       quality: state.settings?.quality || "720",
     });
-    if (!reply?.streamUrl) return "прямой поток не найден (" + (hint || "") + ")";
-    await chrome.downloads.download({
-      url: reply.streamUrl,
-      filename: sanitizeFilename(state.meta?.title || state.videoId) + ".mp4",
-      conflictAction: "uniquify",
-      saveAs: false,
-    });
-    return true;
+    if (!reply?.streamUrl) return { ok: false, error: "прямой поток не найден (" + (hint || "") + ")" };
+    return await downloadWithStatus({ url: reply.streamUrl, filename });
   } catch (e) {
-    return "прямой поток: " + (e.message || e);
+    return { ok: false, error: "прямой поток: " + (e.message || e) };
   }
 }
 
@@ -738,7 +760,39 @@ function bindEvents() {
     }
   });
   $("btn-download-thumb").addEventListener("click", downloadThumb);
-  $("btn-view-thumb").addEventListener("click", viewThumb);
+  $("btn-view-thumb").addEventListener("click", openThumbModal);
+  $("btn-modal-close").addEventListener("click", closeThumbModal);
+  $("thumb-modal").addEventListener("click", (e) => {
+    if (e.target.id === "thumb-modal") closeThumbModal();
+  });
+  $("btn-modal-download").addEventListener("click", async () => {
+    const img = $("thumb-modal-image");
+    const url = img.src || "";
+    if (url) {
+      closeThumbModal();
+      try {
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        const dataUrl = await blobToDataURL(blob);
+        const tpl = state.settings?.thumbTemplate || "{title} - {channel}";
+        const m = state.meta;
+        const name = sanitizeFilename(
+          tpl
+            .replaceAll("{title}", sanitizeFilename(m.title || "video"))
+            .replaceAll("{channel}", sanitizeFilename(m.channelName || "channel"))
+            .replaceAll("{videoid}", m.videoId)
+        );
+        await chrome.downloads.download({
+          url: dataUrl,
+          filename: name + ".jpg",
+          conflictAction: "uniquify",
+          saveAs: false,
+        });
+      } catch (e) {
+        showToast("Не удалось скачать превью: " + (e.message || e));
+      }
+    }
+  });
   $("btn-download-video").addEventListener("click", downloadVideo);
   $("btn-open-video").addEventListener("click", () => {
     if (state.meta) chrome.tabs.create({ url: state.meta.pageUrl });
