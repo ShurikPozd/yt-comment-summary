@@ -18,7 +18,10 @@
       }
     } catch (e) {}
     try {
-      // Резерв: берём из данных плеера игрока (то же самое значение, что у страницы).
+      // Резерв: visitorData уже присутствует в контексте player response страницы.
+      const pr = getPlayerResponse();
+      const vd = pr?.context?.client?.visitorData;
+      if (typeof vd === "string" && vd.length > 20) return vd;
     } catch (e) {}
     return null;
   }

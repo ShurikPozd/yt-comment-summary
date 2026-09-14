@@ -900,11 +900,22 @@ function bindEvents() {
     try {
       const ok = await proxy.test();
       let diag = ok ? "Связь есть ✓" : "Ответ пустой";
+      diag += ` | v${chrome.runtime.getManifest().version}`;
       if (typeof chrome.cookies === "undefined") {
         diag += " | cookies API недоступен (перезагрузи расширение)";
       } else {
         const ck = await chrome.cookies.getAll({ url: "https://www.youtube.com" });
         diag += ` | cookies YouTube: ${ck.length}`;
+      }
+      if (typeof chrome.declarativeNetRequest !== "undefined") {
+        try {
+          const rulesets = await chrome.declarativeNetRequest.getEnabledRulesets();
+          diag += ` | DNR: ${rulesets.includes("youtube_headers") ? "вкл ✓" : "ВЫКЛ ✗"}`;
+        } catch (e) {
+          diag += " | DNR: ошибка";
+        }
+      } else {
+        diag += " | DNR: недоступен — перезагрузи расширение!";
       }
       el.textContent = diag;
       el.className = ok ? "ok" : "err";
