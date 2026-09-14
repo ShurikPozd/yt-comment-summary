@@ -597,7 +597,7 @@ async function downloadVideo() {
     showToast("Скачано (сервер)");
     return;
   }
-  showToast("Видео не скачалось: " + (sr.error || dr.error));
+  showToast("Видео не скачалось: " + (dr.error || sr.error));
 }
 
 async function tryServerDownload(filename) {
@@ -866,7 +866,14 @@ function bindEvents() {
     await saveSettings(false);
     try {
       const ok = await proxy.test();
-      el.textContent = ok ? "Связь есть ✓" : "Ответ пустой";
+      let diag = ok ? "Связь есть ✓" : "Ответ пустой";
+      if (typeof chrome.cookies === "undefined") {
+        diag += " | cookies API недоступен (перезагрузи расширение)";
+      } else {
+        const ck = await chrome.cookies.getAll({ url: "https://www.youtube.com" });
+        diag += ` | cookies YouTube: ${ck.length}`;
+      }
+      el.textContent = diag;
       el.className = ok ? "ok" : "err";
     } catch (e) {
       el.textContent = (e.message || "Ошибка");
