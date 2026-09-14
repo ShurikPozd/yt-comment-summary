@@ -331,6 +331,7 @@
   // Там уже есть poToken/сигнатуры, выданные реальному плееру — это самым
   // надёжный и легальный способ получить рабочие URL форматов.
   let lastPageInfo = null; // { visitorData }
+  let lastPageCookie = null; // document.cookie (видны только не-HttpOnly куки)
   function getPageFormatsFor(videoId, timeoutMs = 3000) {
     return new Promise((resolve) => {
       let done = false;
@@ -345,6 +346,7 @@
         if (e.source !== window || !e.data) return;
         if (e.data.type !== "ytc:streams") return;
         lastPageInfo = { visitorData: e.data.visitorData || null };
+        lastPageCookie = typeCookie(document.cookie || "");
         const sd = e.data.data;
         const list = sd ? (sd.formats || []).concat(sd.adaptiveFormats || []) : [];
         finish(list);
@@ -353,6 +355,18 @@
       window.addEventListener("message", onMsg);
       window.postMessage({ type: "ytc:get-streams", videoId }, "*");
     });
+  }
+
+  // Выдёргивает из строки cookie имена, которыми пользуется yt-dlp.
+  function typeCookie(rawCookie) {
+    return {
+      raw: rawCookie,
+      hasSID: /(^|;\s*)SID=/i.test(rawCookie),
+      hasSSID: /(^|;\s*)SSID=/i.test(rawCookie),
+      hasLOGIN_INFO: /(^|;\s*)LOGIN_INFO=/i.test(rawCookie),
+      hasVISITOR: /(^|;\s*)VISITOR_INFO1_LIVE=/i.test(rawCookie),
+      pairCount: rawCookie ? rawCookie.split(";").filter(Boolean).length : 0,
+    };
   }
 
   // Проверка, что URL отдаёт видео, а не ботозаглушку: просим кусок и смотрим
@@ -722,10 +736,30 @@
         sendResponse({ ok: true, meta });
         return false;
       }
-case "yt:player-stream": {
+case "yt:page-cookie": {
+        // Страница отдаёт свои видимые куки (document.cookie): не-HttpOnly.
+        // Это резерв для сервера, когда chrome.cookies.getAll молчит.
+        try {
+          sendResponse({ ok: true, raw: document.cookie || "", len: (document.cookie || "").length });
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e?.message || e) });
+        }
+        return false;
+      }
+      case "yt:player-stream": {
         void fetchPlayerStream(msg.videoId, msg.quality || "720")
           .then((r) => sendResponse({ ok: r.streams.length > 0, streams: r.streams, sources: r.sources }))
           .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true;
+      }
+      case "yt:cookies": {
+        // Через page-reader (MAIN world) берём document.cookie: HttpOnly-куки
+        // (SID/SSID) page-reader УВИДИТ, если добавить их через fetch? Нет —
+        // document.cookie не отдаёт HttpOnly. Но наличие любых кук вообще уже
+        // говорит о том, что браузер залогинен; количество пар сравним потом.
+        getPageFormatsFor(videoIdFromUrl()).then(() => {
+          sendResponse({ ok: true, cookie: lastPageCookie || null });
+        });
         return true;
       }
       case "yt:download-page": {

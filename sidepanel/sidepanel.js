@@ -602,6 +602,53 @@ async function downloadVideo() {
   showToast("Видео не скачалось: " + (dr.error || sr.error) + diag);
 }
 
+async function readYouTubeCookies() {
+  // YouTube с 2025-2026 переводит куки на CHIPS (partitioned): ключевые сессионные
+  // куки (SID, SSID, LOGIN_INFO...) живут в партиции top-level youtube, и обычный
+  // getAll({url}) их не видит. Пробуем все доступные партиции + документ страницы.
+  const out = [];
+  const seen = new Set();
+  const merge = (list) => {
+    for (const c of list || []) {
+      if (!c?.name) continue;
+      const k = `${c.domain}|${c.name}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(c);
+    }
+  };
+  try {
+    merge(await chrome.cookies.getAll({ url: "https://www.youtube.com" }));
+  } catch (e) {}
+  try {
+    merge(await chrome.cookies.getAll({ url: "https://www.youtube.com", partitionKey: {} }));
+  } catch (e) {}
+  try {
+    merge(await chrome.cookies.getAll({ url: "https://www.youtube.com", partitionKey: { topLevelSite: "https://www.youtube.com" } }));
+  } catch (e) {}
+  // httpOnly-куки страницы не видны через document.cookie, но страница может дать
+  // хотя бы не-HttpOnly; их добавляем как запасной источник (полные данные даёт
+  // только cookies API, но тем - 0 в диагностике).
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:page-cookie" });
+      const raw = String(r?.raw || "");
+      if (raw) {
+        for (const part of raw.split(";")) {
+          const i = part.indexOf("=");
+          if (i <= 0) continue;
+          const name = part.slice(0, i).trim();
+          if (seen.has(`_page_|${name}`)) continue;
+          seen.add(`_page_|${name}`);
+          out.push({ name, value: part.slice(i + 1).trim(), domain: "youtube.com", path: "/", secure: false, httpOnly: false });
+        }
+      }
+    }
+  } catch (e) {}
+  return out;
+}
+
 async function tryServerDownload(filename) {
   const baseUrl = (state.settings?.baseUrl || "").replace(/\/+$/, "");
   const token = state.settings?.token || "";
@@ -612,7 +659,7 @@ async function tryServerDownload(filename) {
   try {
     // Отдаём серверу браузерные cookies YouTube (одноразовая сессия, ~30 мин) —
     // через них yt-dlp обходит ботозащиту и скачивает даже с IP датацентра.
-    const ck = await chrome.cookies.getAll({ url: "https://www.youtube.com" });
+    const ck = await readYouTubeCookies();
     cookiesFound = Boolean(ck.length);
     if (ck.length) {
       // Cold-start Render держится до ~50 с, поэтому пробуем до 3 раз.
@@ -690,24 +737,23 @@ async function fallbackDirectDownload(filename) {
         : `источники: ${(reply?.sources || []).join(", ") || "нет"}`;
       return { ok: false, error: "прямой поток не найден — " + why };
     }
-    return { ok: false, error: "", sources: reply?.sources, streams };
     // Пробуем кандидатов по очереди. Если googlevideo отклонил прямой
     // chrome.downloads (SERVER_FORBIDDEN) или отдал заглушку — тот же URL
     // качаем через fetch в контексте расширения и сохраняем blob-URL.
     let lastErr = "";
     for (let i = 0; i < streams.length; i++) {
       const r = await downloadWithStatus({ url: streams[i], filename });
-      if (r.ok) return { ok: true };
+      if (r.ok) return { ok: true, sources: reply?.sources };
       lastErr = r.error;
       if (r.error && (r.error.includes("FORBIDDEN") || r.error.includes("BAD_CONTENT") || r.error.includes("не-видео"))) {
         const viaBlob = await downloadStreamViaBlob(streams[i], filename);
-        if (viaBlob.ok) return { ok: true };
+        if (viaBlob.ok) return { ok: true, sources: reply?.sources };
         lastErr = viaBlob.error;
       } else {
-        return { ok: false, error: r.error };
+        return { ok: false, error: r.error, sources: reply?.sources };
       }
     }
-    return { ok: false, error: lastErr || "все потоки недоступны" };
+    return { ok: false, error: lastErr || "все потоки недоступны", sources: reply?.sources };
   } catch (e) {
     return { ok: false, error: "прямой поток: " + (e.message || e) };
   }
@@ -927,8 +973,10 @@ function bindEvents() {
       if (typeof chrome.cookies === "undefined") {
         diag += " | cookies API недоступен (перезагрузи расширение)";
       } else {
-        const ck = await chrome.cookies.getAll({ url: "https://www.youtube.com" });
-        diag += ` | cookies YouTube: ${ck.length}`;
+        const ck = await readYouTubeCookies();
+        const hasSID = ck.some((c) => c.name === "SID" || c.name === "__Secure-1PSID");
+        const hasLogin = ck.some((c) => c.name === "LOGIN_INFO");
+        diag += ` | cookies YouTube: ${ck.length}${hasSID ? " (залогинен ✓)" : hasLogin ? " (login_info)" : ""}`;
       }
       if (typeof chrome.declarativeNetRequest !== "undefined") {
         try {
