@@ -597,9 +597,12 @@ async function downloadVideo() {
     showToast("Скачано (сервер)");
     return;
   }
-  // Если поток не нашёлся или всё дало 403 — показываем, какие источники пробовали.
-  const diag = dr.sources?.length ? ` [источники: ${dr.sources.join(", ")}]` : "";
-  showToast("Видео не скачалось: " + (dr.error || sr.error) + diag);
+  // Если поток не нашёлся или всё дало 403 — показываем ошибки обоих путей,
+  // чтобы было видно, что сказал серверный yt-dlp.
+  const src = dr.sources?.length ? ` [${dr.sources.join(",")}]` : "";
+  showToast(
+    "не скачалось: прямо: " + (dr.error || "?") + " | сервер: " + (sr.error || "?") + src
+  );
 }
 
 async function readYouTubeCookies() {
