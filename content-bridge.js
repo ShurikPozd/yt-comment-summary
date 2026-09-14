@@ -7,14 +7,40 @@
 (() => {
   const REQ = "ytc:get-streams";
   const RES = "ytc:streams";
+  const DL_REQ = "ytc:download";
+  const DL_RES = "ytc:download:res";
 
   let cache = null;
+
+  // Страница качает поток сама (MAIN world → Origin и куки страницы как у плеера).
+  // Blob возвращается через postMessage (structured clone поддерживает Blob),
+  // контент-скрипт сохраняет его через chrome.downloads. Работает только там,
+  // где и DNR (googlevideo отдаёт видео по правильным заголовкам).
+  window.addEventListener("message", async (e) => {
+    if (e.source !== window || !e.data) return;
+    if (e.data.type !== DL_REQ) return;
+    try {
+      const resp = await fetch(e.data.url, { credentials: "include", referrer: "https://www.youtube.com/" });
+      if (!resp.ok) {
+        window.postMessage({ type: DL_RES, ok: false, error: "HTTP " + resp.status }, "*");
+        return;
+      }
+      const blob = await resp.blob();
+      window.postMessage({ type: DL_RES, ok: true, blob }, "*");
+    } catch (err) {
+      window.postMessage({ type: DL_RES, ok: false, error: String(err?.message || err) }, "*");
+    }
+  });
 
   function getVisitorData() {
     try {
       if (window.ytcfg && typeof window.ytcfg.get === "function") {
         const vd = window.ytcfg.get("VISITOR_DATA");
         if (typeof vd === "string" && vd.length > 20) return vd;
+        // Новый YouTube кладёт visitorData в INNERTUBE_CONTEXT.
+        const ctx = window.ytcfg.get("INNERTUBE_CONTEXT") || {};
+        const vd2 = ctx?.client?.visitorData;
+        if (typeof vd2 === "string" && vd2.length > 20) return vd2;
       }
     } catch (e) {}
     try {

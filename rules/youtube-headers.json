@@ -7,9 +7,8 @@
       "requestHeaders": [
         { "header": "Origin", "operation": "set", "value": "https://www.youtube.com" },
         { "header": "Referer", "operation": "set", "value": "https://www.youtube.com/" },
-        { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-site" },
-        { "header": "Sec-Fetch-Mode", "operation": "set", "value": "no-cors" },
-        { "header": "Sec-Fetch-Dest", "operation": "set", "value": "video" }
+        { "header": "Sec-Fetch-Site", "operation": "set", "value": "cross-site" },
+        { "header": "Sec-Fetch-Storage-Access", "operation": "set", "value": "active" }
       ]
     },
     "condition": {

@@ -48,6 +48,45 @@
     }
   }
 
+  // ---------------- Скачивание через MAIN-мир (мост) ----------------
+
+  // Мост (content-bridge.js, world MAIN) качает поток от имени страницы:
+  // там корректный Origin/куки. Полученный Blob сохраняем через chrome.downloads.
+  let pageDownloader = null; // {id, resolve}
+  window.addEventListener("message", (e) => {
+    if (e.source !== window || !e.data) return;
+    if (e.data.type !== "ytc:download:res") return;
+    const d = pageDownloader;
+    pageDownloader = null;
+    if (!d) return;
+    if (!e.data.ok) {
+      d.resolve({ ok: false, error: e.data.error || "скачивание не удалось" });
+      return;
+    }
+    const blobUrl = URL.createObjectURL(e.data.blob);
+    chrome.downloads
+      .download({ url: blobUrl, filename: d.filename, conflictAction: "uniquify", saveAs: false })
+      .then((id) => d.resolve({ ok: true, dlId: id, blobUrl }))
+      .catch((err) => d.resolve({ ok: false, error: (err && err.message) || "не удалось скачать" }));
+  });
+  function downloadViaPage(url, filename) {
+    return new Promise((resolve) => {
+      if (pageDownloader) return resolve({ ok: false, error: "уже идёт скачивание" });
+      pageDownloader = { filename, resolve };
+      try {
+        window.postMessage({ type: "ytc:download", url }, "*");
+      } catch (err) {
+        pageDownloader = null;
+        resolve({ ok: false, error: String(err?.message || err) });
+      }
+      setTimeout(() => {
+        if (pageDownloader === null) return;
+        pageDownloader = null;
+        resolve({ ok: false, error: "таймаут скачивания" });
+      }, 120000);
+    });
+  }
+
   // ---------------- Метаданные видео/канала из DOM ----------------
 
   function extractMeta() {
@@ -338,6 +377,7 @@
     // Собираем список кандидатов-URL из всех доступных источников.
     // YouTube может дать ботозащиту (текст/HTML) на один URL, а на другой — работать.
     const candidates = [];
+    const sources = []; // какие источники дали потоки (диагностика)
     const push = (url) => {
       if (url && !candidates.includes(url)) candidates.push(url);
     };
@@ -346,6 +386,7 @@
     try {
       const pageFormats = await getPageFormatsFor(videoId);
       const pageBest = pickStreams(pageFormats, quality);
+      if (pageBest.length) sources.push("page");
       pageBest.forEach((s) => push(s?.url));
     } catch (e) {}
 
@@ -415,7 +456,9 @@
         }
         const formats = (data.streamingData?.formats || []).concat(data.streamingData?.adaptiveFormats || []);
         if (!formats.length) throw new Error("noFormats");
-        pickStreams(formats, quality).forEach((s) => push(s?.url));
+        const picked = pickStreams(formats, quality);
+        if (picked.length) sources.push(c.clientName);
+        picked.forEach((s) => push(s?.url));
       } catch (e) {
         lastErr = String(e?.message || e);
       }
@@ -423,10 +466,12 @@
 
     const verified = await Promise.all(candidates.map(async (u) => (await probeStream(u) ? u : "")));
     const good = verified.filter(Boolean);
-    if (good.length) return good;
+    if (good.length) {
+      return { streams: good, sources };
+    }
     // Все URL заблокированы ботозащитой — вернём как есть, sidepanel всё равно
     // попробует; часть URL может открыться только с range-запросом через плеер.
-    return candidates;
+    return { streams: candidates, sources };
 
     function heightOf(f) {
       return Number(f.height) || 0;
@@ -677,11 +722,19 @@
         sendResponse({ ok: true, meta });
         return false;
       }
-      case "yt:player-stream": {
+case "yt:player-stream": {
         void fetchPlayerStream(msg.videoId, msg.quality || "720")
-          .then((streams) => sendResponse({ ok: streams.length > 0, streams }))
+          .then((r) => sendResponse({ ok: r.streams.length > 0, streams: r.streams, sources: r.sources }))
           .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
-        return true; // async
+        return true;
+      }
+      case "yt:download-page": {
+        // Скачивание "именем страницы": мост качает поток в MAIN-мире
+        // (Origin/куки страницы), а мы сохраняем Blob через chrome.downloads.
+        void downloadViaPage(msg.url, msg.filename)
+          .then((r) => sendResponse(r))
+          .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true;
       }
       default:
         break;

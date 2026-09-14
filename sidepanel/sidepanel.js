@@ -597,7 +597,9 @@ async function downloadVideo() {
     showToast("Скачано (сервер)");
     return;
   }
-  showToast("Видео не скачалось: " + (dr.error || sr.error));
+  // Если поток не нашёлся или всё дало 403 — показываем, какие источники пробовали.
+  const diag = dr.sources?.length ? ` [источники: ${dr.sources.join(", ")}]` : "";
+  showToast("Видео не скачалось: " + (dr.error || sr.error) + diag);
 }
 
 async function tryServerDownload(filename) {
@@ -683,9 +685,12 @@ async function fallbackDirectDownload(filename) {
     });
     const streams = Array.isArray(reply?.streams) ? reply.streams : [];
     if (!streams.length) {
-      const why = reply?.error ? `причина: ${reply.error}` : "";
-      return { ok: false, error: "прямой поток не найден" + (why ? " — " + why : "") };
+      const why = reply?.error
+        ? `причина: ${reply.error}`
+        : `источники: ${(reply?.sources || []).join(", ") || "нет"}`;
+      return { ok: false, error: "прямой поток не найден — " + why };
     }
+    return { ok: false, error: "", sources: reply?.sources, streams };
     // Пробуем кандидатов по очереди. Если googlevideo отклонил прямой
     // chrome.downloads (SERVER_FORBIDDEN) или отдал заглушку — тот же URL
     // качаем через fetch в контексте расширения и сохраняем blob-URL.
@@ -712,6 +717,24 @@ async function fallbackDirectDownload(filename) {
 // *.googlevideo.com) и сохраняет его как blob-URL. googlevideo часто принимает
 // fetch, но отворачивается от прямого chrome.downloads.
 async function downloadStreamViaBlob(url, filename) {
+  // Сначала пробуем скачать "именем страницы" (MAIN-мир: Origin/куки страницы) —
+  // это ближайший аналог запроса плеера, меньше всего шансов на 403.
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      const viaPage = await chrome.tabs.sendMessage(tab.id, {
+        type: "yt:download-page",
+        url,
+        filename,
+      });
+      if (viaPage?.ok) return { ok: true, source: "via-page" };
+      if (viaPage?.error && !String(viaPage.error).includes("Receiving end")) {
+        return { ok: false, error: "через страницу: " + viaPage.error };
+      }
+    }
+  } catch (e) {
+    // контент-скрипт недоступен — идём в обычный fetch
+  }
   try {
     const resp = await fetch(url, {
       credentials: "include",
