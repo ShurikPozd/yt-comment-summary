@@ -314,6 +314,24 @@
     });
   }
 
+  // Проверка, что URL отдаёт видео, а не ботозаглушку: просим кусок и смотрим
+  // content-type. googlevideo отвечает 206 + video/* — такой поток качается.
+  // Заглушки ботозащиты → text/html → кандидат отбрасывается.
+  async function probeStream(url) {
+    try {
+      const r = await fetch(url, {
+        credentials: "include",
+        headers: { Range: "bytes=0-131071" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok && r.status !== 206) return false;
+      const ct = (r.headers.get("content-type") || "").toLowerCase();
+      return ct.includes("video") || ct.includes("octet-stream") || ct.includes("binary") || ct.startsWith("application/dash");
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function fetchPlayerStream(videoId, quality) {
     // Собираем список кандидатов-URL из всех доступных источников.
     // YouTube может дать ботозащиту (текст/HTML) на один URL, а на другой — работать.
@@ -380,7 +398,11 @@
       }
     }
 
-    if (!candidates.length) throw new Error(lastErr);
+    const verified = await Promise.all(candidates.map(async (u) => (await probeStream(u) ? u : "")));
+    const good = verified.filter(Boolean);
+    if (good.length) return good;
+    // Все URL заблокированы ботозащитой — вернём как есть, sidepanel всё равно
+    // попробует; часть URL может открыться только с range-запросом через плеер.
     return candidates;
 
     function heightOf(f) {

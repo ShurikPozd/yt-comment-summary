@@ -8,6 +8,7 @@
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
     "https://i.ytimg.com/*",
+    "https://*.googlevideo.com/*",
     "https://*.onrender.com/*"
   ],
   "background": {
