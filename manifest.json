@@ -1,25 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.1.0",
-  "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео и инфо о канале.",
-  "permissions": ["storage", "sidePanel", "downloads", "tabs", "cookies", "declarativeNetRequest"],
+  "version": "0.2.0",
+  "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео в отдельной вкладке и инфо о канале.",
+  "permissions": ["storage", "sidePanel", "downloads", "tabs"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
     "https://i.ytimg.com/*",
-    "https://*.googlevideo.com/*",
     "https://*.onrender.com/*"
   ],
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "youtube_headers",
-        "enabled": true,
-        "path": "rules/youtube-headers.json"
-      }
-    ]
-  },
   "background": {
     "service_worker": "background.js"
   },
@@ -28,12 +18,6 @@
       "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
-      "js": ["content-bridge.js"],
-      "run_at": "document_idle",
-      "world": "MAIN"
     }
   ],
   "side_panel": {

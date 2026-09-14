@@ -52,6 +52,23 @@ function fmtNum(n) {
   return String(n);
 }
 
+function friendlyError(e) {
+  const s = String(e?.message || e);
+  if (/Модель не ответила/.test(s)) {
+    return "Модель Groq не ответила (временный сбой). Попробуй нажать «Анализировать» ещё раз — часто после ретрая всё проходит.";
+  }
+  if (/таймаут|timeout|Сервер недоступен|Failed to fetch|fetch failed/i.test(s)) {
+    return "Не удалось связаться с сервером: возможно, Render спит (холодный старт ~50 сек) или нет связи с интернетом. Проверь «Проверить связь» и попробуй ещё раз.";
+  }
+  if (/403|Отказано прокси|forbidden/i.test(s)) {
+    return "Прокси-сервер отклонил запрос: проверь правильность URL, секрета и то, что сервер обновлён (Render деплоит из GitHub автоматически).";
+  }
+  if (/400|413/.test(s)) {
+    return "Запрос слишком большой или отклонён прокси: попробуй уменьшить «Максимум комментариев» в настройках.";
+  }
+  return s || "Неизвестная ошибка";
+}
+
 // ---------------- Настройки ----------------
 
 async function loadSettings() {
@@ -65,7 +82,6 @@ async function loadSettings() {
       lang: DEFAULTS.lang,
       collectMode: DEFAULTS.collectMode,
       thumbTemplate: DEFAULTS.thumbTemplate,
-      quality: DEFAULTS.quality,
     },
     obj.settings || {}
   );
@@ -79,7 +95,6 @@ function fillSettingsFields() {
   $("set-lang").value = state.settings.lang || "ru";
   $("set-mode").value = state.settings.collectMode || "auto";
   $("set-thumb-template").value = state.settings.thumbTemplate || "";
-  $("set-quality").value = state.settings.quality || "720";
 }
 
 function readSettingsFromFields() {
@@ -90,7 +105,6 @@ function readSettingsFromFields() {
   state.settings.lang = $("set-lang").value;
   state.settings.collectMode = $("set-mode").value;
   state.settings.thumbTemplate = $("set-thumb-template").value.trim() || "{title} - {channel}";
-  state.settings.quality = $("set-quality").value || "720";
 }
 
 async function saveSettings(showFeedback = true) {
@@ -302,7 +316,9 @@ async function analyze() {
     $("summary-placeholder").textContent = "";
     setTab("summary");
   } catch (e) {
-    $("summary-placeholder").textContent = "Ошибка анализа: " + (e.message || e);
+    const msg = friendlyError(e);
+    $("summary-placeholder").classList.remove("hidden");
+    $("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
   } finally {
     state.analyzing = false;
     $("btn-analyze").disabled = false;
@@ -315,35 +331,44 @@ function renderSummary() {
   if (!s) {
     ph.textContent = "Нажми «Анализировать», чтобы получить сводку обсуждения.";
     ph.classList.remove("hidden");
+    $("btn-copy-summary").classList.add("hidden");
     $("summary-sentiment").classList.add("hidden");
     $("summary-text").textContent = "";
     $("summary-points").innerHTML = "";
     $("summary-notable").innerHTML = "";
     return;
   }
+  ph.textContent = "";
   ph.classList.add("hidden");
+  $("btn-copy-summary").classList.remove("hidden");
 
   const total = Math.max(1, s.sentiment.positive + s.sentiment.neutral + s.sentiment.negative);
-  const pct = (n) => Math.round((n / total) * 100);
+  const pct = (n) => (n ? Math.max(4, Math.round((n / total) * 100)) : 0);
   $("summary-sentiment").classList.remove("hidden");
   $("summary-sentiment").innerHTML = `
-    <div class="sentiment-label">Тональность: 👍 ${s.sentiment.positive} · 😐 ${s.sentiment.neutral} · 👎 ${s.sentiment.negative}</div>
+    <div class="sentiment-label">Настроение зрителей</div>
     <div class="sentiment-bar">
-      <div style="display:flex;height:100%">
-        <div class="sentiment-fill positive" style="width:${pct(s.sentiment.positive)}%"></div>
-        <div class="sentiment-fill neutral" style="width:${pct(s.sentiment.neutral)}%"></div>
-        <div class="sentiment-fill negative" style="width:${pct(s.sentiment.negative)}%"></div>
+      <div style="display:flex;height:100%;min-width:0">
+        ${pct(s.sentiment.positive) ? `<div class="sentiment-fill positive" style="width:${pct(s.sentiment.positive)}%" title="Положительные"></div>` : ""}
+        ${pct(s.sentiment.neutral) ? `<div class="sentiment-fill neutral" style="width:${pct(s.sentiment.neutral)}%" title="Нейтральные"></div>` : ""}
+        ${pct(s.sentiment.negative) ? `<div class="sentiment-fill negative" style="width:${pct(s.sentiment.negative)}%" title="Негативные"></div>` : ""}
       </div>
+    </div>
+    <div class="sentiment-legend">
+      <span class="lg lg-pos">${s.sentiment.positive} положит.</span>
+      <span class="lg lg-neu">${s.sentiment.neutral} нейтр.</span>
+      <span class="lg lg-neg">${s.sentiment.negative} негатив.</span>
     </div>`;
 
-  $("summary-text").textContent = s.summary || "";
+  $("summary-text").innerHTML =
+      '<div class="summary-title">Что говорят в комментариях</div>' + esc(s.summary || "");
 
   $("summary-points").innerHTML = "";
   if (s.points?.length) {
     $("summary-points").innerHTML =
-      '<div class="subhead">Ключевые мнения</div><ul class="points">' +
+      '<div class="subhead">Ключевые мнения</div><ol class="points">' +
       s.points.map((p) => `<li>${esc(p)}</li>`).join("") +
-      "</ul>";
+      "</ol>";
   }
 
   $("summary-notable").innerHTML = "";
@@ -498,17 +523,14 @@ async function runSearch() {
 
 // ---------------- Превью и канал ----------------
 
-function openThumbModal() {
+function openThumbTab() {
   const m = state.meta;
   if (!m?.thumbs) return;
-  const url = m.thumbs.maxres || m.thumbs.sd || m.thumbs.hq;
-  if (!url) return;
-  $("thumb-modal-image").src = url;
-  $("thumb-modal").classList.remove("hidden");
-}
-
-function closeThumbModal() {
-  $("thumb-modal").classList.add("hidden");
+  const urls = [m.thumbs.maxres, m.thumbs.sd, m.thumbs.hq].filter(Boolean).join(",");
+  if (!urls) return;
+  const page = chrome.runtime.getURL("sidepanel/preview.html");
+  const qs = "?urls=" + encodeURIComponent(urls) + "&title=" + encodeURIComponent(m.title || "");
+  chrome.tabs.create({ url: page + qs });
 }
 
 async function downloadThumb() {
@@ -539,271 +561,9 @@ async function downloadThumb() {
   }
 }
 
-// ---------------- Скачивание видео ----------------
-
-function downloadWithStatus({ url, filename }) {
-  // chrome.downloads.download резолвится сразу (не по завершении),
-  // поэтому реальный исход смотрим через onChanged: complete или interrupted(error).
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (r) => {
-      if (done) return;
-      done = true;
-      chrome.downloads.onChanged.removeListener(onChange);
-      clearTimeout(timer);
-      // При неудаче подчищаем сохранённый stub (ботозащита/ошибка сервера),
-      // чтобы на диске не оставался мусорный .txt/.json.
-      if (!r.ok && typeof dlId === "number") {
-        chrome.downloads.erase({ id: dlId }).catch(() => {});
-      }
-      resolve(r);
-    };
-    const onChange = (delta) => {
-      if (delta.id !== dlId) return;
-      if (delta.state?.current === "complete") finish({ ok: true });
-      else if (delta.state?.current === "interrupted") {
-        const why = delta.error?.current
-          ? "загрузка прервана: " + (delta.error.current === "SERVER_BAD_CONTENT" ? "сервер вернул не-видео" : delta.error.current)
-          : "загрузка прервана";
-        finish({ ok: false, error: why });
-      }
-    };
-    let dlId;
-    const timer = setTimeout(() => finish({ ok: false, error: "таймаут загрузки" }), 300000);
-    chrome.downloads.download({ url, filename, conflictAction: "uniquify", saveAs: false })
-      .then((id) => {
-        dlId = id;
-        chrome.downloads.onChanged.addListener(onChange);
-      })
-      .catch((e) => finish({ ok: false, error: (e && e.message) || "не удалось запустить скачивание" }));
-  });
-}
-
-async function downloadVideo() {
-  if (!state.videoId) return;
-  const q = state.settings?.quality || "720";
-  const label = q === "best" ? "лучшее качество" : `${q}p`;
-  showToast(`Готовлю видео (${label})…`);
-  const filename = sanitizeFilename(state.meta?.title || state.videoId) + ".mp4";
-  // Сначала прямой путь: форматы берём из живого playerResponse страницы —
-  // там уже есть poToken, поэтому потоки валидные и качаются мгновенно.
-  const dr = await fallbackDirectDownload(filename);
-  if (dr.ok) {
-    showToast("Скачано (напрямую)");
-    return;
-  }
-  const sr = await tryServerDownload(filename);
-  if (sr.ok) {
-    showToast("Скачано (сервер)");
-    return;
-  }
-  // Если поток не нашёлся или всё дало 403 — показываем ошибки обоих путей,
-  // чтобы было видно, что сказал серверный yt-dlp.
-  const src = dr.sources?.length ? ` [${dr.sources.join(",")}]` : "";
-  showToast(
-    "не скачалось: прямо: " + (dr.error || "?") + " | сервер: " + (sr.error || "?") + src
-  );
-}
-
-async function readYouTubeCookies() {
-  // YouTube с 2025-2026 переводит куки на CHIPS (partitioned): ключевые сессионные
-  // куки (SID, SSID, LOGIN_INFO...) живут в партиции top-level youtube, и обычный
-  // getAll({url}) их не видит. Пробуем все доступные партиции + документ страницы.
-  const out = [];
-  const seen = new Set();
-  const merge = (list) => {
-    for (const c of list || []) {
-      if (!c?.name) continue;
-      const k = `${c.domain}|${c.name}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(c);
-    }
-  };
-  try {
-    merge(await chrome.cookies.getAll({ url: "https://www.youtube.com" }));
-  } catch (e) {}
-  try {
-    merge(await chrome.cookies.getAll({ url: "https://www.youtube.com", partitionKey: {} }));
-  } catch (e) {}
-  try {
-    merge(await chrome.cookies.getAll({ url: "https://www.youtube.com", partitionKey: { topLevelSite: "https://www.youtube.com" } }));
-  } catch (e) {}
-  // httpOnly-куки страницы не видны через document.cookie, но страница может дать
-  // хотя бы не-HttpOnly; их добавляем как запасной источник (полные данные даёт
-  // только cookies API, но тем - 0 в диагностике).
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:page-cookie" });
-      const raw = String(r?.raw || "");
-      if (raw) {
-        for (const part of raw.split(";")) {
-          const i = part.indexOf("=");
-          if (i <= 0) continue;
-          const name = part.slice(0, i).trim();
-          if (seen.has(`_page_|${name}`)) continue;
-          seen.add(`_page_|${name}`);
-          out.push({ name, value: part.slice(i + 1).trim(), domain: "youtube.com", path: "/", secure: false, httpOnly: false });
-        }
-      }
-    }
-  } catch (e) {}
-  return out;
-}
-
-async function tryServerDownload(filename) {
-  const baseUrl = (state.settings?.baseUrl || "").replace(/\/+$/, "");
-  const token = state.settings?.token || "";
-  if (!baseUrl || !token) return { ok: false, error: "Не задан сервер/секрет" };
-  const headers = { "X-Sec-Token": token };
-  let session = "";
-  let cookiesFound = false;
-  try {
-    // Отдаём серверу браузерные cookies YouTube (одноразовая сессия, ~30 мин) —
-    // через них yt-dlp обходит ботозащиту и скачивает даже с IP датацентра.
-    const ck = await readYouTubeCookies();
-    cookiesFound = Boolean(ck.length);
-    if (ck.length) {
-      // Cold-start Render держится до ~50 с, поэтому пробуем до 3 раз.
-      for (let attempt = 0; attempt < 3 && !session; attempt++) {
-        try {
-          const r0 = await fetch(`${baseUrl}/api/download-cookies`, {
-            method: "POST",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              cookies: ck.map((c) => ({
-                name: c.name,
-                value: c.value,
-                domain: c.domain,
-                path: c.path,
-                secure: Boolean(c.secure),
-                httpOnly: Boolean(c.httpOnly),
-                expirationDate: c.expirationDate || undefined,
-              })),
-            }),
-          });
-          if (r0.ok) {
-            const j = await r0.json().catch(() => ({}));
-            session = j.session || "";
-          }
-        } catch (e) {
-          // transient-сбой сети — повторим
-        }
-        if (!session) await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
-      }
-    }
-  } catch (e) {
-    // cookies API недоступен — перезагрузи расширение в chrome://extensions,
-    // чтобы Chrome перечитал permission "cookies"/host_permissions.
-    cookiesFound = false;
-  }
-  const qs = `id=${encodeURIComponent(state.videoId)}&quality=${encodeURIComponent(state.settings.quality || "720")}${session ? `&session=${encodeURIComponent(session)}` : ""}`;
-  const url = `${baseUrl}/api/download?${qs}`;
-  try {
-    // С сессией токен не нужен (session == авторизация) — chrome.downloads не умеет headers.
-    // Без session сервер ответит 403, поэтому сразу считаем ошибкой.
-    if (!session) {
-      const why = cookiesFound
-        ? "сервер не выдал сессию (попробуй ещё раз; если повторяется — проверь «Проверить связь»)"
-        : "расширению не доступны cookies YouTube — перезагрузи его в chrome://extensions (кнопка ↻), открой видео, будучи залогиненным, и нажми 🎬 ещё раз";
-      return { ok: false, error: why };
-    }
-    // Probe: узнаём у сервера наличие/файл ДО скачивания. Если сервер вернёт
-    // ошибку — у chrome.downloads не будет возможности сохранить JSON как файл.
-    const probe = await fetch(`${url}&probe=1`, { signal: AbortSignal.timeout(90000) });
-    if (!probe.ok) {
-      const body = await probe.json().catch(() => ({}));
-      const reason = body?.detail || body?.error || `HTTP ${probe.status}`;
-      return { ok: false, error: `сервер: ${reason}` };
-    }
-    const meta = await probe.json().catch(() => ({}));
-    return await downloadWithStatus({ url, filename });
-  } catch (e) {
-    return { ok: false, error: "Сервер недоступен: " + (e.message || e) };
-  }
-}
-
-async function fallbackDirectDownload(filename) {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return { ok: false, error: "нет активной вкладки" };
-    const reply = await chrome.tabs.sendMessage(tab.id, {
-      type: "yt:player-stream",
-      videoId: state.videoId,
-      quality: state.settings?.quality || "720",
-    });
-    const streams = Array.isArray(reply?.streams) ? reply.streams : [];
-    if (!streams.length) {
-      const why = reply?.error
-        ? `причина: ${reply.error}`
-        : `источники: ${(reply?.sources || []).join(", ") || "нет"}`;
-      return { ok: false, error: "прямой поток не найден — " + why };
-    }
-    // Пробуем кандидатов по очереди. Если googlevideo отклонил прямой
-    // chrome.downloads (SERVER_FORBIDDEN) или отдал заглушку — тот же URL
-    // качаем через fetch в контексте расширения и сохраняем blob-URL.
-    let lastErr = "";
-    for (let i = 0; i < streams.length; i++) {
-      const r = await downloadWithStatus({ url: streams[i], filename });
-      if (r.ok) return { ok: true, sources: reply?.sources };
-      lastErr = r.error;
-      if (r.error && (r.error.includes("FORBIDDEN") || r.error.includes("BAD_CONTENT") || r.error.includes("не-видео"))) {
-        const viaBlob = await downloadStreamViaBlob(streams[i], filename);
-        if (viaBlob.ok) return { ok: true, sources: reply?.sources };
-        lastErr = viaBlob.error;
-      } else {
-        return { ok: false, error: r.error, sources: reply?.sources };
-      }
-    }
-    return { ok: false, error: lastErr || "все потоки недоступны", sources: reply?.sources };
-  } catch (e) {
-    return { ok: false, error: "прямой поток: " + (e.message || e) };
-  }
-}
-
-// Скачивает поток через fetch (контекст расширения, есть host_permissions на
-// *.googlevideo.com) и сохраняет его как blob-URL. googlevideo часто принимает
-// fetch, но отворачивается от прямого chrome.downloads.
-async function downloadStreamViaBlob(url, filename) {
-  // Сначала пробуем скачать "именем страницы" (MAIN-мир: Origin/куки страницы) —
-  // это ближайший аналог запроса плеера, меньше всего шансов на 403.
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      const viaPage = await chrome.tabs.sendMessage(tab.id, {
-        type: "yt:download-page",
-        url,
-        filename,
-      });
-      if (viaPage?.ok) return { ok: true, source: "via-page" };
-      if (viaPage?.error && !String(viaPage.error).includes("Receiving end")) {
-        return { ok: false, error: "через страницу: " + viaPage.error };
-      }
-    }
-  } catch (e) {
-    // контент-скрипт недоступен — идём в обычный fetch
-  }
-  try {
-    const resp = await fetch(url, {
-      credentials: "include",
-      referrer: "https://www.youtube.com/",
-      signal: AbortSignal.timeout(600000),
-    });
-    if (!resp.ok) return { ok: false, error: `fetch потока: HTTP ${resp.status}` };
-    const blob = await resp.blob();
-    if (!blob.size) return { ok: false, error: "поток пустой" };
-    const blobUrl = URL.createObjectURL(blob);
-    try {
-      const r = await downloadWithStatus({ url: blobUrl, filename });
-      return r;
-    } finally {
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-    }
-  } catch (e) {
-    return { ok: false, error: "fetch потока: " + (e.message || e) };
-  }
-}
+// Удалён функционал скачивания видео (SABR/403 в 2026 делает прямое скачивание
+// невозможным без локального yt-dlp; серверный yt-dlp с Render не справляется
+// из-за ботозащиты YouTube). Сохраняем только скачивание превью (downloadThumb).
 
 function blobToDataURL(blob) {
   return new Promise((resolve, reject) => {
@@ -913,40 +673,29 @@ function bindEvents() {
     }
   });
   $("btn-download-thumb").addEventListener("click", downloadThumb);
-  $("btn-view-thumb").addEventListener("click", openThumbModal);
-  $("btn-modal-close").addEventListener("click", closeThumbModal);
-  $("thumb-modal").addEventListener("click", (e) => {
-    if (e.target.id === "thumb-modal") closeThumbModal();
-  });
-  $("btn-modal-download").addEventListener("click", async () => {
-    const img = $("thumb-modal-image");
-    const url = img.src || "";
-    if (url) {
-      closeThumbModal();
-      try {
-        const resp = await fetch(url);
-        const blob = await resp.blob();
-        const dataUrl = await blobToDataURL(blob);
-        const tpl = state.settings?.thumbTemplate || "{title} - {channel}";
-        const m = state.meta;
-        const name = sanitizeFilename(
-          tpl
-            .replaceAll("{title}", sanitizeFilename(m.title || "video"))
-            .replaceAll("{channel}", sanitizeFilename(m.channelName || "channel"))
-            .replaceAll("{videoid}", m.videoId)
-        );
-        await chrome.downloads.download({
-          url: dataUrl,
-          filename: name + ".jpg",
-          conflictAction: "uniquify",
-          saveAs: false,
-        });
-      } catch (e) {
-        showToast("Не удалось скачать превью: " + (e.message || e));
-      }
+  $("btn-view-thumb").addEventListener("click", openThumbTab);
+  $("btn-copy-summary").addEventListener("click", async () => {
+    const s = state.summary;
+    if (!s) return;
+    const lines = [
+      s.summary || "",
+      "",
+      "Темы:",
+      ...(s.topics || []).map((t) => `• ${t.name} (${t.count})`),
+      "",
+      "Ключевые мнения:",
+      ...(s.points || []).map((p, i) => `${i + 1}. ${p}`),
+    ];
+    if (s.notable?.length) {
+      lines.push("", "Яркие комментарии:", ...s.notable.map((c) => `• ${c.author}: ${c.text}`));
+    }
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      showToast("Сводка скопирована в буфер ✓");
+    } catch (e) {
+      showToast("Не удалось скопировать: " + (e.message || e));
     }
   });
-  $("btn-download-video").addEventListener("click", downloadVideo);
   $("btn-open-video").addEventListener("click", () => {
     if (state.meta) chrome.tabs.create({ url: state.meta.pageUrl });
   });
@@ -973,26 +722,7 @@ function bindEvents() {
       const ok = await proxy.test();
       let diag = ok ? "Связь есть ✓" : "Ответ пустой";
       diag += ` | v${chrome.runtime.getManifest().version}`;
-      if (typeof chrome.cookies === "undefined") {
-        diag += " | cookies API недоступен (перезагрузи расширение)";
-      } else {
-        const ck = await readYouTubeCookies();
-        const names = ck.map((c) => c.name);
-        const key = (n) => names.includes(n);
-        const sess = key("SID") || key("__Secure-1PSID") || key("SSID") || key("__Secure-3PSID");
-        const login = key("LOGIN_INFO") || key("__Secure-YEC");
-        diag += ` | cookies: ${ck.length}${sess ? " (сессия ✓)" : ""}${login ? " (логин ✓)" : ""}`;
-      }
-      if (typeof chrome.declarativeNetRequest !== "undefined") {
-        try {
-          const rulesets = await chrome.declarativeNetRequest.getEnabledRulesets();
-          diag += ` | DNR: ${rulesets.includes("youtube_headers") ? "вкл ✓" : "ВЫКЛ ✗"}`;
-        } catch (e) {
-          diag += " | DNR: ошибка";
-        }
-      } else {
-        diag += " | DNR: недоступен — перезагрузи расширение!";
-      }
+      diag += ` · модель ${state.settings.model || "?"}`;
       el.textContent = diag;
       el.className = ok ? "ok" : "err";
     } catch (e) {

@@ -152,8 +152,9 @@ export class GroqProxy {
           }
           if (resp.status === 502) {
             const data = await resp.json().catch(() => ({}));
-            const reason = data.detail ? ` (${data.detail})` : "";
-            throw new Error((data.error || "LLM не ответил (502)") + reason);
+            let msg = "Модель не ответила (временный сбой на сервере). Попробуй ещё раз.";
+            if (data?.detail) msg = `Модель не ответила: ${data.detail} Попробуй ещё раз.`;
+            throw new Error(msg);
           }
           if (!resp.ok) throw new Error("Прокси ответил " + resp.status);
           const data = await resp.json();

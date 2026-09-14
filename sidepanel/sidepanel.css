@@ -253,8 +253,13 @@ button.ghost {
 /* Summary */
 .summary-text {
   font-size: 13.5px;
-  line-height: 1.55;
+  line-height: 1.6;
   margin-bottom: 14px;
+  white-space: pre-line;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
 }
 
 .subhead {
@@ -262,25 +267,36 @@ button.ghost {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
-  margin: 14px 0 8px;
+  margin: 16px 0 8px;
 }
 
-ul.points {
+ol.points {
   list-style: none;
+  counter-reset: pt;
 }
 
-ul.points li {
-  padding: 5px 0 5px 16px;
+ol.points li {
+  counter-increment: pt;
+  padding: 6px 0 6px 26px;
   position: relative;
   color: var(--fg);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-ul.points li::before {
-  content: "•";
-  color: var(--accent);
+ol.points li::before {
+  content: counter(pt);
   position: absolute;
   left: 2px;
+  top: 8px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 17px;
 }
 
 .sentiment-row {
@@ -290,15 +306,25 @@ ul.points li::before {
   margin: 10px 0 4px;
 }
 
+.sentiment-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
 .sentiment-bar {
-  height: 6px;
-  border-radius: 3px;
+  height: 10px;
+  border-radius: 5px;
   background: var(--bg-3);
   overflow: hidden;
+  display: flex;
 }
 
 .sentiment-fill {
   height: 100%;
+  transition: width 0.4s ease;
 }
 
 .sentiment-fill.positive {
@@ -313,10 +339,31 @@ ul.points li::before {
   background: #e5484d;
 }
 
-.sentiment-label {
-  font-size: 12px;
+.sentiment-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 11.5px;
   color: var(--muted);
-  margin-bottom: 6px;
+}
+
+.sentiment-legend .lg::before {
+  content: "●";
+  margin-right: 4px;
+  font-size: 9px;
+  vertical-align: 1px;
+}
+
+.sentiment-legend .lg-pos::before {
+  color: #2e9e5b;
+}
+
+.sentiment-legend .lg-neu::before {
+  color: #8a8a8a;
+}
+
+.sentiment-legend .lg-neg::before {
+  color: #e5484d;
 }
 
 /* Topics */
@@ -472,6 +519,32 @@ ul.points li::before {
   color: var(--accent);
 }
 
+.error-box {
+  background: rgba(229, 72, 77, 0.08);
+  border: 1px solid rgba(229, 72, 77, 0.35);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: var(--fg);
+  line-height: 1.5;
+  text-align: left;
+  font-size: 13px;
+}
+
+.error-box b {
+  color: #ff6b70;
+}
+
+.copy-btn {
+  margin-top: 14px;
+  width: 100%;
+}
+
+.summary-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
 /* Settings */
 .settings-block {
   background: var(--bg-2);
@@ -524,30 +597,4 @@ ul.points li::before {
 
 .err {
   color: #e5484d;
-}
-
-/* Модалка превью */
-.thumb-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.85);
-  padding: 12px;
-}
-
-.thumb-modal img {
-  max-width: 100%;
-  max-height: calc(100% - 48px);
-  border-radius: 6px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-}
-
-.thumb-modal-actions {
-  display: flex;
-  gap: 8px;
 }

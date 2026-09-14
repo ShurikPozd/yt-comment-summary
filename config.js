@@ -7,5 +7,4 @@ export const DEFAULTS = {
   lang: "ru",
   collectMode: "auto",
   thumbTemplate: "{title} - {channel}",
-  quality: "720",
 };

@@ -4,7 +4,7 @@ Chromium-расширение (Manifest V3, Side Panel) для YouTube:
 
 - ИИ-сводка обсуждения под видео (темы, ключевые мнения, тональность, яркие комментарии);
 - поиск по комментариям — по тексту и по смыслу (LLM-ранжирование);
-- превью видео и информация о канале (название, подписчики, аватар, ссылка) из DOM страницы watch.
+- превью видео (открывается в отдельной вкладке для детального просмотра) и информация о канале (название, подписчики, аватар, ссылка) из DOM страницы watch.
 
 LLM-вызовы идут не напрямую из браузера, а через прокси-эндпоинт `POST /api/chat`
 на сервере (см. репозиторий `ShurikPozd/tg-saver-bot-cloud`). Groq-ключ хранится на
@@ -39,12 +39,12 @@ LLM-вызовы идут не напрямую из браузера, а чер
 
 ## Структура
 
-- `manifest.json` — манифест MV3 (storage, sidePanel, downloads, tabs; host Yahoo/YouTube/i.ytimg/onrender).
+- `manifest.json` — манифест MV3 (storage, sidePanel, downloads, tabs; host YouTube/i.ytimg/onrender).
 - `background.js` — service worker: открытие side panel по клику на иконку.
 - `content.js` — сбор метаданных из DOM, сбор комментариев через InnerTube (`youtubei/v1/next`) с fallback на DOM.
 - `groq.js` — клиент прокси (fetch, retry/backoff, AbortController, сериализация вызовов).
 - `prompts.js` — системные/пользовательские промпты для чанкового анализа, сводки и поиска.
-- `sidepanel/` — интерфейс (html/css/js).
+- `sidepanel/` — интерфейс (html/css/js) и страница просмотра превью (`preview.html`).
 - `icons/` — иконки расширения.
 
 ## Примечания

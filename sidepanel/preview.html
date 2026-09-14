@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="sidepanel.css" />
+    <link rel="stylesheet" href="preview.css" />
+    <title>Превью — YouTube</title>
+  </head>
+  <body>
+    <div id="pv-app">
+      <header id="pv-bar">
+        <button id="pv-back" class="pv-ghost" title="Назад">←</button>
+        <div id="pv-title" class="pv-title"></div>
+        <button id="pv-download" class="pv-ghost">⬇ Скачать</button>
+      </header>
+      <main id="pv-stage">
+        <img id="pv-image" alt="превью" draggable="false" />
+        <div id="pv-error" class="hidden">
+          <div class="pv-error-icon">🖼️</div>
+          <div>Превью не удалось загрузить.</div>
+          <button id="pv-retry" class="pv-ghost">Повторить</button>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="preview.js"></script>
+  </body>
+</html>
