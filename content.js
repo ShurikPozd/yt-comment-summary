@@ -67,8 +67,11 @@
       document.querySelector("ytd-reel-video-renderer ytd-channel-name a") ||
       document.querySelector("#channel-name a") ||
       document.querySelector("#channel-name");
-    const channelName = (nameEl?.textContent || "").trim();
-    const channelUrl = (nameEl?.getAttribute("href") || "").trim() || null;
+
+    const linkEl = nameEl?.tagName === "A" ? nameEl : (nameEl?.querySelector("a") || nameEl);
+    const channelName = (linkEl?.textContent || nameEl?.textContent || "").trim();
+    let channelUrl = (linkEl?.getAttribute("href") || "").trim() || null;
+    if (channelUrl && !/^(https?:\/\/|\/)/i.test(channelUrl)) channelUrl = "/" + channelUrl;
 
     const subsEl =
       owner?.querySelector("yt-formatted-string#owner-sub-count") ||

@@ -180,7 +180,12 @@ function renderHeader() {
   $("video-title").textContent = m.title || "";
   $("channel-name").textContent = m.channelName || "—";
   $("channel-subs").textContent = m.channelSubs || "";
-  $("channel-name").href = m.channelUrl ? "https://www.youtube.com" + m.channelUrl : "#";
+  const cu = m.channelUrl || "";
+  $("channel-name").href = cu
+    ? /^https?:\/\//i.test(cu)
+      ? cu
+      : "https://www.youtube.com" + cu
+    : `https://www.youtube.com/results?search_query=${encodeURIComponent(m.channelName || "")}`;
   const avatar = $("channel-avatar");
   avatar.src = m.channelAvatar || "";
   avatar.onerror = () => (avatar.style.visibility = "hidden");
@@ -837,9 +842,6 @@ function bindEvents() {
     } catch (e) {
       showToast("Не удалось сохранить: " + (e.message || e));
     }
-  });
-  $("btn-open-video").addEventListener("click", () => {
-    if (state.meta) chrome.tabs.create({ url: state.meta.pageUrl });
   });
   $("chip-all").addEventListener("click", () => {
     state.activeTopic = null;
