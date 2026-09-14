@@ -10,6 +10,19 @@
 
   let cache = null;
 
+  function getVisitorData() {
+    try {
+      if (window.ytcfg && typeof window.ytcfg.get === "function") {
+        const vd = window.ytcfg.get("VISITOR_DATA");
+        if (typeof vd === "string" && vd.length > 20) return vd;
+      }
+    } catch (e) {}
+    try {
+      // Резерв: берём из данных плеера игрока (то же самое значение, что у страницы).
+    } catch (e) {}
+    return null;
+  }
+
   function getPlayerResponse() {
     try {
       if (window.ytInitialPlayerResponse?.streamingData) {
@@ -28,15 +41,24 @@
 
   function refresh() {
     const pr = getPlayerResponse();
-    cache = pr ? { videoId: pr.videoDetails?.videoId || null, data: pr.streamingData || null } : null;
+    cache = pr
+      ? {
+          videoId: pr.videoDetails?.videoId || null,
+          data: pr.streamingData || null,
+          visitorData: getVisitorData(),
+        }
+      : null;
   }
 
   window.addEventListener("message", (e) => {
     if (e.source !== window || !e.data) return;
     if (e.data.type !== REQ) return;
     refresh();
-    const payload = cache && cache.videoId === e.data.videoId ? cache.data : null;
-    window.postMessage({ type: RES, ok: Boolean(payload), data: payload }, "*");
+    const sameVideo = cache && cache.videoId === e.data.videoId;
+    window.postMessage(
+      { type: RES, ok: Boolean(sameVideo), data: sameVideo ? cache.data : null, visitorData: cache?.visitorData || null },
+      "*"
+    );
   });
 
   // Обновляем кэш после навигации YouTube (SPA).

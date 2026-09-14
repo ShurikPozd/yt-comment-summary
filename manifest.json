@@ -3,7 +3,7 @@
   "name": "Сводка комментариев YouTube",
   "version": "0.1.0",
   "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео и инфо о канале.",
-  "permissions": ["storage", "sidePanel", "downloads", "tabs", "cookies"],
+  "permissions": ["storage", "sidePanel", "downloads", "tabs", "cookies", "declarativeNetRequest"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
@@ -11,6 +11,15 @@
     "https://*.googlevideo.com/*",
     "https://*.onrender.com/*"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "youtube_headers",
+        "enabled": true,
+        "path": "rules/youtube-headers.json"
+      }
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },

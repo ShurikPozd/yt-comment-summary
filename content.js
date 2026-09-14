@@ -291,6 +291,7 @@
   // Просит мост (main world) вернуть streamingData текущего видео со страницы.
   // Там уже есть poToken/сигнатуры, выданные реальному плееру — это самым
   // надёжный и легальный способ получить рабочие URL форматов.
+  let lastPageInfo = null; // { visitorData }
   function getPageFormatsFor(videoId, timeoutMs = 3000) {
     return new Promise((resolve) => {
       let done = false;
@@ -304,6 +305,7 @@
       const onMsg = (e) => {
         if (e.source !== window || !e.data) return;
         if (e.data.type !== "ytc:streams") return;
+        lastPageInfo = { visitorData: e.data.visitorData || null };
         const sd = e.data.data;
         const list = sd ? (sd.formats || []).concat(sd.adaptiveFormats || []) : [];
         finish(list);
@@ -347,8 +349,22 @@
       pageBest.forEach((s) => push(s?.url));
     } catch (e) {}
 
-    // 2) Fallback клиенты Innertube (WEB/ANDROID/TVHTML5) — обход без poToken.
+    // 2) Fallback клиенты Innertube. ANDROID_VR (Oculus) — единственный, кому
+    // YouTube НЕ требует poToken для GVS: он отдаёт прямые CDN URL без SABR
+    // и без лимита 4 МБ/запрос. Требует валидный visitorData со страницы.
+    const vd = lastPageInfo?.visitorData;
     const clients = [
+      {
+        clientName: "ANDROID_VR",
+        clientVersion: "1.65.10",
+        androidSdkVersion: 32,
+        deviceMake: "Oculus",
+        deviceModel: "Quest 3",
+        userAgent: "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L) gzip",
+        osName: "Android",
+        osVersion: "12L",
+        ...(vd ? { visitorData: vd } : {}),
+      },
       {
         clientName: "WEB",
         clientVersion: CLIENT_VERSION,
@@ -377,6 +393,8 @@
         const payload = {
           context: { client: { hl: (navigator.language || "ru-RU").replace("-", "_"), gl: "US", ...c } },
           videoId,
+          contentCheckOk: true,
+          racyCheckOk: true,
         };
         const resp = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}`, {
           method: "POST",
@@ -390,6 +408,11 @@
         });
         if (!resp.ok) throw new Error("player:" + resp.status);
         const data = await resp.json();
+        if (data.playabilityStatus?.status !== "OK") {
+          throw new Error(
+            "playability:" + (data.playabilityStatus?.status || "?") + " " + (data.playabilityStatus?.reason || "")
+          );
+        }
         const formats = (data.streamingData?.formats || []).concat(data.streamingData?.adaptiveFormats || []);
         if (!formats.length) throw new Error("noFormats");
         pickStreams(formats, quality).forEach((s) => push(s?.url));

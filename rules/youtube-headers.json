@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://www.youtube.com" },
+        { "header": "Referer", "operation": "set", "value": "https://www.youtube.com/" },
+        { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-site" },
+        { "header": "Sec-Fetch-Mode", "operation": "set", "value": "no-cors" },
+        { "header": "Sec-Fetch-Dest", "operation": "set", "value": "video" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*.googlevideo.com/videoplayback*"
+    }
+  }
+]
