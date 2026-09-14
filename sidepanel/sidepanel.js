@@ -431,7 +431,7 @@ function topicCommentsHtml(name) {
   if (!list.length) return '<div class="placeholder">Комментарии по теме не найдены.</div>';
   return list
     .map(
-      (c, i) => `<div class="comment-card${i >= 10 ? " secondary" : ""}" data-name="${esc(name)}">
+      (c) => `<div class="comment-card">
         <img class="avatar" src="${esc(c.avatar || "")}" onerror="this.style.visibility='hidden'" alt="" loading="lazy" />
         <div class="c-body">
           <div class="c-meta">

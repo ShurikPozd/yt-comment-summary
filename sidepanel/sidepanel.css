@@ -482,14 +482,6 @@ ol.points li::before {
   border-bottom: none;
 }
 
-.topic-body .comment-card.secondary {
-  display: none;
-}
-
-.topic-body .comment-card.secondary.show {
-  display: flex;
-}
-
 /* Search */
 .search-row {
   display: flex;
