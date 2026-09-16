@@ -23,9 +23,10 @@ LLM-вызовы идут не напрямую из браузера, а чер
 
 В боковой панели открыть вкладку «⚙️ Настройки»:
 
-- **URL сервера** — например `https://tg-saver-bot-cloud.onrender.com`;
+- **URL сервера** — по умолчанию `http://localhost:8080` (локальный tg-saver-bot-cloud):
+например `https://tg-saver-bot-cloud.onrender.com`, если бэкенд развёрнут в облаке;
 - **Секрет** — значение `EXT_SECRET` из env бэкенда;
-- **Модель** — модель из allowlist бэкенда (`EXT_MODELS_ALLOW`), по умолчанию `qwen/qwen3.6-27b`;
+- **Модель** — модель из allowlist бэкенда (`EXT_MODELS_ALLOW`), по умолчанию `qwen/qwen3.8-27b`;
 - **Максимум комментариев** — сколько собрать для анализа (10–2000, по умолчанию 120);
 - **Язык сводки** — `ru` или `en`;
 - **Тема интерфейса** — тёмная, светлая или как в системе;
@@ -42,7 +43,7 @@ LLM-вызовы идут не напрямую из браузера, а чер
 
 ## Структура
 
-- `manifest.json` — манифест MV3 (storage, sidePanel, downloads, tabs; host YouTube/i.ytimg/onrender).
+- `manifest.json` — манифест MV3 (storage, sidePanel, downloads, tabs; host YouTube/i.ytimg/localhost/onrender).
 - `background.js` — service worker: открытие side panel по клику на иконку.
 - `content.js` — сбор метаданных из DOM, сбор комментариев через InnerTube (`youtubei/v1/next`) с fallback на DOM.
 - `config.js` — публичные дефолты расширения (без секретов).
@@ -53,5 +54,5 @@ LLM-вызовы идут не напрямую из браузера, а чер
 
 ## Примечания
 
-- Если прокси не на `*.onrender.com` — обновить `host_permissions` в `manifest.json`.
+- Если прокси не на `localhost:8080` и не на `*.onrender.com` — обновить `host_permissions` в `manifest.json`.
 - Секреты и токены не хранятся в коде; `EXT_SECRET` задаётся только в настройках расширения.

@@ -8,6 +8,7 @@
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
     "https://i.ytimg.com/*",
+    "http://localhost:8080/*",
     "https://*.onrender.com/*"
   ],
   "background": {
