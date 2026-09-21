@@ -13,7 +13,7 @@
   const DEFAULT_MAX = 120;
 
   let currentVideoId = null;
-  let collector = null; // активный сборщик (для отмены)
+  let collector = null; // активный сборщик (для отмены); { videoId, cancelled }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -273,17 +273,28 @@
     };
   }
 
-  async function innerTubePost(payload) {
-    const resp = await fetch(INNERTUBE_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-YouTube-Client-Name": "1",
-        "X-YouTube-Client-Version": CLIENT_VERSION,
-      },
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
+  async function innerTubePost(payload, timeoutMs = 20000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let resp;
+    try {
+      resp = await fetch(INNERTUBE_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": CLIENT_VERSION,
+        },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      if (e?.name === "AbortError") throw new Error("innerTubeTimeout");
+      throw new Error("innerTubeNetwork:" + String(e?.message || e));
+    } finally {
+      clearTimeout(timer);
+    }
     if (resp.status === 403 || resp.status === 429) {
       throw new Error("innerTubeBlocked:" + resp.status);
     }
@@ -304,10 +315,12 @@
     if (!token) throw new Error("innerTubeNoCommentsSection");
 
     // Шаг 2+: листать комментарии по continuation
+    let emptyPages = 0;
     while (out.length < limit && token) {
       if (collector?.cancelled) throw new Error("cancelled");
       const data = await innerTubePost({ context: baseContext(), continuation: token });
       const entities = buildEntityMap(data);
+      const before = out.length;
 
       for (const node of findThreadNodes(data)) {
         if (out.length >= limit) break;
@@ -327,6 +340,14 @@
       }
 
       token = findNextToken(data);
+      if (out.length === before) {
+        emptyPages++;
+        // YouTube перестал отдавать новые комментарии (контент закончился или
+        // ответ сменил схему) — не листаем дальше вхолостую.
+        if (emptyPages >= 3) break;
+      } else {
+        emptyPages = 0;
+      }
       if (!token) break;
       onBatch?.(out.length);
       await sleep(350);
@@ -373,8 +394,10 @@
   async function collectViaDom(videoId, limit, onBatch) {
     const out = [];
     document.querySelector("#comments")?.scrollIntoView();
+    let stagnant = 0;
     for (let i = 0; i < 60 && out.length < limit; i++) {
       if (collector?.cancelled) throw new Error("cancelled");
+      const before = out.length;
       const nodes = document.querySelectorAll("ytd-comment-renderer, ytd-comment-view-model");
       for (const n of nodes) {
         if (out.length >= limit) break;
@@ -388,6 +411,14 @@
       const cont = document.querySelector("ytd-continuation-item-renderer");
       cont?.querySelector("tp-yt-paper-button, button")?.click();
       onBatch?.(out.length);
+      if (out.length === before) {
+        stagnant++;
+        // Ничего нового за несколько проходов — контент-скриптом уже всё собрано
+        // или комментарии монтируются лениво; не крутим цикл впустую.
+        if (stagnant >= 4) break;
+      } else {
+        stagnant = 0;
+      }
       await sleep(800);
     }
     return out;
@@ -399,13 +430,20 @@
     if (!videoId) return;
     const stateKey = K.state(videoId);
     const { [stateKey]: prev } = await sessionGet([stateKey]);
-    if (!force && prev && (prev.status === "done" || prev.status === "loading")) return;
+    if (!force && prev) {
+      if (prev.status === "done") return;
+      // «loading», зависшее от предыдущего процесса (страница перезагружена,
+      // сборщик умер, но статус остался) — перезапускаем.
+      if (prev.status === "loading" && collector && collector.videoId === videoId && !collector.cancelled) {
+        return;
+      }
+    }
 
     const settings = (await chrome.storage.local.get("settings")).settings || {};
     const max = Math.min(Math.max(parseInt(settings.maxComments, 10) || DEFAULT_MAX, 10), 2000);
     const mode = settings.collectMode || "auto";
 
-    collector = { cancelled: false };
+    collector = { videoId, cancelled: false };
     await sessionSet({ [stateKey]: { status: "loading", fetched: 0, max, error: null } });
     send({ type: "yt:progress", videoId, status: "loading", fetched: 0, max });
 
