@@ -302,13 +302,14 @@
     return resp.json();
   }
 
-  async function collectViaInnerTube(videoId, limit, onBatch) {
+  async function collectViaInnerTube(videoId, limit, onBatch, mine) {
     const out = [];
     const seen = new Set();
 
     // Шаг 1: получить токен секции комментариев с watch-страницы
     let token = null;
     {
+      if (collector !== mine || collector?.cancelled) throw new Error("cancelled");
       const page = await innerTubePost({ context: baseContext(), videoId });
       token = commentSectionToken(page);
     }
@@ -317,7 +318,7 @@
     // Шаг 2+: листать комментарии по continuation
     let emptyPages = 0;
     while (out.length < limit && token) {
-      if (collector?.cancelled) throw new Error("cancelled");
+      if (collector !== mine || collector?.cancelled) throw new Error("cancelled");
       const data = await innerTubePost({ context: baseContext(), continuation: token });
       const entities = buildEntityMap(data);
       const before = out.length;
@@ -391,12 +392,12 @@
     };
   }
 
-  async function collectViaDom(videoId, limit, onBatch) {
+  async function collectViaDom(videoId, limit, onBatch, mine) {
     const out = [];
-    document.querySelector("#comments")?.scrollIntoView();
+    const tab = location.pathname.startsWith("/shorts");
     let stagnant = 0;
     for (let i = 0; i < 60 && out.length < limit; i++) {
-      if (collector?.cancelled) throw new Error("cancelled");
+      if (collector !== mine || collector?.cancelled) throw new Error("cancelled");
       const before = out.length;
       const nodes = document.querySelectorAll("ytd-comment-renderer, ytd-comment-view-model");
       for (const n of nodes) {
@@ -406,10 +407,16 @@
           out.push(parsed);
         }
       }
-      const expandMore = document.querySelector("ytd-button-renderer#more-replies");
-      expandMore?.click();
-      const cont = document.querySelector("ytd-continuation-item-renderer");
-      cont?.querySelector("tp-yt-paper-button, button")?.click();
+      if (!tab) {
+        // На обычном видео (не шортсах) — доскроллить к комментариям, чтобы
+        // YouTube их подмонтировал, и кликнуть «показать ещё».
+        document.querySelector("#comments")?.scrollIntoView();
+        document.querySelector("ytd-button-renderer#more-replies")?.click();
+        const cont = document.querySelector(
+          "ytd-continuation-item-renderer ytd-button-renderer"
+        );
+        cont?.querySelector("tp-yt-paper-button, button")?.click();
+      }
       onBatch?.(out.length);
       if (out.length === before) {
         stagnant++;
@@ -448,7 +455,9 @@
     send({ type: "yt:progress", videoId, status: "loading", fetched: 0, max });
 
     let comments = [];
+    const mine = collector;
     const onBatch = async (n) => {
+      if (collector !== mine) return;
       await sessionSet({
         [stateKey]: { status: "loading", fetched: n, max, error: null },
         [K.comments(videoId)]: comments,
@@ -459,16 +468,16 @@
     try {
       if (mode === "innerTube" || mode === "auto") {
         try {
-          comments = await collectViaInnerTube(videoId, max, onBatch);
+          comments = await collectViaInnerTube(videoId, max, onBatch, mine);
         } catch (e) {
           if (String(e.message).startsWith("innerTubeBlocked") && mode === "auto") {
-            comments = await collectViaDom(videoId, max, onBatch);
+            comments = await collectViaDom(videoId, max, onBatch, mine);
           } else {
             throw e;
           }
         }
       } else {
-        comments = await collectViaDom(videoId, max, onBatch);
+        comments = await collectViaDom(videoId, max, onBatch, mine);
       }
       comments = comments.slice(0, max);
       await sessionSet({
@@ -496,6 +505,11 @@
       return;
     }
     if (id === currentVideoId && !forceCollect) return;
+    // Ушли на другое видео — гасим активный сбор предыдущего, иначе его цикл
+    // продолжит крутиться в фоне и дёргать DOM (клики/скролл в шортсах).
+    if (collector && collector.videoId !== id && !collector.cancelled) {
+      collector.cancelled = true;
+    }
     currentVideoId = id;
 
     // светимся на новом видео
