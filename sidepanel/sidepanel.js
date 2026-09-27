@@ -237,7 +237,23 @@ async function analyze() {
     return;
   }
   if (!state.comments.length) {
-    showToast("Сначала собери комментарии — нажми 🔄 или открой видео заново.");
+    // Разберёмся по живому статусу сбора: идёт ли он, упал ли, или готов без комментов.
+    const stKey = state.videoId ? `collect:${state.videoId}` : null;
+    let st = null;
+    if (stKey) {
+      try {
+        st = (await chrome.storage.session.get([stKey]))[stKey] || null;
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    if (st?.status === "loading") {
+      showToast(`Сбор ещё идёт: ${st.fetched || 0}/${st.max || "…"}. Подожди, пока появится «✓».`);
+    } else if (st?.status === "error") {
+      showToast(`Сбор комментариев упал: ${st.error || "ошибка"}. Нажми 🔄, чтобы повторить.`);
+    } else {
+      showToast("Сначала собери комментарии — нажми 🔄 или открой видео заново.");
+    }
     return;
   }
   state.analyzing = true;

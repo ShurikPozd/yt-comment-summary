@@ -14,6 +14,7 @@
 
   let currentVideoId = null;
   let collector = null; // активный сборщик (для отмены); { videoId, cancelled }
+  let collectGen = 0; // поколение сбора: растёт при смене видео/рестарте
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -435,6 +436,10 @@
 
   async function runCollection(videoId, force) {
     if (!videoId) return;
+    // Стартуем «поколение» сбора до любых await: если за время чтения хранилища
+    // придёт навигация на другое видео или новый рановер без force — оба
+    // увидели чужой collector и старый не должен сам себя перезапускать.
+    const gen = ++collectGen;
     const stateKey = K.state(videoId);
     const { [stateKey]: prev } = await sessionGet([stateKey]);
     if (!force && prev) {
@@ -450,7 +455,10 @@
     const max = Math.min(Math.max(parseInt(settings.maxComments, 10) || DEFAULT_MAX, 10), 2000);
     const mode = settings.collectMode || "auto";
 
-    collector = { videoId, cancelled: false };
+    // Другой сбор уже запущен после нас (новая навигация/force) — отступаем.
+    if (collector && collector.gen > gen) return;
+
+    collector = { gen, videoId, cancelled: false };
     await sessionSet({ [stateKey]: { status: "loading", fetched: 0, max, error: null } });
     send({ type: "yt:progress", videoId, status: "loading", fetched: 0, max });
 
@@ -469,8 +477,22 @@
       if (mode === "innerTube" || mode === "auto") {
         try {
           comments = await collectViaInnerTube(videoId, max, onBatch, mine);
+          if (mode === "auto" && !comments.length) {
+            // InnerTube технически ответил, но комментарии не разобрались —
+            // добираем из DOM, пока не набрали лимит.
+            const rest = max - comments.length;
+            if (rest > 0) {
+              comments = comments.concat(await collectViaDom(videoId, rest, onBatch, mine));
+            }
+          }
         } catch (e) {
-          if (String(e.message).startsWith("innerTubeBlocked") && mode === "auto") {
+          const em = String(e.message);
+          const fallback =
+            mode === "auto" &&
+            (em.startsWith("innerTubeBlocked") ||
+              em.startsWith("innerTubeNoCommentsSection") ||
+              em.startsWith("innerTubeTimeout"));
+          if (fallback) {
             comments = await collectViaDom(videoId, max, onBatch, mine);
           } else {
             throw e;
@@ -507,6 +529,7 @@
     if (id === currentVideoId && !forceCollect) return;
     // Ушли на другое видео — гасим активный сбор предыдущего, иначе его цикл
     // продолжит крутиться в фоне и дёргать DOM (клики/скролл в шортсах).
+    collectGen++;
     if (collector && collector.videoId !== id && !collector.cancelled) {
       collector.cancelled = true;
     }
