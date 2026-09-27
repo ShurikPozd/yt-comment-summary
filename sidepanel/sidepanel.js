@@ -19,16 +19,19 @@ const LOCAL_CONFIG =
   (typeof window !== "undefined" && window.__EXT_LOCAL_CONFIG__) || {};
 
 const $ = (id) => document.getElementById(id);
-// Анализ пачками. Выбираем размер чанка под лимит Groq free-тарифа
-// (qwen3.8: ITPM 7000 токенов/мин). Режем по оценке токенов, а не по счётчику,
-// чтобы один запрос не превышал ~5500 токенов и хватало ещё и на системный/юзер промпты.
-const CHUNK_MAX_TOKENS = 4200;
-const CHUNK_SLEEP_MS = 25000; // перерыв между кусками — не упереться в ITPM
+// Анализ пачками. Groq free: ITPM ~7000 input-токенов в СКОЛЬЗЯЩУЮ минуту на модель,
+// причём один ключ делят бот и расширение. Поэтому режем чанки мельче и сами
+// следим за бюджетом — иначе два запроса в одну минуту ловят 413.
+const CHUNK_MAX_TOKENS = 1800;
+const ITPM_BUDGET_PER_MIN = 6000; // держим запас под работу бота (5000-6000 в окне)
+// минимальный перерыв между запросами — Groq не любит ОЧЕНЬ частые мелкие вызовы
+const MIN_REQUEST_GAP_MS = 1500;
 
-// грубая оценка «токенов» комментария для нарезки (1 токен ≈ 3.5 символа-ru)
+// грубая оценка «токенов» комментария для нарезки (1 токен ≈ 3 символа-ru,
+// с запасом; лучше переоценить — меньше риска 413)
 function tokensOf(text) {
   const t = String(text || "");
-  return Math.ceil(t.length / 3.5);
+  return Math.ceil(t.length / 3);
 }
 
 function buildChunks(comments) {
@@ -47,6 +50,42 @@ function buildChunks(comments) {
   }
   if (cur.length) chunks.push(cur);
   return chunks;
+}
+
+// Скользящий бюджет ITPM: перед каждым запросом ждём, пока суммарные входные
+// токены за последние 60 с + новый запрос не превышают бюджета.
+const _budgetLog = []; // { t: Date.now(), n: оценка токенов }
+let _lastRequestAt = 0;
+async function paceRequest(estTokens) {
+  for (;;) {
+    const now = Date.now();
+    while (_budgetLog.length && now - _budgetLog[0].t >= 60000) _budgetLog.shift();
+    const used = _budgetLog.reduce((a, x) => a + x.n, 0);
+    if (used + estTokens <= ITPM_BUDGET_PER_MIN && now - _lastRequestAt >= MIN_REQUEST_GAP_MS) {
+      _budgetLog.push({ t: now, n: estTokens });
+      _lastRequestAt = now;
+      return;
+    }
+    // освобождение бюджета: самая старая запись устареет через (её возраст - 60с)
+    const waitMs = _budgetLog.length
+      ? Math.max(1500, _budgetLog[0].t + 60000 - now)
+      : Math.max(1500, MIN_REQUEST_GAP_MS - (now - _lastRequestAt));
+    await sleep(Math.min(waitMs, 60000));
+  }
+}
+
+// прикидка входных токенов запроса: системный промпт + юзер + накладные (roles/json)
+function estimateRequestTokens(sysText, userText) {
+  return tokensOf(sysText) + tokensOf(userText) + 120;
+}
+
+function isItpmError(e) {
+  const s = String(e?.message || e);
+  return /413|429|Request too large|ITPM|tokens per minute|reduce your message size|rate_limit/i.test(s);
+}
+
+function isItpmOrServerError(e) {
+  return isItpmError(e) || /Модель не ответила|502|таймаут|timeout/i.test(String(e?.message || e));
 }
 
 let expandedTopic = null;
@@ -85,7 +124,7 @@ function fmtNum(n) {
 function friendlyError(e) {
   const s = String(e?.message || e);
   if (/Request too large|ITPM|tokens per minute|input tokens|reduce your message size|413/i.test(s)) {
-    return "Groq не принял запрос: превышен лимит входных токенов (ITPM на free-тарифе). Расширение постарается нарезать комментарии меньшими кусками — просто нажми «Анализировать» ещё раз; если повторится, уменьши «Максимум комментариев».";
+    return "Groq не принял запрос: превышен лимит входных токенов (ITPM на free-тарифе, ~7000 ток/мин на всю учётку — бот и расширение делят один ключ). Расширение ждёт окно и режет комментарии на части автоматически; просто нажми «Анализировать» ещё раз.";
   }
   if (/Модель не ответила/.test(s)) {
     return "Модель Groq не ответила (временный сбой или лимит). Попробуй нажать «Анализировать» ещё раз — часто после ретрая всё проходит.";
@@ -336,55 +375,69 @@ async function analyze() {
       sentiment.negative += Number(s.negative) || 0;
     };
 
-    for (let ci = 0; ci < nodes.length; ci++) {
-      if (!state.analyzing) return;
-      $("summary-placeholder").textContent = `Анализирую кусок ${ci + 1} из ${nodes.length}…`;
-      const chunk = nodes[ci];
-      const user = chunkUser(chunk);
-      let processedThisChunk = false;
+    // Рекурсивно разбираем порцию комментариев: нормальный размер → 1 запрос;
+    // при 413/сбое делим пополам и опрашиваем обе половины (с паузами по бюджету).
+    // Возвращает true, если вся порция разобрана без ошибок.
+    const processPortion = async (portion, localBase, depth) => {
+      if (!portion.length) return true;
+      if (!state.analyzing) return false;
+      if (depth > 6) throw new Error("Слишком много дроблений (комментарии слишком большие или лимит исчерпан)");
+      if (portion.length === 1 && depth > 6) throw new Error("Личное дробление исчерпано.");
+
+      // оцениваем токены порции; если она уже мала для лимита, но всё равно
+      // получили 413 — значит уперлись в общий бюджет бота+расширения: ждём окно.
+      const est = estimateRequestTokens(CHUNK_ANALYZE_SYSTEM, chunkUser(portion));
+      await paceRequest(est);
       try {
         const raw = await proxy.chat(
           [
             { role: "system", content: CHUNK_ANALYZE_SYSTEM },
-            { role: "user", content: user },
+            { role: "user", content: chunkUser(portion) },
           ],
           { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
         );
-        if (extractJson(raw)) {
-          absorb(extractJson(raw), baseOffset);
-          processedThisChunk = true;
-        } else {
-          throw new Error("Модель вернула не JSON");
-        }
+        const data = extractJson(raw);
+        if (!data) throw new Error("Модель вернула не JSON");
+        absorb(data, localBase);
+        return true;
       } catch (e) {
-        // Упор в ITPM-лимит или сбой: переразбиваем КУСОК на минимальные порции
-        // (buildChunks снова, иначе — порциями по одному комментарию) и
-        // допрашиваем, пока не разберём всё или не упрёмся в количество попыток.
-        const subchunks = buildChunks(chunk).length === 1 ? chunk.map((c) => [c]) : buildChunks(chunk);
-        for (let si = 0; si < subchunks.length && !processedThisChunk; si++) {
-          if (!state.analyzing) return;
-          $("summary-placeholder").textContent = `Анализирую кусок ${ci + 1} из ${nodes.length} (дозапрос ${si + 1}/${subchunks.length})…`;
-          try {
-            const raw = await proxy.chat(
-              [
-                { role: "system", content: CHUNK_ANALYZE_SYSTEM },
-                { role: "user", content: chunkUser(subchunks[si]) },
-              ],
-              { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
-            );
-            absorb(extractJson(raw), baseOffset + chunk.indexOf(subchunks[si]));
-            processedThisChunk = true;
-          } catch {
-            // и так далее; пауза между запросами — не терять ITPM-окно
-          }
-          await sleep(CHUNK_SLEEP_MS);
+        if (isItpmError(e) && portion.length > 1) {
+          // Упёрлись в минутный лимит токенов (наш или ботора). Делим пополам:
+          // каждая половина легче, а приличные паузы соблюдают общий бюджет.
+          $("summary-placeholder").textContent = `Лимит токенов Groq — дроблю и жду окно…`;
+          await sleep(2000);
+          const half = Math.ceil(portion.length / 2);
+          const okFirst = await processPortion(portion.slice(0, half), localBase, depth + 1);
+          const okSecond = await processPortion(portion.slice(half), localBase + half, depth + 1);
+          return okFirst && okSecond;
         }
-        if (!processedThisChunk) {
-          $("summary-placeholder").textContent = `Не удалось проанализировать кусок ${ci + 1}`;
-          throw e;
+        // Единичный комментарий или дробление не помогает (413 остаётся) —
+        // это общий ITPM-бюджет бота занят: ждём полное окно (до 2 мин) и пробуем снова.
+        if (isItpmError(e)) {
+          $("summary-placeholder").textContent = `Groq лимит занят — жду окно (до 2 мин), затем повтор…`;
+          await sleep(60000);
+          await sleep(60000);
+          const raw = await proxy.chat(
+            [
+              { role: "system", content: CHUNK_ANALYZE_SYSTEM },
+              { role: "user", content: chunkUser(portion) },
+            ],
+            { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
+          );
+          const data = extractJson(raw);
+          if (!data) throw new Error("Модель вернула не JSON");
+          absorb(data, localBase);
+          return true;
         }
+        throw e;
       }
-      baseOffset += chunk.length;
+    };
+
+    for (let ci = 0; ci < nodes.length; ci++) {
+      if (!state.analyzing) return;
+      $("summary-placeholder").textContent = `Анализирую кусок ${ci + 1} из ${nodes.length}…`;
+      await processPortion(nodes[ci], baseOffset, 0);
+      baseOffset += nodes[ci].length;
     }
 
     const topics = Object.entries(topicMap)
