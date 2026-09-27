@@ -19,7 +19,35 @@ const LOCAL_CONFIG =
   (typeof window !== "undefined" && window.__EXT_LOCAL_CONFIG__) || {};
 
 const $ = (id) => document.getElementById(id);
-const CHUNK_SIZE = 120;
+// Анализ пачками. Выбираем размер чанка под лимит Groq free-тарифа
+// (qwen3.8: ITPM 7000 токенов/мин). Режем по оценке токенов, а не по счётчику,
+// чтобы один запрос не превышал ~5500 токенов и хватало ещё и на системный/юзер промпты.
+const CHUNK_MAX_TOKENS = 4200;
+const CHUNK_SLEEP_MS = 25000; // перерыв между кусками — не упереться в ITPM
+
+// грубая оценка «токенов» комментария для нарезки (1 токен ≈ 3.5 символа-ru)
+function tokensOf(text) {
+  const t = String(text || "");
+  return Math.ceil(t.length / 3.5);
+}
+
+function buildChunks(comments) {
+  const chunks = [];
+  let cur = [];
+  let curTokens = 0;
+  for (const c of comments) {
+    const t = tokensOf(c.text) + 12; // + на инфраструктуру JSON
+    if (cur.length && curTokens + t > CHUNK_MAX_TOKENS) {
+      chunks.push(cur);
+      cur = [];
+      curTokens = 0;
+    }
+    cur.push(c);
+    curTokens += t;
+  }
+  if (cur.length) chunks.push(cur);
+  return chunks;
+}
 
 let expandedTopic = null;
 
@@ -56,8 +84,11 @@ function fmtNum(n) {
 
 function friendlyError(e) {
   const s = String(e?.message || e);
+  if (/Request too large|ITPM|tokens per minute|input tokens|reduce your message size|413/i.test(s)) {
+    return "Groq не принял запрос: превышен лимит входных токенов (ITPM на free-тарифе). Расширение постарается нарезать комментарии меньшими кусками — просто нажми «Анализировать» ещё раз; если повторится, уменьши «Максимум комментариев».";
+  }
   if (/Модель не ответила/.test(s)) {
-    return "Модель Groq не ответила (временный сбой). Попробуй нажать «Анализировать» ещё раз — часто после ретрая всё проходит.";
+    return "Модель Groq не ответила (временный сбой или лимит). Попробуй нажать «Анализировать» ещё раз — часто после ретрая всё проходит.";
   }
   if (/таймаут|timeout|Сервер недоступен|Failed to fetch|fetch failed/i.test(s)) {
     return "Не удалось связаться с сервером: возможно, Render спит (холодный старт ~50 сек) или нет связи с интернетом. Проверь «Проверить связь» и попробуй ещё раз.";
@@ -260,9 +291,9 @@ async function analyze() {
   $("btn-analyze").disabled = true;
   $("summary-placeholder").textContent = "Анализирую… (куски)";
   try {
-    const nodes = [];
-    for (let i = 0; i < state.comments.length; i += CHUNK_SIZE) {
-      nodes.push(state.comments.slice(i, i + CHUNK_SIZE));
+    const nodes = buildChunks(state.comments);
+    if (!nodes.length) {
+      $("current-summary-short").textContent = "Нет комментариев для анализа.";
     }
 
     let baseOffset = 0;
@@ -272,52 +303,88 @@ async function analyze() {
     const sentiment = { positive: 0, neutral: 0, negative: 0 };
     const notableComments = [];
 
+    const absorb = (data, localBase) => {
+      if (!data) return;
+      if (data.topics && typeof data.topics === "object") {
+        for (const [name, ids] of Object.entries(data.topics)) {
+          const nm = clean(name);
+          if (!nm || !Array.isArray(ids)) continue;
+          if (!topicMap[nm]) topicMap[nm] = new Set();
+          for (const id of ids) {
+            const g = localBase + Number(id);
+            if (Number.isFinite(g) && g >= 0 && g < state.comments.length) topicMap[nm].add(g);
+          }
+        }
+      }
+      if (Array.isArray(data.points)) {
+        for (const p of data.points) {
+          const pg = clean(p);
+          if (pg) points.push(pg.slice(0, 220));
+        }
+      }
+      if (Array.isArray(data.notable)) {
+        for (const id of data.notable) {
+          const g = localBase + Number(id);
+          if (Number.isFinite(g) && g >= 0 && g < state.comments.length && !notableIds.includes(g)) {
+            notableIds.push(g);
+          }
+        }
+      }
+      const s = data.sentiment || {};
+      sentiment.positive += Number(s.positive) || 0;
+      sentiment.neutral += Number(s.neutral) || 0;
+      sentiment.negative += Number(s.negative) || 0;
+    };
+
     for (let ci = 0; ci < nodes.length; ci++) {
       if (!state.analyzing) return;
       $("summary-placeholder").textContent = `Анализирую кусок ${ci + 1} из ${nodes.length}…`;
       const chunk = nodes[ci];
       const user = chunkUser(chunk);
-      const raw = await proxy.chat(
-        [
-          { role: "system", content: CHUNK_ANALYZE_SYSTEM },
-          { role: "user", content: user },
-        ],
-        { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
-      );
-      const data = extractJson(raw);
-      if (data) {
-        if (data.topics && typeof data.topics === "object") {
-          for (const [name, ids] of Object.entries(data.topics)) {
-            const nm = clean(name);
-            if (!nm || !Array.isArray(ids)) continue;
-            if (!topicMap[nm]) topicMap[nm] = new Set();
-            for (const id of ids) {
-              const g = baseOffset + Number(id);
-              if (Number.isFinite(g) && g >= 0 && g < state.comments.length) topicMap[nm].add(g);
-            }
-          }
+      let processedThisChunk = false;
+      try {
+        const raw = await proxy.chat(
+          [
+            { role: "system", content: CHUNK_ANALYZE_SYSTEM },
+            { role: "user", content: user },
+          ],
+          { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
+        );
+        if (extractJson(raw)) {
+          absorb(extractJson(raw), baseOffset);
+          processedThisChunk = true;
+        } else {
+          throw new Error("Модель вернула не JSON");
         }
-        if (Array.isArray(data.points)) {
-          for (const p of data.points) {
-            const pg = clean(p);
-            if (pg) points.push(pg.slice(0, 220));
+      } catch (e) {
+        // Упор в ITPM-лимит или сбой: переразбиваем КУСОК на минимальные порции
+        // (buildChunks снова, иначе — порциями по одному комментарию) и
+        // допрашиваем, пока не разберём всё или не упрёмся в количество попыток.
+        const subchunks = buildChunks(chunk).length === 1 ? chunk.map((c) => [c]) : buildChunks(chunk);
+        for (let si = 0; si < subchunks.length && !processedThisChunk; si++) {
+          if (!state.analyzing) return;
+          $("summary-placeholder").textContent = `Анализирую кусок ${ci + 1} из ${nodes.length} (дозапрос ${si + 1}/${subchunks.length})…`;
+          try {
+            const raw = await proxy.chat(
+              [
+                { role: "system", content: CHUNK_ANALYZE_SYSTEM },
+                { role: "user", content: chunkUser(subchunks[si]) },
+              ],
+              { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
+            );
+            absorb(extractJson(raw), baseOffset + chunk.indexOf(subchunks[si]));
+            processedThisChunk = true;
+          } catch {
+            // и так далее; пауза между запросами — не терять ITPM-окно
           }
+          await sleep(CHUNK_SLEEP_MS);
         }
-        if (Array.isArray(data.notable)) {
-          for (const id of data.notable) {
-            const g = baseOffset + Number(id);
-            if (Number.isFinite(g) && g >= 0 && g < state.comments.length && !notableIds.includes(g)) {
-              notableIds.push(g);
-            }
-          }
+        if (!processedThisChunk) {
+          $("summary-placeholder").textContent = `Не удалось проанализировать кусок ${ci + 1}`;
+          throw e;
         }
-        const s = data.sentiment || {};
-        sentiment.positive += Number(s.positive) || 0;
-        sentiment.neutral += Number(s.neutral) || 0;
-        sentiment.negative += Number(s.negative) || 0;
       }
       baseOffset += chunk.length;
-      await sleep(120);
     }
 
     const topics = Object.entries(topicMap)
