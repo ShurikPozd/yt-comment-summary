@@ -211,9 +211,6 @@ async function saveSettings(showFeedback = true) {
 // ---------------- Загрузка состояния ----------------
 
 const ORDER_KEY = "svc:order";
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
 // Запись в session с вытеснением старых видео при переполнении квоты (10 МБ):
 // комментарии всех просмотренных видео накапливаются, пока браузер открыт,
 // поэтому при Resource::kQuotaBytes удаляем кэш совсем старых видео (кроме активного).
