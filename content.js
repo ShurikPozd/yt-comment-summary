@@ -41,11 +41,98 @@
       return await chrome.storage.local.get(keys);
     }
   }
-  async function sessionSet(patch) {
+
+  // ------ Вытеснение кэша при переполнении session (10 МБ) ------
+  // Комментарии каждого просмотренного видео лежат в session до закрытия
+  // браузера; при листании списков квота легко выбивается (Resource::kQuotaBytes
+  // quota exceeded). Храним порядок недавних видео (svc:order) и при запросе
+  // записываем в начало; при нехватке места удаляем самые старые видео целиком.
+  const ORDER_KEY = "svc:order";
+  const VIDEO_PREFIXES = ["comments:", "collect:", "meta:", "summary:"];
+
+  async function getSessionOrder() {
     try {
-      await chrome.storage.session.set(patch);
+      const o = await chrome.storage.session.get(ORDER_KEY);
+      return Array.isArray(o[ORDER_KEY]) ? o[ORDER_KEY] : [];
     } catch (e) {
+      return [];
+    }
+  }
+  async function setSessionOrder(order) {
+    try {
+      await chrome.storage.session.set({ [ORDER_KEY]: order.slice(0, 30) });
+    } catch (e) {
+      /* не критично */
+    }
+  }
+  async function touchVideoOrder(id) {
+    try {
+      const o = await getSessionOrder();
+      const i = o.indexOf(id);
+      if (i >= 0) o.splice(i, 1);
+      o.unshift(id);
+      await setSessionOrder(o);
+    } catch (e) {
+      /* не критично */
+    }
+  }
+  async function evictVideoFromSession(id) {
+    try {
+      await chrome.storage.session.remove(VIDEO_PREFIXES.map((p) => p + id));
+    } catch (e) {
+      /* partial */
+    }
+    try {
+      const o = await getSessionOrder();
+      const i = o.indexOf(id);
+      if (i >= 0) {
+        o.splice(i, 1);
+        await setSessionOrder(o);
+      }
+    } catch (e) {
+      /* не критично */
+    }
+  }
+
+  async function sessionSet(patch) {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      try {
+        await chrome.storage.session.set(patch);
+        return;
+      } catch (e) {
+        const em = String(e?.message || e);
+        // не квота — как раньше, fallback на local
+        if (!/quota|QuotaBytes/i.test(em)) {
+          try {
+            await chrome.storage.local.set(patch);
+          } catch (e2) {
+            /* тоже не влезло */
+          }
+          return;
+        }
+        // квота session: выбиваем самое старое видео
+        const order = await getSessionOrder();
+        if (order.length) {
+          evictVideoFromSession(order[order.length - 1]);
+          continue;
+        }
+        // порядок пуст/не сохранился — удаляем все чужие кэши субэкстрейнов (comments/collect/meta),
+        // но НЕ summary и НЕ svc:order, чтобы не потерять накопленные сводки без нужды.
+        try {
+          const all = await chrome.storage.session.get(null);
+          const stale = Object.keys(all).filter((k) => /^(comments|collect|meta):/i.test(k));
+          if (stale.length) await chrome.storage.session.remove(stale);
+        } catch (e2) {
+          /* partial */
+        }
+        break;
+      }
+    }
+    // совсем не влезло в session — последняя попытка в local
+    try {
       await chrome.storage.local.set(patch);
+    } catch (e) {
+      /* некритично: сбор продолжится, просто нет кэша */
     }
   }
 
@@ -534,6 +621,7 @@
       collector.cancelled = true;
     }
     currentVideoId = id;
+    void touchVideoOrder(id);
 
     // светимся на новом видео
     const meta = extractMeta();
@@ -541,6 +629,7 @@
     const { [K.state(id)]: st } = await sessionGet([K.state(id)]);
     if (st?.status === "done") {
       send({ type: "yt:progress", videoId: id, status: "done", fetched: st.fetched, max: st.fetched });
+      void touchVideoOrder(id);
     } else {
       void runCollection(id, forceCollect);
     }

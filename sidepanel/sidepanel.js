@@ -210,6 +210,52 @@ async function saveSettings(showFeedback = true) {
 
 // ---------------- Загрузка состояния ----------------
 
+const ORDER_KEY = "svc:order";
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+// Запись в session с вытеснением старых видео при переполнении квоты (10 МБ):
+// комментарии всех просмотренных видео накапливаются, пока браузер открыт,
+// поэтому при Resource::kQuotaBytes удаляем кэш совсем старых видео (кроме активного).
+async function safeSessionSet(patch, { keepVideoId = null } = {}) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      await chrome.storage.session.set(patch);
+      return;
+    } catch (e) {
+      if (!/quota|QuotaBytes/i.test(String(e?.message || e))) throw e;
+      let order;
+      try {
+        const o = await chrome.storage.session.get(ORDER_KEY);
+        order = Array.isArray(o[ORDER_KEY]) ? o[ORDER_KEY].slice() : [];
+      } catch (er) {
+        order = [];
+      }
+      const victims = order.filter((v) => v !== keepVideoId);
+      if (!victims.length) {
+        try {
+          const all = await chrome.storage.session.get(null);
+          const stale = Object.keys(all)
+            .filter((k) => /^(comments|collect|meta):/i.test(k))
+            .filter((k) => !keepVideoId || !k.endsWith(":" + keepVideoId));
+          if (stale.length) await chrome.storage.session.remove(stale);
+        } catch (er) {
+          /* partial */
+        }
+        break;
+      }
+      const victim = victims[victims.length - 1];
+      const keys = ["comments:", "collect:", "meta:", "summary:"].map((p) => p + victim);
+      try {
+        await chrome.storage.session.remove(keys);
+        order = order.filter((v) => v !== victim);
+        await chrome.storage.session.set({ [ORDER_KEY]: order.slice(0, 30) });
+      } catch (er) {
+        break;
+      }
+    }
+  }
+}
 async function loadFor(videoId) {
   if (!videoId) return;
   const obj = await chrome.storage.session.get([
@@ -473,7 +519,7 @@ async function analyze() {
       sentiment,
       updatedAt: Date.now(),
     };
-    await chrome.storage.session.set({ [`summary:${state.videoId}`]: state.summary });
+    await safeSessionSet({ [`summary:${state.videoId}`]: state.summary }, { keepVideoId: state.videoId });
     renderSummary();
     renderTopics();
     $("summary-placeholder").textContent = "";
@@ -846,7 +892,7 @@ async function refreshFromActiveTab() {
         await loadFor(reply.videoId);
         if (reply.meta) {
           state.meta = reply.meta;
-          await chrome.storage.session.set({ [`meta:${reply.videoId}`]: reply.meta });
+          await safeSessionSet({ [`meta:${reply.videoId}`]: reply.meta }, { keepVideoId: reply.videoId });
           renderHeader();
         }
         return;
