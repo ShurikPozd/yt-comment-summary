@@ -879,10 +879,44 @@ function onRuntimeMessage(msg) {
   }
 }
 
+// Ищем активную вкладку с видео YouTube. currentWindow НЕ годится: если side
+// panel открыт в отдельном окне, «текущее окно» — это окно панели
+// (chrome-extension://…), и видео не находится. Поэтому перебираем все обычные
+// окна и берём активную вкладку с /watch|/shorts.
+async function findActiveVideoTab() {
+  try {
+    const wins = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
+    const YT = /^https:\/\/(www|m)\.youtube\.com\/(watch|shorts)/;
+    for (const w of wins || []) {
+      const active = (w.tabs || []).find((t) => t.active);
+      if (active && YT.test(active.url || "")) return active;
+    }
+  } catch (e) {
+    /* windows API недоступен — fallback ниже */
+  }
+  try {
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return tabs?.[0] || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function refreshFromActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = await findActiveVideoTab();
   if (!tab?.id || !/^https:\/\/(www|m)\.youtube\.com\/(watch|shorts)/.test(tab.url || "")) {
     renderBottomMatters();
+    const el = $("empty-state");
+    const focusHint = tab?.url
+      ? `<div class="hint">Активная вкладка: <b>${esc(tab.url)}</b><br>Нужен YouTube с открытым видео (watch/shorts).</div>`
+      : `<div class="hint">Видео-вкладка не найдена. Открой страницу с видео на YouTube.</div>`;
+    if (tab?.url && !/youtube\.com/i.test(tab.url)) {
+      el.innerHTML = "Активная вкладка — не YouTube." + focusHint;
+    } else if (tab?.url && !/\/watch|\/shorts/.test(tab.url)) {
+      el.innerHTML = "Это YouTube, но без страницы видео (главная/лента)." + focusHint;
+    } else {
+      el.innerHTML = "Открой страницу с видео на YouTube, и комментарии появятся здесь." + focusHint;
+    }
     return;
   }
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -936,7 +970,7 @@ function bindEvents() {
     renderComments();
     renderSummary();
     renderTopics();
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = await findActiveVideoTab();
     if (tab?.id) {
       try {
         await chrome.tabs.sendMessage(tab.id, { type: "yt:start-collect" });
