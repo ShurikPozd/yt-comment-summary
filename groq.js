@@ -95,7 +95,19 @@ export class SerialQueue {
   }
 }
 
-export class GroqProxy {
+export /**
+ * Ошибка лимитов токенов Groq. Сервер уже отретраил сам (3 попытки с паузами по
+ * подсказке Groq), поэтому клиентский ретрай тут только добивает окно и
+ * растягивает ожидание. Пробрасываем наружу: вызывающий код (sidepanel) сам
+ * решает — ждать и повторять (OTPM) либо дробить (ITPM).
+ */
+function isTokenLimitErr(e) {
+  return /429|413|tokens per minute|\bITPM\b|\bOTPM\b|Request too large|rate.?limit/i.test(
+    String(e?.message || e)
+  );
+}
+
+class GroqProxy {
   constructor({ baseUrl = "", token = "", model = "" } = {}) {
     this.baseUrl = (baseUrl || "").replace(/\/+$/, "");
     this.token = token;
@@ -166,6 +178,7 @@ export class GroqProxy {
                 "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй."
               )
             : e;
+          if (isTokenLimitErr(e)) throw lastErr;
           await sleep(3000 * (attempt + 1));
         }
       }
@@ -259,6 +272,7 @@ export class GroqProxy {
                 "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй."
               )
             : e;
+          if (isTokenLimitErr(e)) throw lastErr;
           await sleep(3000 * (attempt + 1));
         }
       }

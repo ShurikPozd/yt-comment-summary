@@ -84,18 +84,65 @@ async function paceRequest(estIn, estOut = CHUNK_MAX_OUTPUT_TOKENS) {
   }
 }
 
+// Когда Groq отвечает 429 по OTPM, окно уже занято — наш скользящий бюджет об
+// этом ещё не знает и через 1.5 с двинул бы следующий запрос, гарантированно
+// упёршись в тот же лимит. Записываем в бюджет «занятое» окно, чтобы paceRequest
+// не спешил.
+function pushBudgetAfterOutputError(waitMs) {
+  const n = Math.max(CHUNK_MAX_OUTPUT_TOKENS, OTPM_BUDGET_PER_MIN);
+  const t = Date.now();
+  _budgetLogOut.push({ t: t - 60000 + waitMs, n });
+  _lastRequestAt = t;
+}
+}
+
 // прикидка входных токенов запроса: системный промпт + юзер + накладные (roles/json)
 function estimateRequestTokens(sysText, userText) {
   return tokensOf(sysText) + tokensOf(userText) + 120;
 }
 
+// Groq различает лимиты токенов, и лечатся они по-разному:
+//  - ITPM / «input tokens» / 413 — запрос велик, помогает ДРОБЛЕНИЕ порции;
+//  - OTPM / «output tokens» — велик ответ, дробление входа НЕ помогает
+//    (наоборот, добавляет запросов и усугубляет OTPM), помогает только пауза.
+// Раньше один regex ловил и 413, и 429, и всегда звал это ITPM.
+function errorText(e) {
+  return String(e?.message || e || "");
+}
+
+// Сколько Groq велит ждать: «try again in 20.4s» / «try again in 1.5s».
+function retryAfterMs(e, fallbackMs) {
+  const m = errorText(e).match(/try again in\s*([\d.]+)\s*s/i);
+  const fallback = fallbackMs || 6000;
+  if (!m) return fallback;
+  const sec = parseFloat(m[1]);
+  if (!Number.isFinite(sec) || sec <= 0) return fallback;
+  return Math.min(Math.max(2000, (sec + 1) * 1000), 120000);
+}
+
+function isOutputLimitError(e) {
+  const s = errorText(e);
+  return /OTPM|output tokens per minute|reduce max_tokens/i.test(s);
+}
+
+function isInputLimitError(e) {
+  const s = errorText(e);
+  if (isOutputLimitError(e)) return false;
+  return /413|ITPM|input tokens per minute|Request too large|reduce your message size|context length|maximum context/i.test(s);
+}
+
+// Общий «Groq меня не пустил» без разбора вида лимита.
+function isRateLimitError(e) {
+  return /429|rate.?limit|tokens per minute|\bITPM\b|\bOTPM\b|Request too large/i.test(errorText(e));
+}
+
+// Прежнее имя оставлено для совместимости: теперь это «любой лимит/429».
 function isItpmError(e) {
-  const s = String(e?.message || e);
-  return /413|429|Request too large|ITPM|tokens per minute|reduce your message size|rate_limit/i.test(s);
+  return isRateLimitError(e);
 }
 
 function isItpmOrServerError(e) {
-  return isItpmError(e) || /Модель не ответила|502|таймаут|timeout/i.test(String(e?.message || e));
+  return isRateLimitError(e) || /Модель не ответила|502|таймаут|timeout/i.test(errorText(e));
 }
 
 let expandedTopic = null;
@@ -132,9 +179,16 @@ function fmtNum(n) {
 }
 
 function friendlyError(e) {
-  const s = String(e?.message || e);
-  if (/Request too large|ITPM|tokens per minute|input tokens|reduce your message size|413/i.test(s)) {
-    return "Groq не принял запрос: превышен лимит входных токенов (ITPM на free-тарифе, ~7000 ток/мин на всю учётку — бот и расширение делят один ключ). Расширение ждёт окно и режет комментарии на части автоматически; просто нажми «Анализировать» ещё раз.";
+  const s = errorText(e);
+  // Порядок важен: сначала выходной лимит — он самый частый, а раньше его
+  // подменяли текстом про входные токены.
+  if (isOutputLimitError(e)) {
+    const wait = retryAfterMs(e, 0);
+    const tail = wait ? ` Groq велит подождать ~${Math.round(wait / 1000)} с.` : "";
+    return `Groq не принял запрос: превышен лимит ВЫХОДНЫХ токенов (OTPM на free-тарифе — ~1000 ток/мин на всю учётку, бот и расширение делят один ключ).${tail} Расширение подождёт и попробует снова; можно просто нажать «Анализировать» ещё раз.`;
+  }
+  if (isInputLimitError(e)) {
+    return "Groq не принял запрос: превышен лимит ВХОДНЫХ токенов (ITPM на free-тарифе, ~7000 ток/мин на всю учётку — бот и расширение делят один ключ). Расширение ждёт окно и режет комментарии на части автоматически; просто нажми «Анализировать» ещё раз.";
   }
   if (/Модель не ответила/.test(s)) {
     return "Модель Groq не ответила (временный сбой или лимит). Попробуй нажать «Анализировать» ещё раз — часто после ретрая всё проходит.";
@@ -429,13 +483,16 @@ async function analyze() {
     };
 
     // Рекурсивно разбираем порцию комментариев: нормальный размер → 1 запрос;
-    // при 413/сбое делим пополам и опрашиваем обе половины (с паузами по бюджету).
+    // при лимите ВХОДНЫХ токенов делим пополам (обе половины!), при лимите
+    // ВЫХОДНЫХ — ждём окно и повторяем ту же порцию (дробление не помогает).
+    // rateTries ограничивает повторы при OTPM, чтобы не уйти в бесконечный цикл:
+    // depth тут не растёт, поэтому сторож дроблений его бы не поймал.
     // Возвращает true, если вся порция разобрана без ошибок.
-    const processPortion = async (portion, localBase, depth) => {
+    const processPortion = async (portion, localBase, depth, rateTries = 0) => {
       if (!portion.length) return true;
       if (!state.analyzing) return false;
       if (depth > 6) throw new Error("Слишком много дроблений (комментарии слишком большие или лимит исчерпан)");
-      if (portion.length === 1 && depth > 6) throw new Error("Личное дробление исчерпано.");
+      if (rateTries > 3) throw new Error("Groq держит лимит выходных токенов дольше 3 минут — сделай перерыв и нажми «Анализировать» ещё раз.");
 
       // оцениваем токены порции; если она уже мала для лимита, но всё равно
       // получили 429 — значит уперлись в общий бюджет бота+расширения: ждём окно.
@@ -459,33 +516,36 @@ async function analyze() {
         absorb(data, localBase);
         return true;
       } catch (e) {
-        if (isItpmError(e) && portion.length > 1) {
-          // Упёрлись в минутный лимит токенов (наш или ботора). Делим пополам:
-          // каждая половина легче, а приличные паузы соблюдают общий бюджет.
-          $("summary-placeholder").textContent = `Лимит токенов Groq — дроблю и жду окно…`;
+        // OTPM (лимит ВЫХОДНЫХ токенов) дроблением НЕ лечится: меньше входа —
+        // не меньше выхода, а запросов станет больше и OTPM только усугубится.
+        // Лечится паузой на минутное окно (Groq сам пишет, сколько ждать).
+        if (isOutputLimitError(e)) {
+          const waitMs = Math.max(30000, retryAfterMs(e, 30000));
+          $("summary-placeholder").textContent =
+            `Groq: лимит выходных токенов (OTPM) — жду окно ~${Math.round(waitMs / 1000)} с, затем повтор…`;
+          // Сдвигаем и локальный бюджет, иначе paceRequest сразу повторит запрос.
+          pushBudgetAfterOutputError(waitMs);
+          await sleep(waitMs);
+          // Повторяем ту же порцию (глубина не растёт — растёт счётчик rateTries).
+          return processPortion(portion, localBase, depth, rateTries + 1);
+        }
+        // Настоящий лимит ВХОДНЫХ токенов (413/ITPM) — тут помогает дробление.
+        if (isInputLimitError(e) && portion.length > 1) {
+          $("summary-placeholder").textContent = `Лимит входных токенов Groq — дроблю и жду окно…`;
           await sleep(2000);
           const half = Math.ceil(portion.length / 2);
           const okFirst = await processPortion(portion.slice(0, half), localBase, depth + 1);
           const okSecond = await processPortion(portion.slice(half), localBase + half, depth + 1);
           return okFirst && okSecond;
         }
-        // Единичный комментарий или дробление не помогает (413 остаётся) —
-        // это общий ITPM-бюджет бота занят: ждём полное окно (до 2 мин) и пробуем снова.
-        if (isItpmError(e)) {
-          $("summary-placeholder").textContent = `Groq лимит занят — жду окно (до 2 мин), затем повтор…`;
-          await sleep(60000);
-          await sleep(60000);
-          const raw = await proxy.chat(
-            [
-              { role: "system", content: CHUNK_ANALYZE_SYSTEM },
-              { role: "user", content: chunkUser(portion) },
-            ],
-            { jsonMode: true, maxTokens: CHUNK_MAX_OUTPUT_TOKENS, timeoutMs: 150000 }
-          );
-          const data = extractJson(raw);
-          if (!data) throw new Error("Модель вернула не JSON");
-          absorb(data, localBase);
-          return true;
+        // Портция уже мала, а входной лимит всё равно упёрся: занят общий
+        // ITPM-бюджет (бот + расширение). Ждём окно и пробуем ту же порцию.
+        if (isInputLimitError(e)) {
+          const waitMs = Math.max(60000, retryAfterMs(e, 60000));
+          $("summary-placeholder").textContent =
+            `Groq: лимит входных токенов (ITPM) — жду ~${Math.round(waitMs / 1000)} с, затем повтор…`;
+          await sleep(waitMs);
+          return processPortion(portion, localBase, depth, rateTries + 1);
         }
         throw e;
       }
@@ -512,17 +572,37 @@ async function analyze() {
     const liveSummary = $("summary-text");
     // Финальный запрос идёт сразу после чанков — OTPM ещё выбран, поэтому
     // заранее ждём место в окне под его выходные токены.
-    await paceRequest(estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang })), 700);
-    const fin = await proxy.chatStream(
-      [
-        { role: "system", content: FINAL_SYSTEM },
-        { role: "user", content: finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang }) },
-      ],
-      { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
-      (full) => {
-        liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(full);
+    const finIn = estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang }));
+    await paceRequest(finIn, 700);
+    let fin = "";
+    // Финал обычно последний и самый «весомый» — именно он чаще всего упирается
+    // в OTPM. На OTPM ждём окно и повторяем (дробление тут невозможно), на прочих
+    // ошибках — одна попытка, дальше покажем пользователю текст.
+    for (let finTry = 0; finTry <= 3; finTry++) {
+      try {
+        fin = await proxy.chatStream(
+          [
+            { role: "system", content: FINAL_SYSTEM },
+            { role: "user", content: finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang }) },
+          ],
+          { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
+          (full) => {
+            liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(full);
+          }
+        );
+        break;
+      } catch (fe) {
+        if (isOutputLimitError(fe) && finTry < 3) {
+          const waitMs = Math.max(30000, retryAfterMs(fe, 30000));
+          $("summary-placeholder").textContent =
+            `Groq: лимит выходных токенов на финальной сводке — жду ~${Math.round(waitMs / 1000)} с, затем повтор…`;
+          pushBudgetAfterOutputError(waitMs);
+          await sleep(waitMs);
+          continue;
+        }
+        throw fe;
       }
-    );
+    }
     const summary = clean(fin) || "Сводка не получена.";
     liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(summary);
 
