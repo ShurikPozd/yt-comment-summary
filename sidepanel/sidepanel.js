@@ -441,8 +441,10 @@ async function analyze() {
       // получили 429 — значит уперлись в общий бюджет бота+расширения: ждём окно.
       const userText = chunkUser(portion);
       const est = estimateRequestTokens(CHUNK_ANALYZE_SYSTEM, userText);
-      // выход примерно пропорционален входу, но не выше потолка
-      const estOut = Math.min(CHUNK_MAX_OUTPUT_TOKENS, 150 + Math.round(est * 0.35));
+      // В OTPM Groq считает ФАКТИЧЕСКИ сгенерированные токены (в логах бота это
+      // ~400 токенов на чанк), а не запрошенный max_tokens. Поэтому резервируем
+      // реалистичную оценку выхода: полный чанк ≈ 400 токенов → ~2 запроса/мин.
+      const estOut = Math.min(500, 120 + Math.round(est * 0.15));
       await paceRequest(est, estOut);
       try {
         const raw = await proxy.chat(
