@@ -19,11 +19,13 @@ const LOCAL_CONFIG =
   (typeof window !== "undefined" && window.__EXT_LOCAL_CONFIG__) || {};
 
 const $ = (id) => document.getElementById(id);
-// Анализ пачками. Groq free: ITPM ~7000 input-токенов в СКОЛЬЗЯЩУЮ минуту на модель,
-// причём один ключ делят бот и расширение. Поэтому режем чанки мельче и сами
-// следим за бюджетом — иначе два запроса в одну минуту ловят 413.
+// Анализ пачками. Лимиты Groq free на qwen/qwen3.8-27b (одна учётка на бота и расширение):
+//   ITPM ~7000 входных токенов/мин, OTPM 1000 ВЫХОДНЫХ токенов/мин.
+// OTPM жёстче: любой запрос с max_tokens > 1000 отклоняется целиком (429), поэтому
+// max_tokens держим заметно ниже лимита, а выходные токены тоже учитываем в паузах.
 const CHUNK_MAX_TOKENS = 1800;
-const ITPM_BUDGET_PER_MIN = 6000; // держим запас под работу бота (5000-6000 в окне)
+const CHUNK_MAX_OUTPUT_TOKENS = 800; // < OTPM 1000, с запасом
+const OTPM_BUDGET_PER_MIN = 900; // фактический выход всех запросов за минуту
 // минимальный перерыв между запросами — Groq не любит ОЧЕНЬ частые мелкие вызовы
 const MIN_REQUEST_GAP_MS = 1500;
 
@@ -52,24 +54,32 @@ function buildChunks(comments) {
   return chunks;
 }
 
-// Скользящий бюджет ITPM: перед каждым запросом ждём, пока суммарные входные
-// токены за последние 60 с + новый запрос не превышают бюджета.
-const _budgetLog = []; // { t: Date.now(), n: оценка токенов }
+// Скользящий бюджет: учитываем как входные (ITPM), так и выходные (OTPM) токены.
+const _budgetLogIn = []; // { t: Date.now(), n: входные }
+const _budgetLogOut = []; // { t: Date.now(), n: выходные }
 let _lastRequestAt = 0;
-async function paceRequest(estTokens) {
+
+async function paceRequest(estIn, estOut = CHUNK_MAX_OUTPUT_TOKENS) {
+  const outEst = Math.min(estOut, CHUNK_MAX_OUTPUT_TOKENS);
   for (;;) {
     const now = Date.now();
-    while (_budgetLog.length && now - _budgetLog[0].t >= 60000) _budgetLog.shift();
-    const used = _budgetLog.reduce((a, x) => a + x.n, 0);
-    if (used + estTokens <= ITPM_BUDGET_PER_MIN && now - _lastRequestAt >= MIN_REQUEST_GAP_MS) {
-      _budgetLog.push({ t: now, n: estTokens });
+    while (_budgetLogIn.length && now - _budgetLogIn[0].t >= 60000) _budgetLogIn.shift();
+    while (_budgetLogOut.length && now - _budgetLogOut[0].t >= 60000) _budgetLogOut.shift();
+    const usedIn = _budgetLogIn.reduce((a, x) => a + x.n, 0);
+    const usedOut = _budgetLogOut.reduce((a, x) => a + x.n, 0);
+    if (
+      usedIn + estIn <= ITPM_BUDGET_PER_MIN &&
+      usedOut + outEst <= OTPM_BUDGET_PER_MIN &&
+      now - _lastRequestAt >= MIN_REQUEST_GAP_MS
+    ) {
+      _budgetLogIn.push({ t: now, n: estIn });
+      _budgetLogOut.push({ t: now, n: outEst });
       _lastRequestAt = now;
       return;
     }
-    // освобождение бюджета: самая старая запись устареет через (её возраст - 60с)
-    const waitMs = _budgetLog.length
-      ? Math.max(1500, _budgetLog[0].t + 60000 - now)
-      : Math.max(1500, MIN_REQUEST_GAP_MS - (now - _lastRequestAt));
+    const wait1 = _budgetLogIn.length ? Math.max(0, _budgetLogIn[0].t + 60000 - now) : 0;
+    const wait2 = _budgetLogOut.length ? Math.max(0, _budgetLogOut[0].t + 60000 - now) : 0;
+    const waitMs = Math.max(1500, wait1, wait2, MIN_REQUEST_GAP_MS - (now - _lastRequestAt));
     await sleep(Math.min(waitMs, 60000));
   }
 }
@@ -428,16 +438,19 @@ async function analyze() {
       if (portion.length === 1 && depth > 6) throw new Error("Личное дробление исчерпано.");
 
       // оцениваем токены порции; если она уже мала для лимита, но всё равно
-      // получили 413 — значит уперлись в общий бюджет бота+расширения: ждём окно.
-      const est = estimateRequestTokens(CHUNK_ANALYZE_SYSTEM, chunkUser(portion));
-      await paceRequest(est);
+      // получили 429 — значит уперлись в общий бюджет бота+расширения: ждём окно.
+      const userText = chunkUser(portion);
+      const est = estimateRequestTokens(CHUNK_ANALYZE_SYSTEM, userText);
+      // выход примерно пропорционален входу, но не выше потолка
+      const estOut = Math.min(CHUNK_MAX_OUTPUT_TOKENS, 150 + Math.round(est * 0.35));
+      await paceRequest(est, estOut);
       try {
         const raw = await proxy.chat(
           [
             { role: "system", content: CHUNK_ANALYZE_SYSTEM },
             { role: "user", content: chunkUser(portion) },
           ],
-          { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
+          { jsonMode: true, maxTokens: CHUNK_MAX_OUTPUT_TOKENS, timeoutMs: 150000 }
         );
         const data = extractJson(raw);
         if (!data) throw new Error("Модель вернула не JSON");
@@ -465,7 +478,7 @@ async function analyze() {
               { role: "system", content: CHUNK_ANALYZE_SYSTEM },
               { role: "user", content: chunkUser(portion) },
             ],
-            { jsonMode: true, maxTokens: 1600, timeoutMs: 150000 }
+            { jsonMode: true, maxTokens: CHUNK_MAX_OUTPUT_TOKENS, timeoutMs: 150000 }
           );
           const data = extractJson(raw);
           if (!data) throw new Error("Модель вернула не JSON");
@@ -495,6 +508,9 @@ async function analyze() {
     $("summary-placeholder").textContent = "Собираю итоговую сводку…";
     $("summary-text").innerHTML = '<div class="summary-title">Что говорят в комментариях</div>';
     const liveSummary = $("summary-text");
+    // Финальный запрос идёт сразу после чанков — OTPM ещё выбран, поэтому
+    // заранее ждём место в окне под его выходные токены.
+    await paceRequest(estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang })), 700);
     const fin = await proxy.chatStream(
       [
         { role: "system", content: FINAL_SYSTEM },
