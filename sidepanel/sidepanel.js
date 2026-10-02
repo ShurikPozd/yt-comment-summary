@@ -50,6 +50,11 @@ function renderDiag(text) {
 async function collectDiagnostics() {
   const lines = [];
   const stamp = new Date().toLocaleTimeString();
+  if (LAST_RAW_ERROR) {
+    lines.push("последняя ошибка (сырой текст):");
+    lines.push(LAST_RAW_ERROR.slice(0, 900));
+    lines.push("");
+  }
   let ver = "?";
   try {
     ver = chrome.runtime.getManifest().version;
@@ -111,6 +116,14 @@ async function collectDiagnostics() {
 
 function bindDiagnostics() {
   $("btn-diag")?.addEventListener("click", async () => {
+    // Повторное нажатие закрывает панель: renderDiag() всегда только открывал,
+    // поэтому кнопка выглядела залипшей.
+    const out = $("diag-out");
+    if (out && !out.classList.contains("hidden")) {
+      out.classList.add("hidden");
+      out.textContent = "";
+      return;
+    }
     renderDiag("собираю диагностику…");
     try {
       renderDiag(await collectDiagnostics());
@@ -241,6 +254,16 @@ function isInputLimitError(e) {
   return /413|ITPM|input tokens per minute|Request too large|reduce your message size|context length|maximum context/i.test(s);
 }
 
+// Ошибка РАЗМЕРА запроса, а не минутного лимита: вход не влезает в контекст
+// модели. Раньше эти ответы попадали в isInputLimitError и показывались как
+// «превышен лимит ВХОДНЫХ токенов» — ждать минутное окно тут бесполезно,
+// надо просто уменьшить порцию.
+function isSizeLimitError(e) {
+  const s = errorText(e);
+  if (isOutputLimitError(e)) return false;
+  return /context length|maximum context|Request too large|reduce your message size|\b413\b/i.test(s);
+}
+
 // Общий «Groq меня не пустил» без разбора вида лимита.
 function isRateLimitError(e) {
   return /429|rate.?limit|tokens per minute|\bITPM\b|\bOTPM\b|Request too large/i.test(errorText(e));
@@ -288,14 +311,20 @@ function fmtNum(n) {
   return String(n);
 }
 
+let LAST_RAW_ERROR = "";
+
 function friendlyError(e) {
   const s = errorText(e);
+  LAST_RAW_ERROR = s;
   // Порядок важен: сначала выходной лимит — он самый частый, а раньше его
   // подменяли текстом про входные токены.
   if (isOutputLimitError(e)) {
     const wait = retryAfterMs(e, 0);
     const tail = wait ? ` Groq велит подождать ~${Math.round(wait / 1000)} с.` : "";
     return `Groq не принял запрос: превышен лимит ВЫХОДНЫХ токенов (OTPM на free-тарифе — ~1000 ток/мин на всю учётку, бот и расширение делят один ключ).${tail} Расширение подождёт и попробует снова; можно просто нажать «Анализировать» ещё раз.`;
+  }
+  if (isSizeLimitError(e)) {
+    return "Запрос не влезает в контекст модели — это НЕ лимит токенов в минуту, ждать нечего. Уменьши «Максимум комментариев» в настройках или запусти анализ на меньшем объёме.";
   }
   if (isInputLimitError(e)) {
     return "Groq не принял запрос: превышен лимит ВХОДНЫХ токенов (ITPM на free-тарифе, ~7000 ток/мин на всю учётку — бот и расширение делят один ключ). Расширение ждёт окно и режет комментарии на части автоматически; просто нажми «Анализировать» ещё раз.";
@@ -647,6 +676,11 @@ async function analyze() {
           const okFirst = await processPortion(portion.slice(0, half), localBase, depth + 1);
           const okSecond = await processPortion(portion.slice(half), localBase + half, depth + 1);
           return okFirst && okSecond;
+        }
+        // Не влезает по размеру даже одиночная порция: ждать минутное окно тут
+        // нечего, надо уменьшать объём — показываем честный текст ошибки.
+        if (isSizeLimitError(e)) {
+          throw e;
         }
         // Портция уже мала, а входной лимит всё равно упёрся: занят общий
         // ITPM-бюджет (бот + расширение). Ждём окно и пробуем ту же порцию.
