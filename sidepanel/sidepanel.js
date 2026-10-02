@@ -979,22 +979,36 @@ function onRuntimeMessage(msg) {
 // (chrome-extension://…), и видео не находится. Поэтому перебираем все обычные
 // окна и берём активную вкладку с /watch|/shorts.
 async function findActiveVideoTab() {
+  const YT = /^https:\/\/(www|m)\.youtube\.com\/(watch|shorts)/;
+  const pool = [];
+  let wins = [];
   try {
-    const wins = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
-    const YT = /^https:\/\/(www|m)\.youtube\.com\/(watch|shorts)/;
-    for (const w of wins || []) {
-      const active = (w.tabs || []).find((t) => t.active);
-      if (active && YT.test(active.url || "")) return active;
-    }
+    wins = await chrome.windows.getAll({ populate: true });
+    for (const w of wins || []) for (const t of w.tabs || []) pool.push(t);
   } catch (e) {
-    /* windows API недоступен — fallback ниже */
+    /* windows API недоступен — соберём вкладки иначе */
   }
   try {
-    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    return tabs?.[0] || null;
+    const all = await chrome.tabs.query({});
+    for (const t of all || []) if (!pool.some((p) => p.id === t.id)) pool.push(t);
   } catch (e) {
-    return null;
+    /* игнорируем */
   }
+
+  // Сначала активная вкладка обычного окна — это то, что пользователь видит.
+  for (const w of wins || []) {
+    const active = (w.tabs || []).find((t) => t.active);
+    if (active && YT.test(active.url || "")) return active;
+  }
+  // Затем любая вкладка с видео: панель могли открыть, переключившись на другую
+  // вкладку, или YouTube открыт в фоновой вкладке/окне. Раньше в этом случае
+  // панель молча показывала заглушку «видео не найдено».
+  const any = pool.filter((t) => YT.test(t.url || ""));
+  if (any.length) {
+    const activeFirst = any.find((t) => t.active);
+    return activeFirst || any.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+  }
+  return pool.find((t) => t.active) || pool[0] || null;
 }
 
 async function refreshFromActiveTab() {
@@ -1034,8 +1048,18 @@ async function refreshFromActiveTab() {
   // контент-скрипт так и не ответил: расширение установлено/обновлено после открытия вкладки
   renderBottomMatters();
   const el = $("empty-state");
+  el.classList.remove("hidden");
   el.innerHTML =
-    'Контент-скрипт не подключился к этой вкладке.<br>Перезагрузи страницу видео (F5), чтобы начать сбор комментариев.';
+    "Контент-скрипт не подключился к этой вкладке.<br>Перезагрузи страницу видео (F5), чтобы начать сбор комментариев." +
+    `<div class="hint">Вкладка: <b>${esc(tab.url || "")}</b></div>` +
+    '<button id="btn-reload-tab" class="primary" style="margin-top:10px">🔄 Перезагрузить вкладку</button>';
+  $("btn-reload-tab")?.addEventListener("click", async () => {
+    try {
+      await chrome.tabs.reload(tab.id);
+    } catch (e) {
+      /* ignore */
+    }
+  });
 }
 
 // ---------------- Инициализация ----------------
@@ -1192,6 +1216,20 @@ function bindEvents() {
   window.addEventListener("focus", refreshFromActiveTab);
 }
 
+function showFatal(message, detail) {
+  // Раньше любая ошибка инициализации уходила только в консоль, а панель
+  // оставалась на статической заглушке — пользователь не понимал, что делать.
+  const el = $("empty-state");
+  if (el) {
+    el.classList.remove("hidden");
+    el.innerHTML =
+      `<b>Панель не запустилась.</b><br>${esc(message)}` +
+      (detail ? `<div class="hint">${esc(String(detail).slice(0, 300))}</div>` : "") +
+      `<div class="hint">Обнови расширение на chrome://extensions и перезагрузи страницу видео (F5).</div>`;
+  }
+  console.error("sidepanel:", message, detail);
+}
+
 async function main() {
   await loadSettings();
   fillSettingsFields();
@@ -1203,4 +1241,22 @@ async function main() {
   await refreshFromActiveTab();
 }
 
-main().catch((e) => console.error("sidepanel init:", e));
+// Страховка: если init завис (например, на storage), панель не должна молчать
+// вечной заглушкой — показываем, что истекло время.
+const _initWatchdog = setTimeout(() => {
+  const el = $("empty-state");
+  if (state.videoId) return; // видео уже найдено — панель в работе, не мешаем
+  if (el && !el.classList.contains("hidden") && el.textContent.includes("Открой страницу")) {
+    showFatal(
+      "Панель не успела загрузиться за 6 секунд.",
+      "Вероятнее всего, вкладка YouTube открыта до обновления расширения — её контент-скрипт устарел."
+    );
+  }
+}, 6000);
+
+main()
+  .then(() => clearTimeout(_initWatchdog))
+  .catch((e) => {
+    clearTimeout(_initWatchdog);
+    showFatal("Ошибка при запуске панели.", e?.message || e);
+  });
