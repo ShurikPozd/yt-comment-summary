@@ -149,6 +149,7 @@ window.addEventListener("unhandledrejection", (e) => {
 // max_tokens держим заметно ниже лимита, а выходные токены тоже учитываем в паузах.
 const CHUNK_MAX_TOKENS = 1800;
 const CHUNK_MAX_OUTPUT_TOKENS = 800; // < OTPM 1000, с запасом
+const ITPM_BUDGET_PER_MIN = 6000; // < ~7000, с запасом: ключ общий с ботом
 const OTPM_BUDGET_PER_MIN = 900; // фактический выход всех запросов за минуту
 // минимальный перерыв между запросами — Groq не любит ОЧЕНЬ частые мелкие вызовы
 const MIN_REQUEST_GAP_MS = 1500;
@@ -251,7 +252,10 @@ function isOutputLimitError(e) {
 function isInputLimitError(e) {
   const s = errorText(e);
   if (isOutputLimitError(e)) return false;
-  return /413|ITPM|input tokens per minute|Request too large|reduce your message size|context length|maximum context/i.test(s);
+  // \b вокруг ITPM обязателен: без него голое "ITPM" матчилось даже внутри
+  // имён вида ITPM_BUDGET_PER_MIN, и любая обычная JS-ошибка про отсутствие
+  // переменной превращалась в «превышен лимит входных токенов».
+  return /\b413\b|\bITPM\b|input tokens per minute|Request too large|reduce your message size|context length|maximum context/i.test(s);
 }
 
 // Ошибка РАЗМЕРА запроса, а не минутного лимита: вход не влезает в контекст

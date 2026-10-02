@@ -8,6 +8,21 @@ set -u
 cd "$(dirname "$0")"
 echo "== синтаксис ES-модулей =="
 node check-exports.mjs . && echo "= экспорты на месте ="
+echo "== константы верхнего регистра =="
+cstmp=$(mktemp)
+cfail=0
+for f in sidepanel/sidepanel.js groq.js prompts.js config.js; do
+  [ -f "$f" ] || continue
+  if out=$(node check-consts.mjs "$f") && ! printf '%s' "$out" | grep -q 'НЕ ОБЪЯВЛЕНЫ'; then
+    echo "OK   $f"
+  else
+    echo "FAIL $f"
+    printf '%s\n' "$out"
+    cfail=1
+  fi
+done
+rm -f "$cstmp"
+echo "== разбор как ESM =="
 tmp=".syntaxcheck.mjs"
 err=$(mktemp)
 fail=0
@@ -23,5 +38,8 @@ for f in sidepanel/sidepanel.js groq.js prompts.js config.js content.js backgrou
   fi
 done
 rm -f "$tmp" "$err"
-if [ "$fail" -eq 0 ]; then echo "все модули разбираются как ESM"; fi
-exit $fail
+if [ "$fail" -eq 0 ] && [ "$cfail" -eq 0 ]; then
+  echo "всё чисто: модули разбираются как ESM, необъявленных констант нет"
+  exit 0
+fi
+exit 1
