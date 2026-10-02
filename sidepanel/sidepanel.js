@@ -205,7 +205,6 @@ function pushBudgetAfterOutputError(waitMs) {
   _budgetLogOut.push({ t: t - 60000 + waitMs, n });
   _lastRequestAt = t;
 }
-}
 
 // прикидка входных токенов запроса: системный промпт + юзер + накладные (roles/json)
 function estimateRequestTokens(sysText, userText) {

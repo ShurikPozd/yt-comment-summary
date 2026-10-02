@@ -1,9 +1,14 @@
-﻿{
+{
   "manifest_version": 3,
   "name": "РЎРІРѕРґРєР° РєРѕРјРјРµРЅС‚Р°СЂРёРµРІ YouTube",
   "version": "0.2.6",
   "description": "AI-СЃРІРѕРґРєР° РѕР±СЃСѓР¶РґРµРЅРёСЏ, С‚РµРјС‹ Рё СѓРјРЅС‹Р№ РїРѕРёСЃРє РїРѕ РєРѕРјРјРµРЅС‚Р°СЂРёСЏРј YouTube. РџСЂРµРІСЊСЋ РІРёРґРµРѕ РІ РѕС‚РґРµР»СЊРЅРѕР№ РІРєР»Р°РґРєРµ Рё РёРЅС„Рѕ Рѕ РєР°РЅР°Р»Рµ.",
-  "permissions": ["storage", "sidePanel", "downloads", "tabs"],
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "downloads",
+    "tabs"
+  ],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
@@ -16,8 +21,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

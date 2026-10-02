@@ -675,36 +675,49 @@ ol.points li::before {
 .err {
   color: #e5484d;
 }
-/* --- Панель диагностики (видна всегда, чтобы отличить «код не запустился» от «вкладка не найдена») --- */
+/* --- Панель диагностики: тихая строка внизу шапки, в цветах темы --- */
 #diag-bar {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   align-items: center;
-  padding: 4px 8px;
+  padding: 2px 10px;
   font-size: 11px;
-  color: #888;
-  border-bottom: 1px solid #333;
-  background: #1a1a1a;
+  color: var(--muted);
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
 }
 #ver-badge {
-  color: #6cf;
-  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+#diag-bar .diag-sep {
+  flex: 1;
 }
 #diag-bar button {
+  font: inherit;
   font-size: 11px;
-  padding: 2px 6px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed var(--border);
+  border-radius: 0;
+  padding: 1px 2px;
   cursor: pointer;
 }
+#diag-bar button:hover {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
 #diag-out {
-  padding: 8px;
-  font-family: Consolas, monospace;
-  font-size: 10px;
-  line-height: 1.35;
+  padding: 8px 10px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
-  color: #bbb;
-  background: #141414;
-  border-bottom: 1px solid #333;
-  max-height: 55vh;
+  color: var(--muted);
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  max-height: 50vh;
   overflow: auto;
 }

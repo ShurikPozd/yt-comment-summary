@@ -95,7 +95,7 @@ export class SerialQueue {
   }
 }
 
-export /**
+/**
  * Ошибка лимитов токенов Groq. Сервер уже отретраил сам (3 попытки с паузами по
  * подсказке Groq), поэтому клиентский ретрай тут только добивает окно и
  * растягивает ожидание. Пробрасываем наружу: вызывающий код (sidepanel) сам
@@ -107,7 +107,7 @@ function isTokenLimitErr(e) {
   );
 }
 
-class GroqProxy {
+export class GroqProxy {
   constructor({ baseUrl = "", token = "", model = "" } = {}) {
     this.baseUrl = (baseUrl || "").replace(/\/+$/, "");
     this.token = token;
