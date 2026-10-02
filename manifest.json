@@ -1,8 +1,8 @@
-{
+﻿{
   "manifest_version": 3,
-  "name": "Сводка комментариев YouTube",
-  "version": "0.2.5",
-  "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео в отдельной вкладке и инфо о канале.",
+  "name": "РЎРІРѕРґРєР° РєРѕРјРјРµРЅС‚Р°СЂРёРµРІ YouTube",
+  "version": "0.2.6",
+  "description": "AI-СЃРІРѕРґРєР° РѕР±СЃСѓР¶РґРµРЅРёСЏ, С‚РµРјС‹ Рё СѓРјРЅС‹Р№ РїРѕРёСЃРє РїРѕ РєРѕРјРјРµРЅС‚Р°СЂРёСЏРј YouTube. РџСЂРµРІСЊСЋ РІРёРґРµРѕ РІ РѕС‚РґРµР»СЊРЅРѕР№ РІРєР»Р°РґРєРµ Рё РёРЅС„Рѕ Рѕ РєР°РЅР°Р»Рµ.",
   "permissions": ["storage", "sidePanel", "downloads", "tabs"],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -25,7 +25,7 @@
     "default_path": "sidepanel/sidepanel.html"
   },
   "action": {
-    "default_title": "Сводка комментариев YouTube",
+    "default_title": "РЎРІРѕРґРєР° РєРѕРјРјРµРЅС‚Р°СЂРёРµРІ YouTube",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

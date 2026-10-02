@@ -19,6 +19,117 @@ const LOCAL_CONFIG =
   (typeof window !== "undefined" && window.__EXT_LOCAL_CONFIG__) || {};
 
 const $ = (id) => document.getElementById(id);
+
+// Страница с видео на YouTube. Раньше регулярка требовала обязательный префикс
+// www./m. и знала только /watch и /shorts — из-за этого валидная вкладка могла
+// не найтись и панель молча показывала «видео не найдено».
+const YT_VIDEO_RE = /^https:\/\/([a-z0-9-]+\.)*youtube\.com\/(watch|shorts|live)(\/|[?#]|$)/i;
+
+/* =======================================================================
+   Диагностика: ставится СИНХРОННО, до любого await и до main().
+   Смысл: если в шапке видно «v0.2.6» — модуль загрузился и мы внутри кода.
+   Если шапки нет вовсе — браузер отдаёт старый/битый файл, и версии здесь ни при чём.
+   Любая необработанная ошибка тоже рисуется в панель, а не теряется в консоли.
+   ======================================================================= */
+function renderDiag(text) {
+  const out = $("diag-out");
+  if (!out) return;
+  out.classList.remove("hidden");
+  out.textContent = text;
+}
+
+(async function markVersion() {
+  try {
+    const b = $("ver-badge");
+    if (b) b.textContent = "v" + chrome.runtime.getManifest().version;
+  } catch (e) {
+    /* ignore */
+  }
+})();
+
+async function collectDiagnostics() {
+  const lines = [];
+  const stamp = new Date().toLocaleTimeString();
+  let ver = "?";
+  try {
+    ver = chrome.runtime.getManifest().version;
+  } catch (e) {
+    lines.push("!! getManifest не работает: " + e.message);
+  }
+  lines.push(`версия расширения: ${ver}`);
+  lines.push(`время: ${stamp}`);
+  lines.push(`chrome.runtime.id: ${chrome.runtime.id || "нет"}`);
+  lines.push("");
+
+  let wins = [];
+  try {
+    wins = await chrome.windows.getAll({ populate: true });
+    lines.push(`окна (${wins.length}):`);
+    for (const w of wins) {
+      const active = (w.tabs || []).find((t) => t.active);
+      lines.push(
+        `  #${w.id} тип=${w.type} фокус=${w.focused} вкладок=${(w.tabs || []).length}` +
+          ` активная="${active ? active.url : "—"}"`
+      );
+    }
+  } catch (e) {
+    lines.push("!! windows.getAll: " + e.message);
+  }
+
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({});
+    lines.push("");
+    lines.push(`вкладки (${tabs.length}):`);
+    for (const t of tabs) {
+      const u = t.url || "(url недоступен)";
+      lines.push(`  #${t.id} w=${t.windowId} ${t.active ? "АКТ" : "   "} ${u.slice(0, 90)}`);
+    }
+  } catch (e) {
+    lines.push("!! tabs.query: " + e.message);
+  }
+
+  lines.push("");
+  const found = await findActiveVideoTab();
+  lines.push(`findActiveVideoTab() -> ${found ? `#${found.id} ${found.url}` : "null"}`);
+  lines.push(`YT-регексп: /^https:\\/\\/(www|m)\\.youtube\\.com\\/(watch|shorts)/`);
+  lines.push("");
+
+  if (found?.id) {
+    try {
+      const r = await chrome.tabs.sendMessage(found.id, { type: "yt:meta-query" });
+      lines.push(`sendMessage -> ${JSON.stringify(r).slice(0, 300)}`);
+    } catch (e) {
+      lines.push("!! sendMessage не прошёл: " + e.message);
+      lines.push("   (контент-скрипт мёртв — нужно F5 на вкладке видео)");
+    }
+  } else {
+    lines.push("sendMessage -> пропущен: вкладка не найдена");
+  }
+  return lines.join("\n");
+}
+
+function bindDiagnostics() {
+  $("btn-diag")?.addEventListener("click", async () => {
+    renderDiag("собираю диагностику…");
+    try {
+      renderDiag(await collectDiagnostics());
+    } catch (e) {
+      renderDiag("диагностика упала: " + (e?.message || e));
+    }
+  });
+  $("btn-refresh-tab")?.addEventListener("click", async () => {
+    await refreshFromActiveTab();
+  });
+}
+bindDiagnostics();
+
+window.addEventListener("error", (e) => {
+  showFatal("Необработанная ошибка в панели.", e.message + " @ " + (e.filename || "") + ":" + e.lineno);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  showFatal("Ошибка в панели (promise).", e.reason?.message || String(e.reason));
+});
 // Анализ пачками. Лимиты Groq free на qwen/qwen3.8-27b (одна учётка на бота и расширение):
 //   ITPM ~7000 входных токенов/мин, OTPM 1000 ВЫХОДНЫХ токенов/мин.
 // OTPM жёстче: любой запрос с max_tokens > 1000 отклоняется целиком (429), поэтому
@@ -979,7 +1090,7 @@ function onRuntimeMessage(msg) {
 // (chrome-extension://…), и видео не находится. Поэтому перебираем все обычные
 // окна и берём активную вкладку с /watch|/shorts.
 async function findActiveVideoTab() {
-  const YT = /^https:\/\/(www|m)\.youtube\.com\/(watch|shorts)/;
+  const YT = YT_VIDEO_RE;
   const pool = [];
   let wins = [];
   try {
@@ -1013,7 +1124,7 @@ async function findActiveVideoTab() {
 
 async function refreshFromActiveTab() {
   const tab = await findActiveVideoTab();
-  if (!tab?.id || !/^https:\/\/(www|m)\.youtube\.com\/(watch|shorts)/.test(tab.url || "")) {
+  if (!tab?.id || !YT_VIDEO_RE.test(tab.url || "")) {
     renderBottomMatters();
     const el = $("empty-state");
     const focusHint = tab?.url
