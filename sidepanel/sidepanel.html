@@ -37,8 +37,8 @@
 
       <section id="collect-bar" class="toolbar hidden">
         <button id="btn-analyze" class="primary"><span data-icon="sparkles"></span>Анализировать</button>
-        <label class="max-wrap" title="Сколько комментариев собрать с видео (10–2000). После изменения нажми «Собрать заново»">
-          <span>собрать</span>
+        <label class="max-wrap" title="Сколько комментариев собирать с видео (10–2000). После изменения нажмите «Собрать заново»">
+          <span>лимит</span>
           <input id="quick-max" type="number" min="10" max="2000" step="10" value="120" />
         </label>
         <button id="btn-restart" class="icon-btn" title="Собрать комментарии заново" aria-label="Собрать заново"><span data-icon="refresh" data-size="15"></span></button>
@@ -46,12 +46,12 @@
       </section>
       <div id="status-row" class="status-row hidden"><span id="collect-status" class="status"></span></div>
 
-      <nav id="tabs" class="tabs hidden">
-        <button data-tab="summary" class="tab active">Сводка</button>
-        <button data-tab="moments" class="tab">Моменты<span id="moments-badge" class="tab-badge hidden"></span></button>
-        <button data-tab="topics" class="tab">Темы</button>
-        <button data-tab="search" class="tab">Поиск</button>
-        <button data-tab="comments" class="tab">Все</button>
+      <nav id="tabs" class="tabs hidden" role="tablist" aria-label="Разделы">
+        <button data-tab="summary" class="tab active" role="tab" aria-selected="true" aria-controls="view-summary">Сводка</button>
+        <button data-tab="moments" class="tab" role="tab" aria-selected="false" aria-controls="view-moments">Моменты<span id="moments-badge" class="tab-badge hidden"></span></button>
+        <button data-tab="topics" class="tab" role="tab" aria-selected="false" aria-controls="view-topics">Темы</button>
+        <button data-tab="search" class="tab" role="tab" aria-selected="false" aria-controls="view-search">Поиск</button>
+        <button data-tab="comments" class="tab" role="tab" aria-selected="false" aria-controls="view-comments">Все</button>
         <button id="btn-settings" class="tab settings-tab" title="Настройки" aria-label="Настройки"><span data-icon="settings" data-size="18"></span></button>
         <span class="tab-ink" aria-hidden="true"></span>
       </nav>
@@ -86,13 +86,22 @@
         </div>
 
         <div id="view-moments" class="view">
-          <div id="moments-empty" class="placeholder">Здесь появятся моменты видео, на которые ссылаются зрители (таймкоды вида 1:23 в комментариях).</div>
+          <div id="moments-empty" class="view-empty">
+            <div class="empty-icon small" data-icon="clock" data-size="22"></div>
+            <div class="empty-title">Моментов пока нет</div>
+            <div class="empty-text">Когда зрители пишут таймкоды вроде 1:23, здесь собираются самые обсуждаемые места видео — клик перематывает.</div>
+          </div>
           <div id="moments-timeline" class="timeline hidden"></div>
           <div id="moments-list"></div>
         </div>
 
         <div id="view-topics" class="view">
-          <div id="topics-empty" class="placeholder">Темы появятся после анализа.</div>
+          <div id="topics-empty" class="view-empty">
+            <div class="empty-icon small" data-icon="sparkles" data-size="22"></div>
+            <div class="empty-title">Темы появятся после анализа</div>
+            <div class="empty-text">ИИ разложит обсуждение по темам и покажет, сколько комментариев в каждой.</div>
+            <button id="btn-topics-analyze" class="primary empty-cta"><span data-icon="sparkles"></span>Анализировать</button>
+          </div>
           <div id="topics-list"></div>
         </div>
 

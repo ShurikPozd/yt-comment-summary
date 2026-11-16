@@ -7,7 +7,7 @@ const params = new URLSearchParams(location.search);
 const urls = (params.get("urls") || "")
   .split(",")
   .map((u) => u.trim())
-  .filter(Boolean);
+  .filter((u) => /^https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/\w+\.jpg$/.test(u)); // только превью YouTube
 const title = params.get("title") || "";
 // Имя файла приходит из панели — уже по шаблону из настроек.
 const fileName = params.get("name") || sanitizeFilename((title || "thumbnail") + " (превью)") + ".jpg";
@@ -18,6 +18,7 @@ const img = $("pv-image");
 const errBox = $("pv-error");
 
 const LABELS = { maxresdefault: "Макс.", sddefault: "SD", hqdefault: "HQ" };
+const escAttr = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const labelOf = (u) => LABELS[(u.match(/\/(\w+)\.jpg/) || [])[1]] || "—";
 
 // Какие качества реально есть: maxres у части видео отсутствует, и YouTube
@@ -49,7 +50,7 @@ function renderQuality() {
     .filter((u) => available.has(u))
     .map((u) => {
       const { w, h } = available.get(u);
-      return `<button class="chip${u === current ? " active" : ""}" data-url="${u}" role="radio" aria-checked="${u === current}" title="${w}×${h}">${labelOf(u)}</button>`;
+      return `<button class="chip${u === current ? " active" : ""}" data-url="${escAttr(u)}" role="radio" aria-checked="${u === current}" title="${w}×${h}">${escAttr(labelOf(u))}</button>`;
     })
     .join("");
 }

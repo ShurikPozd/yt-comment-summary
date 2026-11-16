@@ -14,6 +14,13 @@ function setup() {
 chrome.runtime.onInstalled.addListener(setup);
 chrome.runtime.onStartup.addListener(setup);
 
+// Доступ контент-скрипта к storage.session нужен с первой секунды жизни
+// воркера, а не только после установки/старта браузера: иначе запись падала
+// в запасной storage.local, которого панель не видит.
+chrome.storage.session
+  .setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" })
+  .catch((e) => console.error("setAccessLevel:", e));
+
 // ---------------- Контекстное меню ----------------
 // Системное меню Chrome: внешний вид задаёт браузер, поэтому красоту делаем
 // структурой — группа под иконкой расширения, галочки у переключателей,
@@ -68,10 +75,12 @@ function videoIdFrom(url) {
   try {
     const u = new URL(url);
     if (!/(^|\.)youtube\.com$|^youtu\.be$/.test(u.hostname)) return null;
-    if (u.hostname === "youtu.be") return u.pathname.slice(1, 12) || null;
-    if (u.pathname === "/watch") return u.searchParams.get("v");
-    const m = u.pathname.match(/^\/(shorts|live|embed)\/([A-Za-z0-9_-]{6,20})/);
-    return m ? m[2] : null;
+    let id = null;
+    if (u.hostname === "youtu.be") id = u.pathname.slice(1, 12);
+    else if (u.pathname === "/watch") id = u.searchParams.get("v");
+    else id = (u.pathname.match(/^\/(shorts|live|embed)\/([A-Za-z0-9_-]{11})/) || [])[2];
+    // id ролика YouTube — ровно 11 символов [A-Za-z0-9_-]; всё остальное отбрасываем
+    return /^[A-Za-z0-9_-]{11}$/.test(id || "") ? id : null;
   } catch (e) {
     return null;
   }
@@ -154,18 +163,43 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   const id = videoIdFrom(info.linkUrl || "") || videoIdFrom(tab?.url || "");
   if (!id) return;
+  if (action === "preview") await openPreview(tab, id);
+  if (action === "download") await downloadThumb(tab, id);
+});
 
-  if (action === "preview") {
-    const { file, title } = await thumbFileName(tab, id);
-    const qs = new URLSearchParams({ urls: thumbUrls(id).join(","), title: title || id, name: file });
-    chrome.tabs.create({ url: chrome.runtime.getURL(`sidepanel/preview.html?${qs}`), index: (tab?.index ?? 0) + 1 });
+async function openPreview(tab, id) {
+  const { file, title } = await thumbFileName(tab, id);
+  const qs = new URLSearchParams({ urls: thumbUrls(id).join(","), title: title || id, name: file });
+  await chrome.tabs.create({ url: chrome.runtime.getURL(`sidepanel/preview.html?${qs}`), index: (tab?.index ?? 0) + 1 });
+}
+
+async function downloadThumb(tab, id) {
+  const url = await bestThumb(id);
+  if (!url) return false;
+  const { file } = await thumbFileName(tab, id);
+  await chrome.downloads.download({ url, filename: file, conflictAction: "uniquify", saveAs: false });
+  return true;
+}
+
+// Действия из нашей кнопки в плеере YouTube (меню рисует content.js).
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "ui:action" || !sender.tab) return;
+  const tab = sender.tab;
+  if (msg.action === "panel") {
+    // Клик по кнопке в плеере — действие пользователя; открываем сразу,
+    // до любых await, иначе Chrome сочтёт вызов не связанным с кликом.
+    chrome.sidePanel
+      .open({ tabId: tab.id })
+      .then(() => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
+  const id = videoIdFrom(tab.url || "");
+  if (!id) {
+    sendResponse({ ok: false });
     return;
   }
-
-  if (action === "download") {
-    const url = await bestThumb(id);
-    if (!url) return;
-    const { file } = await thumbFileName(tab, id);
-    chrome.downloads.download({ url, filename: file, conflictAction: "uniquify", saveAs: false });
-  }
+  const run = msg.action === "preview" ? openPreview(tab, id).then(() => true) : downloadThumb(tab, id);
+  run.then((ok) => sendResponse({ ok })).catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+  return true;
 });

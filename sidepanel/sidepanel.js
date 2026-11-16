@@ -229,6 +229,14 @@ function settleOutput(slot, text) {
   if (slot) slot.n = Math.max(40, Math.ceil(String(text || "").length / 2.5));
 }
 
+// Журнал держим отсортированным по времени и чистим по времени: запись после
+// ошибки OTPM добавляется «задним числом», и чистка с начала её пропускала —
+// пауза растягивалась почти вдвое.
+function pruneLog(log, now) {
+  for (let i = log.length - 1; i >= 0; i--) if (now - log[i].t >= 60000) log.splice(i, 1);
+  log.sort((a, b) => a.t - b.t);
+}
+
 // Через сколько мс в скользящем окне освободится место под need токенов.
 function budgetFreeAt(log, used, need, budget, now) {
   if (used + need <= budget) return 0;
@@ -246,8 +254,8 @@ async function paceRequest(estIn, estOut = CHUNK_MAX_OUTPUT_TOKENS, onWait = nul
   const outEst = Math.min(estOut, CHUNK_MAX_OUTPUT_TOKENS);
   for (;;) {
     const now = Date.now();
-    while (_budgetLogIn.length && now - _budgetLogIn[0].t >= 60000) _budgetLogIn.shift();
-    while (_budgetLogOut.length && now - _budgetLogOut[0].t >= 60000) _budgetLogOut.shift();
+    pruneLog(_budgetLogIn, now);
+    pruneLog(_budgetLogOut, now);
     const usedIn = _budgetLogIn.reduce((a, x) => a + x.n, 0);
     const usedOut = _budgetLogOut.reduce((a, x) => a + x.n, 0);
     if (
@@ -799,15 +807,36 @@ const HIST_PREFIX = "hist:";
 const HIST_INDEX = "hist:index";
 const HIST_MAX = 60;
 
+// Темы в сохранённой сводке ссылаются на комментарии по id, а не по номеру:
+// после пересбора порядок комментариев меняется (и в сессии, и в истории).
+function packSummary(summary, comments) {
+  return {
+    ...summary,
+    topics: (summary.topics || []).map((t) => ({
+      name: t.name,
+      count: t.count,
+      cids: t.cids || (t.ids || []).map((i) => comments[i]?.id).filter(Boolean),
+    })),
+  };
+}
+
+function unpackSummary(entry, comments) {
+  if (!entry) return null;
+  const pos = new Map(comments.map((c, i) => [c.id, i]));
+  return {
+    ...entry,
+    topics: (entry.topics || []).map((t) => ({
+      name: t.name,
+      count: t.count,
+      ids: t.cids ? t.cids.map((id) => pos.get(id)).filter((i) => i !== undefined) : t.ids || [],
+    })),
+  };
+}
+
 async function saveHistory(videoId, summary, comments, meta) {
   try {
     const entry = {
-      ...summary,
-      topics: (summary.topics || []).map((t) => ({
-        name: t.name,
-        count: t.count,
-        cids: t.ids.map((i) => comments[i]?.id).filter(Boolean),
-      })),
+      ...packSummary(summary, comments),
       commentCount: summary.commentCount || comments.length,
       // id собранных комментариев — чтобы в следующий раз показать новые
       seenIds: comments.slice(0, 1000).map((c) => c.id).filter(Boolean),
@@ -832,15 +861,7 @@ async function loadHistory(videoId, comments) {
     return null;
   }
   if (!entry) return null;
-  const pos = new Map(comments.map((c, i) => [c.id, i]));
-  return {
-    ...entry,
-    fromHistory: true,
-    topics: (entry.topics || []).map((t) => {
-      const ids = (t.cids || []).map((id) => pos.get(id)).filter((i) => i !== undefined);
-      return { name: t.name, count: t.count, ids };
-    }),
-  };
+  return { ...unpackSummary(entry, comments), fromHistory: true };
 }
 
 // Список «Недавние сводки» в настройках: клик открывает видео, а панель
@@ -888,10 +909,14 @@ async function loadFor(videoId) {
     `collect:${videoId}`,
   ]);
   const switched = state.videoId !== videoId;
+  // Открыли другое видео посреди анализа — анализ прошлого прерываем
+  // (его сводка, если успеет, всё равно сохранится в историю своего видео).
+  if (switched && state.analyzing) cancelAnalysis("Анализ прерван: открыто другое видео.");
   state.videoId = videoId;
-  state.meta = obj[`meta:${videoId}`] || state.meta || null;
+  state.meta = obj[`meta:${videoId}`] || (switched ? null : state.meta);
   state.comments = obj[`comments:${videoId}`] || [];
-  state.summary = obj[`summary:${videoId}`] || (await loadHistory(videoId, state.comments));
+  state.summary =
+    unpackSummary(obj[`summary:${videoId}`], state.comments) || (await loadHistory(videoId, state.comments));
   state.newIds = state.summary?.fromHistory
     ? newSince(state.comments, state.summary.seenIds, state.summary.updatedAt || state.summary.savedAt)
     : new Set();
@@ -1003,13 +1028,21 @@ function setProgress(id, frac) {
 }
 
 function updateCollectStatus(status, fetched, max, error) {
+  state.collect = { status, fetched, max, error };
   const el = $("collect-status");
   el.classList.toggle("err", status === "error");
   if (status === "loading") {
     el.textContent = `Собираю: ${fetched || 0} из ${max || "…"}`;
     setProgress("collect-progress", max ? (fetched || 0) / max : 0.05);
   } else if (status === "done") {
-    el.innerHTML = `${icon("check", { size: 13 })} ${fetched || 0} комм.`;
+    // max — лимит, с которым собирали. Если лимит с тех пор поменяли, подсказываем
+    // пересобрать (иначе «лимит 120» рядом с «собрано 300» сбивает с толку).
+    const lim = Number(state.settings?.maxComments) || 0;
+    const used = Number(max) || 0;
+    const changed = lim && used && lim !== used && (lim < (fetched || 0) || (fetched || 0) >= used);
+    el.innerHTML =
+      `${icon("check", { size: 13 })} Собрано ${fetched || 0}` +
+      (changed ? ` <span class="status-note">· лимит изменён — соберите заново</span>` : "");
     el.title = `Собрано комментариев: ${fetched || 0}`;
     setProgress("collect-progress", null);
   } else if (status === "error") {
@@ -1044,6 +1077,8 @@ function setTab(name) {
   currentTab = name;
   document.querySelectorAll(".tab[data-tab]").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === name);
+    b.setAttribute("aria-selected", String(b.dataset.tab === name));
+    b.tabIndex = b.dataset.tab === name ? 0 : -1;
   });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   $("view-" + name).classList.add("active");
@@ -1070,6 +1105,23 @@ function setTab(name) {
 }
 
 // ---------------- Сводка ----------------
+
+// Каждый запуск анализа получает номер. Смена видео или «Собрать заново»
+// увеличивают счётчик — старый запуск видит это и тихо сворачивается, а его
+// результат (если успел) уходит в историю своего видео, а не текущего.
+let analyzeRun = 0;
+
+function cancelAnalysis(reason) {
+  if (!state.analyzing) return;
+  analyzeRun++;
+  state.analyzing = false;
+  $("btn-analyze").disabled = false;
+  $("btn-analyze").classList.remove("busy");
+  setProgress("analyze-progress", null);
+  $("summary-placeholder").textContent = "";
+  $("summary-text").innerHTML = "";
+  if (reason) showToast(reason);
+}
 
 async function analyze() {
   if (state.analyzing) return;
@@ -1099,6 +1151,12 @@ async function analyze() {
     return;
   }
   state.analyzing = true;
+  const run = ++analyzeRun;
+  const live = () => run === analyzeRun;
+  // анализируем именно это видео и этот набор комментариев, что бы ни случилось с панелью
+  const vid = state.videoId;
+  const comments = state.comments;
+  const lang = state.settings.lang;
   $("btn-analyze").disabled = true;
   $("btn-analyze").classList.add("busy");
   setTab("summary");
@@ -1111,8 +1169,8 @@ async function analyze() {
     // Пул для ИИ: при большом сборе берём самые залайканные (в исходном
     // порядке) — иначе 2000 комментариев на бесплатном лимите это ~20 минут.
     // Обзор, моменты и поиск по тексту всё равно работают по всем.
-    const pool = analysisPool(state.comments);
-    const poolComments = pool.map((i) => state.comments[i]);
+    const pool = analysisPool(comments);
+    const poolComments = pool.map((i) => comments[i]);
     const nodes = buildChunks(poolComments);
     if (!nodes.length) throw new Error("Нет комментариев для анализа.");
 
@@ -1123,10 +1181,13 @@ async function analyze() {
     const notableIds = [];
     const sentiment = { positive: 0, neutral: 0, negative: 0 };
     const notableComments = [];
-    // локальный № внутри части → индекс в state.comments
-    const toGlobal = (localBase, id) => {
-      const k = localBase + Number(id);
-      return Number.isInteger(k) && k >= 0 && k < pool.length ? pool[k] : -1;
+    // локальный № внутри части → индекс в comments; номер за пределами своей
+    // части отбрасываем (иначе модель «дотягивалась» до соседней части)
+    const toGlobal = (localBase, id, len) => {
+      const n = Number(id);
+      if (!Number.isInteger(n) || n < 0 || n >= len) return -1;
+      const k = localBase + n;
+      return k < pool.length ? pool[k] : -1;
     };
     // Самые крупные темы на данный момент — подсказка следующим частям,
     // чтобы модель называла одну тему одинаково.
@@ -1136,7 +1197,7 @@ async function analyze() {
         .slice(0, 10)
         .map(([name]) => name);
 
-    const absorb = (data, localBase) => {
+    const absorb = (data, localBase, len) => {
       if (!data) return;
       if (data.topics && typeof data.topics === "object") {
         for (const [name, val] of Object.entries(data.topics)) {
@@ -1147,7 +1208,7 @@ async function analyze() {
           const t = (topicMap[nm] ||= { ids: new Set(), n: 0 });
           let added = 0;
           for (const id of ids) {
-            const g = toGlobal(localBase, id);
+            const g = toGlobal(localBase, id, len);
             if (g >= 0 && !t.ids.has(g)) {
               t.ids.add(g);
               added++;
@@ -1164,7 +1225,7 @@ async function analyze() {
       }
       if (Array.isArray(data.notable)) {
         for (const id of data.notable) {
-          const g = toGlobal(localBase, id);
+          const g = toGlobal(localBase, id, len);
           if (g >= 0 && !notableIds.includes(g)) notableIds.push(g);
         }
       }
@@ -1182,7 +1243,7 @@ async function analyze() {
     // Возвращает true, если вся порция разобрана без ошибок.
     const processPortion = async (portion, localBase, depth, rateTries = 0) => {
       if (!portion.length) return true;
-      if (!state.analyzing) return false;
+      if (!live()) return false;
       if (depth > 6) throw new Error("Слишком много дроблений (комментарии слишком большие или лимит исчерпан)");
       if (rateTries > 3) throw new Error("Groq держит лимит выходных токенов дольше 3 минут — сделай перерыв и нажми «Анализировать» ещё раз.");
 
@@ -1206,7 +1267,7 @@ async function analyze() {
         settleOutput(slot, raw);
         const data = extractJson(raw);
         if (!data) throw new Error("Модель вернула не JSON");
-        absorb(data, localBase);
+        absorb(data, localBase, portion.length);
         return true;
       } catch (e) {
         // OTPM (лимит ВЫХОДНЫХ токенов) дроблением НЕ лечится: меньше входа —
@@ -1250,7 +1311,7 @@ async function analyze() {
     };
 
     for (let ci = 0; ci < nodes.length; ci++) {
-      if (!state.analyzing) return;
+      if (!live()) return;
       partLabel = nodes.length > 1 ? `Часть ${ci + 1} из ${nodes.length}.` : "";
       $("summary-placeholder").textContent =
         nodes.length > 1 ? `Читаю комментарии: часть ${ci + 1} из ${nodes.length}…` : "Читаю комментарии…";
@@ -1267,9 +1328,9 @@ async function analyze() {
     // Яркие — по одному-два из каждой части; оставляем 6 самых залайканных.
     for (const g of notableIds
       .slice()
-      .sort((a, b) => (state.comments[b].likes || 0) - (state.comments[a].likes || 0))
+      .sort((a, b) => (comments[b].likes || 0) - (comments[a].likes || 0))
       .slice(0, 6)) {
-      notableComments.push(state.comments[g]);
+      notableComments.push(comments[g]);
     }
 
     $("summary-placeholder").textContent = "Пишу итоговую сводку…";
@@ -1278,7 +1339,8 @@ async function analyze() {
     const liveSummary = $("summary-text");
     // Финальный запрос идёт сразу после чанков — OTPM ещё выбран, поэтому
     // заранее ждём место в окне под его выходные токены.
-    const finIn = estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang }));
+    if (!live()) return;
+    const finIn = estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang }));
     // Сводка ≤380 символов ≈ 150–200 токенов: резервируем 350, а не max_tokens.
     const finSlot = await paceRequest(finIn, 350, waitNote("Осталась итоговая сводка."));
     $("summary-placeholder").textContent = "Пишу итоговую сводку…";
@@ -1291,10 +1353,11 @@ async function analyze() {
         fin = await proxy.chatStream(
           [
             { role: "system", content: FINAL_SYSTEM },
-            { role: "user", content: finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang }) },
+            { role: "user", content: finalUser({ topics, points, sentiment, notableComments, lang }) },
           ],
           { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
           (full) => {
+            if (!live()) return;
             liveSummary.innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
           }
         );
@@ -1313,21 +1376,25 @@ async function analyze() {
     }
     settleOutput(finSlot, fin);
     const summary = clean(fin) || "Сводка не получена.";
-    liveSummary.innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
-
-    state.summary = {
+    const result = {
       summary,
       topics,
       points: dedupeTexts(points, 6),
       notable: notableComments,
       sentiment,
       updatedAt: Date.now(),
+      commentCount: comments.length,
+      analyzed: pool.length,
     };
-    state.summary.commentCount = state.comments.length;
+    // Сохраняем для СВОЕГО видео — даже если пользователь уже смотрит другое.
+    const meta = state.videoId === vid ? state.meta : null;
+    await safeSessionSet({ [`summary:${vid}`]: packSummary(result, comments) }, { keepVideoId: vid });
+    void saveHistory(vid, result, comments, meta);
+    if (!live() || state.videoId !== vid) return;
+    liveSummary.innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
+    state.summary = result;
     state.newIds = new Set();
-    state.summary.analyzed = pool.length;
-    await safeSessionSet({ [`summary:${state.videoId}`]: state.summary }, { keepVideoId: state.videoId });
-    void saveHistory(state.videoId, state.summary, state.comments, state.meta);
+    if (state.commentFilter === "new") state.commentFilter = "all";
     $("summary-placeholder").textContent = "";
     // Снимаем флаг до отрисовки: renderSummary() во время анализа ничего не
     // рисует (бережёт живой прогресс), и без этого темы/тональность/мнения
@@ -1337,15 +1404,18 @@ async function analyze() {
     renderTopics();
     setTab("summary");
   } catch (e) {
+    if (!live()) return; // анализ отменён — ошибку прошлого видео не показываем
     const msg = friendlyError(e);
     $("summary-text").innerHTML = "";
     $("summary-placeholder").classList.remove("hidden");
     $("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
   } finally {
-    state.analyzing = false;
-    $("btn-analyze").disabled = false;
-    $("btn-analyze").classList.remove("busy");
-    setProgress("analyze-progress", null);
+    if (live()) {
+      state.analyzing = false;
+      $("btn-analyze").disabled = false;
+      $("btn-analyze").classList.remove("busy");
+      setProgress("analyze-progress", null);
+    }
   }
 }
 
@@ -1803,6 +1873,7 @@ async function runSearch() {
   if (!q || !state.comments.length) return;
   const mode = document.querySelector('input[name="mode"]:checked').value;
   const seq = ++searchSeq;
+  const vid = state.videoId; // ответ ИИ показываем только для того же видео
   $("btn-search").disabled = true;
   try {
     if (mode === "text") {
@@ -1840,7 +1911,7 @@ async function runSearch() {
         { jsonMode: true, maxTokens: 500, timeoutMs: 120000 }
       );
       settleOutput(slot, raw);
-      if (seq !== searchSeq) return; // пока ждали ответ, запустили новый поиск
+      if (seq !== searchSeq || vid !== state.videoId) return; // новый поиск или другое видео
       const data = extractJson(raw);
       const ids = [...new Set((Array.isArray(data?.ids) ? data.ids : []).map(Number).filter(Number.isFinite))];
       const items = ids.map((i) => subset[i]).filter(Boolean);
@@ -1862,10 +1933,10 @@ async function runSearch() {
           };
     }
   } catch (e) {
-    if (seq !== searchSeq) return;
+    if (seq !== searchSeq || vid !== state.videoId) return;
     globalSearchResults = { mode, query: q, items: [], error: true, info: friendlyError(e) };
   } finally {
-    if (seq === searchSeq) {
+    if (seq === searchSeq && vid === state.videoId) {
       $("btn-search").disabled = false;
       renderSearchResults();
     }
@@ -1961,9 +2032,16 @@ function showToast(text) {
 
 // ---------------- События от контент-скрипта ----------------
 
-function onRuntimeMessage(msg) {
+function onRuntimeMessage(msg, sender) {
   if (!msg || typeof msg.type !== "string") return;
+  if (!msg.type.startsWith("yt:")) return;
+  if (sender?.tab?.id != null && state.tabId != null && sender.tab.id !== state.tabId) return;
   if (msg.type === "yt:meta") {
+    // в той же вкладке открыли другое видео (переход внутри YouTube) — переключаемся
+    if (state.videoId && msg.meta?.videoId && msg.meta.videoId !== state.videoId) {
+      void loadFor(msg.meta.videoId);
+      return;
+    }
     if (!state.videoId) {
       state.videoId = msg.meta.videoId;
       state.meta = msg.meta;
@@ -1983,7 +2061,7 @@ function onRuntimeMessage(msg) {
     updateCollectStatus(msg.status, msg.fetched, msg.max, msg.error || null);
   } else if (msg.type === "yt:ready") {
     if (msg.videoId && state.videoId && msg.videoId !== state.videoId) return;
-    void loadFor(state.videoId);
+    void loadFor(state.videoId || msg.videoId);
   } else if (msg.type === "yt:away") {
     if (!state.videoId) return;
     state.videoId = null;
@@ -2046,6 +2124,9 @@ function setEmptyState(iconName, title, text, extra = "") {
 
 async function refreshFromActiveTab() {
   const tab = await findActiveVideoTab();
+  // вкладка, за которой следит панель: сообщения от других вкладок YouTube
+  // (канал в фоне, другое окно) не должны сбрасывать панель
+  state.tabId = tab?.id ?? null;
   if (!tab?.id || !YT_VIDEO_RE.test(tab.url || "")) {
     renderBottomMatters();
     if (tab?.url && /youtube\.com/i.test(tab.url)) {
@@ -2096,6 +2177,18 @@ function bindEvents() {
   document.querySelectorAll(".tab[data-tab]").forEach((b) => {
     b.addEventListener("click", () => setTab(b.dataset.tab));
   });
+  // Стрелки ← → / Home / End переключают вкладки, когда фокус на вкладке.
+  $("tabs").addEventListener("keydown", (e) => {
+    const tabs = [...document.querySelectorAll(".tab[data-tab]")];
+    const i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const j = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    const t = tabs[(j + tabs.length) % tabs.length];
+    setTab(t.dataset.tab);
+    t.focus();
+  });
   $("btn-settings").addEventListener("click", () => {
     fillSettingsFields();
     setTab("settings");
@@ -2107,6 +2200,7 @@ function bindEvents() {
   });
   $("btn-restart").addEventListener("click", async () => {
     if (!state.videoId) return;
+    cancelAnalysis("Анализ прерван: комментарии собираются заново.");
     const quick = parseInt($("quick-max").value, 10);
     if (Number.isFinite(quick)) {
       const v = Math.min(2000, Math.max(10, quick));
@@ -2139,7 +2233,9 @@ function bindEvents() {
     state.settings.maxComments = v;
     $("set-max").value = v;
     await saveSettings(false);
-    showToast(`Лимит сбора: ${v} комментариев. Нажми «Собрать заново», чтобы применить.`);
+    showToast(`Лимит сбора: ${v} комментариев. Нажмите «Собрать заново», чтобы применить.`);
+    const c = state.collect || {};
+    updateCollectStatus(c.status, c.fetched, c.max, c.error);
   });
   $("btn-analyze").addEventListener("click", () => {
     const quick = parseInt($("quick-max").value, 10);
@@ -2311,7 +2407,7 @@ function bindEvents() {
   });
   document.querySelectorAll('input[name="mode"]').forEach((r) =>
     r.addEventListener("change", () => {
-      const ph = { text: "Слово или фраза…", ai: "Тема, о которой ищешь…", ask: "Например: что не понравилось зрителям?" };
+      const ph = { text: "Слово или фраза…", ai: "Тема, о которой ищешь…", ask: "Свой вопрос — или выберите готовый ниже" };
       $("search-input").placeholder = ph[r.value] || "";
       $("btn-search").textContent = r.value === "ask" ? "Спросить" : "Найти";
       $("ask-suggest").classList.toggle("hidden", r.value !== "ask");
@@ -2328,6 +2424,7 @@ function bindEvents() {
     }
   });
   $("btn-search").addEventListener("click", runSearch);
+  $("btn-topics-analyze").addEventListener("click", () => $("btn-analyze").click());
   $("btn-cta-settings").addEventListener("click", () => {
     fillSettingsFields();
     setTab("settings");

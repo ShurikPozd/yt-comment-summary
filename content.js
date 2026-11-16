@@ -680,15 +680,20 @@
         [stateKey]: { status: "done", fetched: comments.length, max, error: null },
         [K.comments(videoId)]: comments,
       });
-      send({ type: "yt:progress", videoId, status: "done", fetched: comments.length, max: comments.length });
+      // max — лимит, с которым собирали (панель сравнивает его с текущим лимитом)
+      send({ type: "yt:progress", videoId, status: "done", fetched: comments.length, max });
       send({ type: "yt:ready", videoId, count: comments.length });
     } catch (e) {
       const msg = String(e.message || e);
       if (msg === "cancelled") {
+        // Нас вытеснил новый сбор (перезапуск/другое видео) — он сам ведёт статус.
+        // Раньше здесь писалось «idle» поверх его «loading» и рассылалась ложная ошибка.
+        if (collector !== mine) return;
         await sessionSet({ [stateKey]: { status: "idle", fetched: 0, max, error: null } });
-      } else {
-        await sessionSet({ [stateKey]: { status: "error", fetched: comments.length, max, error: msg } });
+        send({ type: "yt:progress", videoId, status: "idle", fetched: 0, max });
+        return;
       }
+      await sessionSet({ [stateKey]: { status: "error", fetched: comments.length, max, error: msg } });
       send({ type: "yt:progress", videoId, status: "error", fetched: comments.length, max, error: msg });
     }
   }
@@ -729,7 +734,7 @@
     }
     const { [K.state(id)]: st } = await sessionGet([K.state(id)]);
     if (st?.status === "done") {
-      send({ type: "yt:progress", videoId: id, status: "done", fetched: st.fetched, max: st.fetched });
+      send({ type: "yt:progress", videoId: id, status: "done", fetched: st.fetched, max: st.max });
       void touchVideoOrder(id);
     } else {
       void runCollection(id, forceCollect);
@@ -767,6 +772,7 @@
     playerPrefs.noAutoplay = Boolean(settings?.noAutoplay);
     playerPrefs.hideProgress = Boolean(settings?.hideProgress);
     applyHideProgress();
+    syncMenuToggles(); // меню в плеере следует за настройками из панели
   }
 
   chrome.storage.local
@@ -793,7 +799,10 @@
   window.addEventListener(
     "pointerdown",
     (e) => {
-      if (e.isTrusted && e.target.closest?.("#movie_player, ytd-player")) lastPlayerGestureAt = Date.now();
+      // клики по нашей кнопке и меню — не «запуск видео»
+      if (e.isTrusted && e.target.closest?.("#movie_player, ytd-player") && !e.target.closest(".ytcs-btn, .ytcs-menu")) {
+        lastPlayerGestureAt = Date.now();
+      }
     },
     true
   );
@@ -831,6 +840,173 @@
     const v = mainVideo();
     if (v && !v.paused && Date.now() - lastPlayerGestureAt > 1500) v.pause();
   }
+
+  // ---------------- Кнопка и меню в плеере YouTube ----------------
+  // Своё меню в стиле плеера (системное контекстное меню Chrome не
+  // стилизуется). Кнопка встаёт рядом с шестерёнкой настроек и наследует
+  // классы плеера — размеры и поведение как у родных кнопок.
+  const UI_CSS = `
+    .ytcs-btn svg { width: 24px; height: 24px; display: block; margin: auto; }
+    .ytcs-btn { opacity: .92; }
+    .ytcs-btn:hover { opacity: 1; }
+    .ytcs-menu {
+      position: absolute; right: 12px; bottom: 64px; z-index: 75;
+      width: 300px; max-width: calc(100% - 24px); padding: 8px 0;
+      background: rgba(28, 28, 30, .86);
+      -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+      border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
+      color: #f1f1f1; font: 500 14px/1.3 "YouTube Noto", Roboto, Arial, sans-serif;
+      opacity: 0; transform: translateY(6px) scale(.97); transform-origin: 100% 100%;
+      pointer-events: none; transition: opacity .16s ease, transform .22s cubic-bezier(.22, 1, .36, 1);
+    }
+    .ytcs-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+    .ytcs-head { display: flex; align-items: center; gap: 8px; padding: 6px 16px 10px; font-size: 12px; font-weight: 600;
+      letter-spacing: .02em; color: rgba(255, 255, 255, .6); }
+    .ytcs-head svg { width: 16px; height: 16px; color: #ff4e6a; }
+    .ytcs-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 40px; padding: 0 16px;
+      background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+      transition: background-color .12s ease; }
+    .ytcs-item:hover, .ytcs-item:focus-visible { background: rgba(255, 255, 255, .1); outline: none; }
+    .ytcs-item:active { background: rgba(255, 255, 255, .16); }
+    .ytcs-item > svg { flex: none; width: 20px; height: 20px; opacity: .9; }
+    .ytcs-item .ytcs-label { flex: 1; min-width: 0; position: relative; top: -.075em; } /* оптическая центровка */
+    .ytcs-sep { height: 1px; margin: 6px 0; background: rgba(255, 255, 255, .1); }
+    .ytcs-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px;
+      background: rgba(255, 255, 255, .25); transition: background-color .2s ease; }
+    .ytcs-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); transition: transform .22s cubic-bezier(.22, 1, .36, 1); }
+    .ytcs-item[aria-checked="true"] .ytcs-switch { background: #ff3b5c; }
+    .ytcs-item[aria-checked="true"] .ytcs-switch::after { transform: translateX(14px); }
+    .ytcs-note { padding: 4px 16px 6px; font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, .55); min-height: 0; }
+    .ytcs-note:empty { display: none; }
+    @media (prefers-reduced-motion: reduce) { .ytcs-menu, .ytcs-switch, .ytcs-switch::after { transition: none; } }`;
+
+  const SVG = (paths) =>
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  const UI_ICONS = {
+    brand: SVG('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M12 8.2l.9 2.2 2.2.9-2.2.9-.9 2.2-.9-2.2-2.2-.9 2.2-.9z" fill="currentColor"/>'),
+    panel: SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/><path d="M17.5 8.5h1M17.5 11.5h1"/>'),
+    eye: SVG('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+    download: SVG('<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'),
+    pause: SVG('<rect x="5" y="4" width="4.5" height="16" rx="1.2"/><rect x="14.5" y="4" width="4.5" height="16" rx="1.2"/>'),
+    bar: SVG('<path d="M3 12h18"/><path d="M3 7h2M3 17h2M19 7h2M19 17h2" opacity=".5"/><path d="M4 4l16 16"/>'),
+  };
+
+  let uiMenu = null;
+
+  function ensureUiStyle() {
+    if (document.getElementById("ytcs-ui")) return;
+    const st = document.createElement("style");
+    st.id = "ytcs-ui";
+    st.textContent = UI_CSS;
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  function buildMenu(player) {
+    const m = document.createElement("div");
+    m.className = "ytcs-menu";
+    m.setAttribute("role", "menu");
+    m.innerHTML = `
+      <div class="ytcs-head">${UI_ICONS.brand}Сводка комментариев</div>
+      <button class="ytcs-item" role="menuitem" data-act="panel">${UI_ICONS.panel}<span class="ytcs-label">Открыть сводку и комментарии</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="download">${UI_ICONS.download}<span class="ytcs-label">Скачать превью</span></button>
+      <div class="ytcs-sep"></div>
+      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="noAutoplay">${UI_ICONS.pause}<span class="ytcs-label">Не запускать видео само</span><span class="ytcs-switch"></span></button>
+      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
+      <div class="ytcs-note" aria-live="polite"></div>`;
+    // клики внутри меню не должны ставить видео на паузу/воспроизведение
+    for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());
+    m.addEventListener("click", onMenuClick);
+    player.appendChild(m);
+    return m;
+  }
+
+  function syncMenuToggles() {
+    if (!uiMenu) return;
+    uiMenu.querySelectorAll("[data-toggle]").forEach((b) => {
+      b.setAttribute("aria-checked", String(Boolean(playerPrefs[b.dataset.toggle])));
+    });
+  }
+
+  function setNote(text) {
+    const n = uiMenu?.querySelector(".ytcs-note");
+    if (n) n.textContent = text || "";
+  }
+
+  function openMenu(open) {
+    if (!uiMenu) return;
+    syncMenuToggles();
+    setNote("");
+    uiMenu.classList.toggle("open", open);
+    document.querySelector(".ytcs-btn")?.setAttribute("aria-expanded", String(open));
+    if (open) uiMenu.querySelector(".ytcs-item")?.focus({ preventScroll: true });
+  }
+
+  async function onMenuClick(e) {
+    const item = e.target.closest(".ytcs-item");
+    if (!item) return;
+    const key = item.dataset.toggle;
+    if (key) {
+      const s = (await chrome.storage.local.get("settings")).settings || {};
+      s[key] = !playerPrefs[key];
+      playerPrefs[key] = s[key];
+      syncMenuToggles();
+      await chrome.storage.local.set({ settings: s }); // панель и системное меню подхватят
+      return;
+    }
+    const act = item.dataset.act;
+    let r = null;
+    try {
+      r = await chrome.runtime.sendMessage({ type: "ui:action", action: act });
+    } catch (err) {
+      r = { ok: false };
+    }
+    if (act === "panel" && !r?.ok) {
+      setNote("Откройте панель кнопкой расширения на панели Chrome.");
+      return;
+    }
+    if (act === "download") setNote(r?.ok ? "Превью сохранено в загрузки." : "Не получилось скачать превью.");
+    else openMenu(false);
+  }
+
+  function ensurePlayerButton() {
+    if (!isWatchPage()) return;
+    const settingsBtn = document.querySelector("#movie_player .ytp-settings-button");
+    const player = document.querySelector("#movie_player");
+    if (!settingsBtn || !player) return;
+    ensureUiStyle();
+    if (!uiMenu || !player.contains(uiMenu)) uiMenu = buildMenu(player);
+    if (document.querySelector("#movie_player .ytcs-btn")) return;
+    const b = document.createElement("button");
+    b.className = "ytp-button ytcs-btn";
+    b.setAttribute("aria-label", "Сводка комментариев");
+    b.setAttribute("aria-haspopup", "menu");
+    b.setAttribute("aria-expanded", "false");
+    b.title = "Сводка комментариев";
+    b.innerHTML = UI_ICONS.brand;
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMenu(!uiMenu.classList.contains("open"));
+    });
+    settingsBtn.parentElement.insertBefore(b, settingsBtn);
+  }
+
+  // закрытие по клику мимо и по Esc
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (uiMenu?.classList.contains("open") && !e.target.closest?.(".ytcs-menu, .ytcs-btn")) openMenu(false);
+    },
+    true
+  );
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && uiMenu?.classList.contains("open")) openMenu(false);
+  });
+
+  // Плеер YouTube перерисовывает панель управления — периодически проверяем,
+  // что кнопка на месте (дёшево: один querySelector раз в 1.5 с).
+  setInterval(ensurePlayerButton, 1500);
 
   // ---------------- Сообщения ----------------
 
@@ -883,6 +1059,10 @@
           return false;
         }
         video.currentTime = Math.max(0, t);
+        // клик по таймкоду в панели — это действие пользователя: блокировщик
+        // автозапуска не должен тут же ставить видео на паузу
+        lastPlayerGestureAt = Date.now();
+        autoplayArmed = false;
         video.play?.().catch(() => {});
         window.scrollTo({ top: 0, behavior: "smooth" });
         sendResponse({ ok: true });

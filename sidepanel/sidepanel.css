@@ -2178,3 +2178,91 @@ kbd {
   opacity: 0;
   transition: opacity 0.3s ease;
 }
+
+/* =====================================================================
+   Оптическая центровка текста.
+   В Segoe UI Variable заглавные сидят ниже центра строки на ~0.075em
+   (по метрикам шрифта: ascent 15, descent 3, cap 10 при 13.5px) — текст
+   в кнопках выглядел «упавшим». Поднимаем текст на 0.075em асимметричным
+   отступом, а иконки возвращаем на геометрический центр.
+   ===================================================================== */
+button.primary,
+button.ghost,
+.chip,
+.tc-big,
+.search-modes label,
+.more-toggle,
+.reply-toggle,
+.more-replies,
+.max-wrap {
+  padding-bottom: 0.15em;
+}
+
+button.primary .ic,
+button.ghost .ic,
+.chip .ic,
+.tc-big .ic,
+.more-toggle .ic,
+.reply-toggle .ic,
+.more-replies .ic {
+  position: relative;
+  top: 0.075em;
+}
+
+.tab {
+  padding-top: 9.5px;
+  padding-bottom: 11.5px;
+}
+
+.tab .ic,
+.tab-badge {
+  position: relative;
+  top: 0.5px;
+}
+
+.word {
+  padding-top: 2.5px;
+  padding-bottom: 3.5px;
+}
+
+.toast {
+  padding-top: 9px;
+  padding-bottom: 11px;
+}
+
+kbd {
+  padding-bottom: 1px;
+  line-height: 17px;
+}
+
+.status-note {
+  color: var(--accent-ink);
+}
+
+/* ---------- Пустые состояния вкладок ---------- */
+.view-empty {
+  padding: 40px 20px 24px;
+  text-align: center;
+}
+
+.empty-icon.small {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+}
+
+.view-empty .empty-text {
+  max-width: 280px;
+  font-size: 13px;
+}
+
+.empty-cta {
+  margin-top: 16px;
+}
+
+/* статус может переноситься, когда в нём подсказка */
+.status:has(.status-note) {
+  white-space: normal;
+  flex-wrap: wrap;
+  column-gap: 4px;
+}
