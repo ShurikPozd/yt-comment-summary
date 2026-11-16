@@ -26,6 +26,7 @@ import {
   commentStats,
   pickForBudget,
   mergeTopics,
+  dedupeTexts,
 } from "./insights.js";
 import { DEFAULTS } from "../config.js";
 
@@ -161,7 +162,9 @@ window.addEventListener("unhandledrejection", (e) => {
 //   ITPM ~7000 входных токенов/мин, OTPM 1000 ВЫХОДНЫХ токенов/мин.
 // OTPM жёстче: любой запрос с max_tokens > 1000 отклоняется целиком (429), поэтому
 // max_tokens держим заметно ниже лимита, а выходные токены тоже учитываем в паузах.
-const CHUNK_MAX_TOKENS = 1800;
+// Вход части без учёта промпта. Крупнее часть — меньше раз повторяется
+// системный промпт; 2400 + промпт укладываются в ~3 тыс., по 2 части в минуту.
+const CHUNK_MAX_TOKENS = 2400;
 const CHUNK_MAX_OUTPUT_TOKENS = 800; // < OTPM 1000, с запасом
 const ITPM_BUDGET_PER_MIN = 6000; // < ~7000, с запасом: ключ общий с ботом
 const OTPM_BUDGET_PER_MIN = 900; // фактический выход всех запросов за минуту
@@ -175,12 +178,27 @@ function tokensOf(text) {
   return Math.ceil(t.length / 3);
 }
 
+// Сколько комментариев максимум отдаём ИИ за один анализ (самые залайканные).
+const ANALYZE_MAX = 200;
+
+// Индексы комментариев для анализа: все, если их немного; иначе самые
+// залайканные, но в исходном порядке (так соседние по ветке остаются рядом).
+function analysisPool(comments, max = ANALYZE_MAX) {
+  const idx = comments.map((_, i) => i);
+  if (idx.length <= max) return idx;
+  return idx
+    .sort((a, b) => (comments[b].likes || 0) - (comments[a].likes || 0) || a - b)
+    .slice(0, max)
+    .sort((a, b) => a - b);
+}
+
 function buildChunks(comments) {
   const chunks = [];
   let cur = [];
   let curTokens = 0;
   for (const c of comments) {
-    const t = tokensOf(c.text) + 12; // + на инфраструктуру JSON
+    // текст режется до 300 символов в chunkUser(); + «№|» и перевод строки
+    const t = tokensOf(String(c.text || "").slice(0, 300)) + 4;
     if (cur.length && curTokens + t > CHUNK_MAX_TOKENS) {
       chunks.push(cur);
       cur = [];
@@ -588,7 +606,7 @@ async function saveHistory(videoId, summary, comments, meta) {
         count: t.count,
         cids: t.ids.map((i) => comments[i]?.id).filter(Boolean),
       })),
-      commentCount: comments.length,
+      commentCount: summary.commentCount || comments.length,
       title: meta?.title || "",
       savedAt: Date.now(),
     };
@@ -651,8 +669,23 @@ async function loadFor(videoId) {
   renderBottomMatters();
   const st = obj[`collect:${videoId}`];
   updateCollectStatus(st?.status, st?.fetched, st?.max, st?.error || null);
+  // loadFor зовётся и на каждый фокус панели: перерисовываем, только если
+  // данные реально изменились — иначе анимации проигрывались заново, а
+  // раскрытые блоки схлопывались от простого клика по окну.
+  const sig = [
+    videoId,
+    state.comments.length,
+    state.comments[0]?.id,
+    state.comments[state.comments.length - 1]?.id,
+    state.summary?.updatedAt,
+    state.meta?.duration,
+  ].join("|");
+  if (sig === lastRenderSig && !switched) return;
+  lastRenderSig = sig;
   renderAll();
 }
+
+let lastRenderSig = "";
 
 function renderAll() {
   renderSummary();
@@ -794,42 +827,64 @@ async function analyze() {
   $("summary-placeholder").textContent = "Готовлю комментарии…";
   setProgress("analyze-progress", 0.03);
   try {
-    const nodes = buildChunks(state.comments);
+    // Пул для ИИ: при большом сборе берём самые залайканные (в исходном
+    // порядке) — иначе 2000 комментариев на бесплатном лимите это ~20 минут.
+    // Обзор, моменты и поиск по тексту всё равно работают по всем.
+    const pool = analysisPool(state.comments);
+    const poolComments = pool.map((i) => state.comments[i]);
+    const nodes = buildChunks(poolComments);
     if (!nodes.length) throw new Error("Нет комментариев для анализа.");
 
     let baseOffset = 0;
     let partLabel = "";
-    const topicMap = {}; // name -> Set(globalIndices)
+    const topicMap = {}; // name -> { ids: Set(globalIndices), n }
     const points = [];
     const notableIds = [];
     const sentiment = { positive: 0, neutral: 0, negative: 0 };
     const notableComments = [];
+    // локальный № внутри части → индекс в state.comments
+    const toGlobal = (localBase, id) => {
+      const k = localBase + Number(id);
+      return Number.isInteger(k) && k >= 0 && k < pool.length ? pool[k] : -1;
+    };
+    // Самые крупные темы на данный момент — подсказка следующим частям,
+    // чтобы модель называла одну тему одинаково.
+    const knownTopics = () =>
+      Object.entries(topicMap)
+        .sort((a, b) => b[1].n - a[1].n)
+        .slice(0, 10)
+        .map(([name]) => name);
 
     const absorb = (data, localBase) => {
       if (!data) return;
       if (data.topics && typeof data.topics === "object") {
-        for (const [name, ids] of Object.entries(data.topics)) {
+        for (const [name, val] of Object.entries(data.topics)) {
           const nm = clean(name);
-          if (!nm || !Array.isArray(ids)) continue;
-          if (!topicMap[nm]) topicMap[nm] = new Set();
+          // новый формат {n, ids}; старый — просто массив номеров
+          const ids = Array.isArray(val) ? val : Array.isArray(val?.ids) ? val.ids : null;
+          if (!nm || !ids) continue;
+          const t = (topicMap[nm] ||= { ids: new Set(), n: 0 });
+          let added = 0;
           for (const id of ids) {
-            const g = localBase + Number(id);
-            if (Number.isFinite(g) && g >= 0 && g < state.comments.length) topicMap[nm].add(g);
+            const g = toGlobal(localBase, id);
+            if (g >= 0 && !t.ids.has(g)) {
+              t.ids.add(g);
+              added++;
+            }
           }
+          t.n += Math.max(Number(val?.n) || 0, added);
         }
       }
       if (Array.isArray(data.points)) {
         for (const p of data.points) {
           const pg = clean(p);
-          if (pg) points.push(pg.slice(0, 220));
+          if (pg) points.push(pg.slice(0, 160));
         }
       }
       if (Array.isArray(data.notable)) {
         for (const id of data.notable) {
-          const g = localBase + Number(id);
-          if (Number.isFinite(g) && g >= 0 && g < state.comments.length && !notableIds.includes(g)) {
-            notableIds.push(g);
-          }
+          const g = toGlobal(localBase, id);
+          if (g >= 0 && !notableIds.includes(g)) notableIds.push(g);
         }
       }
       const s = data.sentiment || {};
@@ -852,18 +907,18 @@ async function analyze() {
 
       // оцениваем токены порции; если она уже мала для лимита, но всё равно
       // получили 429 — значит уперлись в общий бюджет бота+расширения: ждём окно.
-      const userText = chunkUser(portion);
+      const userText = chunkUser(portion, knownTopics());
       const est = estimateRequestTokens(CHUNK_ANALYZE_SYSTEM, userText);
-      // В OTPM Groq считает ФАКТИЧЕСКИ сгенерированные токены (в логах бота это
-      // ~400 токенов на чанк), а не запрошенный max_tokens. Поэтому резервируем
-      // реалистичную оценку выхода: полный чанк ≈ 400 токенов → ~2 запроса/мин.
-      const estOut = Math.min(500, 120 + Math.round(est * 0.15));
+      // В OTPM Groq считает ФАКТИЧЕСКИ сгенерированные токены, а не max_tokens.
+      // Компактный формат ответа — ~200 токенов на часть; резерв с запасом,
+      // после ответа settleOutput() поправит его на факт.
+      const estOut = 280;
       const slot = await paceRequest(est, estOut, waitNote(partLabel));
       try {
         const raw = await proxy.chat(
           [
             { role: "system", content: CHUNK_ANALYZE_SYSTEM },
-            { role: "user", content: chunkUser(portion) },
+            { role: "user", content: userText },
           ],
           { jsonMode: true, maxTokens: CHUNK_MAX_OUTPUT_TOKENS, timeoutMs: 150000 }
         );
@@ -924,12 +979,16 @@ async function analyze() {
     }
     setProgress("analyze-progress", nodes.length / (nodes.length + 1));
 
-    const topics = mergeTopics(Object.entries(topicMap).map(([name, set]) => ({ name, ids: [...set] })))
-      .map((t) => ({ name: t.name, count: t.ids.length, ids: t.ids }))
+    const topics = mergeTopics(Object.entries(topicMap).map(([name, t]) => ({ name, ids: [...t.ids], n: t.n })))
+      .map((t) => ({ name: t.name, count: t.n, ids: t.ids }))
       .slice(0, 12);
 
-    if (notableIds.length) {
-      for (const g of notableIds.slice(0, 6)) notableComments.push(state.comments[g]);
+    // Яркие — по одному-два из каждой части; оставляем 6 самых залайканных.
+    for (const g of notableIds
+      .slice()
+      .sort((a, b) => (state.comments[b].likes || 0) - (state.comments[a].likes || 0))
+      .slice(0, 6)) {
+      notableComments.push(state.comments[g]);
     }
 
     $("summary-placeholder").textContent = "Пишу итоговую сводку…";
@@ -978,12 +1037,13 @@ async function analyze() {
     state.summary = {
       summary,
       topics,
-      points: points.slice(0, 8),
+      points: dedupeTexts(points, 6),
       notable: notableComments,
       sentiment,
       updatedAt: Date.now(),
     };
     state.summary.commentCount = state.comments.length;
+    state.summary.analyzed = pool.length;
     await safeSessionSet({ [`summary:${state.videoId}`]: state.summary }, { keepVideoId: state.videoId });
     void saveHistory(state.videoId, state.summary, state.comments, state.meta);
     $("summary-placeholder").textContent = "";
@@ -1021,7 +1081,12 @@ function renderSummary() {
   const ph = $("summary-placeholder");
   const hist = $("summary-history");
   if (s?.updatedAt) {
-    const n = s.commentCount ? ` · по ${s.commentCount} комментариям` : "";
+    const n =
+      s.analyzed && s.analyzed < s.commentCount
+        ? ` · по ${s.analyzed} самым залайканным из ${s.commentCount}`
+        : s.commentCount
+          ? ` · по ${s.commentCount} комментариям`
+          : "";
     hist.textContent = s.fromHistory
       ? `Сохранённая сводка от ${fmtDate(s.updatedAt)}${n}. «Анализировать» — обновить.`
       : `Сводка от ${fmtDate(s.updatedAt)}${n}`;
@@ -1237,7 +1302,11 @@ function topicCommentsHtml(name) {
       state.summary?.fromHistory ? "Комментарии этой темы не попали в текущий сбор." : "Комментарии по теме не найдены."
     }</div>`;
   }
-  return list.map((c) => commentCard(c)).join("");
+  const note =
+    topic.count > list.length
+      ? `<div class="hint topic-note">Самые характерные ${list.length} из ~${topic.count} — ИИ отмечает примеры, а не каждый комментарий темы.</div>`
+      : "";
+  return note + list.map((c) => commentCard(c)).join("");
 }
 
 function expandTopicInline(name) {

@@ -1402,3 +1402,7 @@ ol.points li::before {
     width: 112px;
   }
 }
+
+.topic-note {
+  padding: 8px 0 2px;
+}

@@ -222,13 +222,18 @@ export function pickForBudget(comments, query, { maxTokens = 3500, perComment = 
   return out.map(({ c, i }) => ({ c, i }));
 }
 
+// Темы-«корзины» без предмета обсуждения: модель иногда заводит их, хотя просили не надо.
+// (\b в JS понимает только латиницу, поэтому границу слова задаём явно.)
+const JUNK_TOPIC = /^(проч|разн|друг(ие|ое)(?=\s|$)|остальн|общ(ие|ее) (впечатл|комм)|misc|other|general)/i;
+
 /**
  * Склейка похожих тем из разных частей анализа. Каждая часть комментариев
  * размечается отдельным запросом, и модель называет одну тему по-разному:
  * «Батарея» и «Автономность батареи». Раньше склеивались только точные
  * совпадения названий — получались дубли. Сравниваем основы слов (Жаккар ≥ 0.5),
  * название берём у самой крупной темы группы. Без запросов к ИИ.
- * На вход: [{name, ids:[...]}], на выход: то же, отсортировано по размеру.
+ * На вход: [{name, ids:[...], n?}] (n — сколько комментариев в теме, если ids —
+ * лишь самые характерные), на выход: [{name, ids, n}] по убыванию n.
  */
 export function mergeTopics(list) {
   const toks = (name) =>
@@ -237,8 +242,9 @@ export function mergeTopics(list) {
         .filter((w) => !STOP.has(w))
         .map(stem)
     );
+  const size = (t) => Math.max(Number(t.n) || 0, t.ids.length);
   const groups = [];
-  for (const t of [...list].sort((a, b) => b.ids.length - a.ids.length)) {
+  for (const t of [...list].filter((t) => !JUNK_TOPIC.test(String(t.name).trim())).sort((a, b) => size(b) - size(a))) {
     const tk = toks(t.name);
     const g = tk.size
       ? groups.find((gr) => {
@@ -249,11 +255,43 @@ export function mergeTopics(list) {
       : null;
     if (g) {
       for (const i of t.ids) g.ids.add(i);
+      g.n += size(t);
     } else {
-      groups.push({ name: t.name, tk, ids: new Set(t.ids) });
+      groups.push({ name: t.name, tk, ids: new Set(t.ids), n: size(t) });
     }
   }
   return groups
-    .map((g) => ({ name: g.name, ids: [...g.ids] }))
-    .sort((a, b) => b.ids.length - a.ids.length);
+    .map((g) => ({ name: g.name, ids: [...g.ids], n: Math.max(g.n, g.ids.size) }))
+    .sort((a, b) => b.n - a.n);
+}
+
+/**
+ * Убирает повторяющиеся по смыслу короткие фразы (ключевые мнения из разных
+ * частей анализа): «Тимати раскрылся как эрудит» ≈ «Тимати оказался образованным».
+ * Сходство — доля общих основ слов от меньшей фразы; совпадение главного
+ * существительного-«героя» тоже засчитывается. Порядок сохраняется.
+ */
+export function dedupeTexts(list, limit = 6) {
+  const toks = (s) =>
+    new Set(
+      (String(s).toLowerCase().replace(/ё/g, "е").match(/[a-zа-я0-9]{3,}/g) || [])
+        .filter((w) => !STOP.has(w))
+        .map(stem)
+    );
+  const kept = [];
+  for (const text of list || []) {
+    const tk = toks(text);
+    if (!tk.size) continue;
+    const dup = kept.some((k) => {
+      let inter = 0;
+      for (const w of tk) if (k.tk.has(w)) inter++;
+      // первое значимое слово (обычно — о ком/о чём) совпало и есть ещё пересечение,
+      // либо пересекается больше половины меньшей фразы
+      const sameHead = [...tk][0] === [...k.tk][0];
+      return inter / Math.min(tk.size, k.tk.size) > 0.5 || (sameHead && inter >= 1 && Math.min(tk.size, k.tk.size) <= 4);
+    });
+    if (!dup) kept.push({ text, tk });
+    if (kept.length >= limit) break;
+  }
+  return kept.map((k) => k.text);
 }
