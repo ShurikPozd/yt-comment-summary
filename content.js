@@ -202,8 +202,15 @@
       hq: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
     };
 
+    // Длительность нужна, чтобы отсеять «таймкоды» за концом видео. При
+    // SPA-навигации плеер какое-то время держит прошлое видео, поэтому берём
+    // её, только если плеер уже переключён на текущий id.
+    const playerId = document.querySelector("ytd-watch-flexy")?.getAttribute("video-id");
+    const dur = playerId === id ? document.querySelector("video")?.duration : NaN;
+
     return {
       videoId: id,
+      duration: Number.isFinite(dur) && dur > 0 ? Math.round(dur) : null,
       title,
       channelName,
       channelUrl,
@@ -696,6 +703,21 @@
         if (collector) collector.cancelled = true;
         sendResponse({ ok: true });
         return false;
+      case "yt:seek": {
+        // Перемотка по таймкоду из комментария. DOM общий с страницей, так что
+        // изолированный мир контент-скрипта может управлять <video> напрямую.
+        const t = Number(msg.t);
+        const video = document.querySelector("video.html5-main-video, #movie_player video, video");
+        if (!video || !Number.isFinite(t) || msg.videoId !== videoIdFromUrl()) {
+          sendResponse({ ok: false });
+          return false;
+        }
+        video.currentTime = Math.max(0, t);
+        video.play?.().catch(() => {});
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        sendResponse({ ok: true });
+        return false;
+      }
       case "yt:rerun-meta": {
         const id = videoIdFromUrl();
         if (!id) break;

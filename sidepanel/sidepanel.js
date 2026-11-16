@@ -4,6 +4,7 @@ import {
   clean,
   sanitizeFilename,
   sleep,
+  normalizeSummary,
 } from "../groq.js";
 import {
   CHUNK_ANALYZE_SYSTEM,
@@ -12,7 +13,20 @@ import {
   finalUser,
   SEARCH_SYSTEM,
   searchUser,
+  ASK_SYSTEM,
+  askUser,
 } from "../prompts.js";
+import {
+  splitTimecodes,
+  timecodesOf,
+  fmtTime,
+  isQuestion,
+  topWords,
+  topMoments,
+  commentStats,
+  pickForBudget,
+  mergeTopics,
+} from "./insights.js";
 import { DEFAULTS } from "../config.js";
 
 const LOCAL_CONFIG =
@@ -184,7 +198,28 @@ const _budgetLogIn = []; // { t: Date.now(), n: входные }
 const _budgetLogOut = []; // { t: Date.now(), n: выходные }
 let _lastRequestAt = 0;
 
-async function paceRequest(estIn, estOut = CHUNK_MAX_OUTPUT_TOKENS) {
+// Резерв выходных токенов делается «с запасом» до ответа; после ответа меняем
+// его на фактический размер (у бота reasoning_effort=none, скрытых токенов нет).
+// Иначе следующие части ждали окно, которое на деле давно свободно.
+// ~2.5 символа на токен — с запасом для кириллицы в JSON.
+function settleOutput(slot, text) {
+  if (slot) slot.n = Math.max(40, Math.ceil(String(text || "").length / 2.5));
+}
+
+// Через сколько мс в скользящем окне освободится место под need токенов.
+function budgetFreeAt(log, used, need, budget, now) {
+  if (used + need <= budget) return 0;
+  let freed = 0;
+  for (const x of log) {
+    freed += x.n;
+    if (used - freed + need <= budget) return Math.max(0, x.t + 60000 - now);
+  }
+  return log.length ? Math.max(0, log[log.length - 1].t + 60000 - now) : 0;
+}
+
+// onWait(сек) зовётся, когда приходится ждать окно лимита дольше пары секунд,
+// чтобы пользователь видел причину паузы, а не «зависшую» панель.
+async function paceRequest(estIn, estOut = CHUNK_MAX_OUTPUT_TOKENS, onWait = null) {
   const outEst = Math.min(estOut, CHUNK_MAX_OUTPUT_TOKENS);
   for (;;) {
     const now = Date.now();
@@ -197,16 +232,27 @@ async function paceRequest(estIn, estOut = CHUNK_MAX_OUTPUT_TOKENS) {
       usedOut + outEst <= OTPM_BUDGET_PER_MIN &&
       now - _lastRequestAt >= MIN_REQUEST_GAP_MS
     ) {
+      const outSlot = { t: now, n: outEst };
       _budgetLogIn.push({ t: now, n: estIn });
-      _budgetLogOut.push({ t: now, n: outEst });
+      _budgetLogOut.push(outSlot);
       _lastRequestAt = now;
-      return;
+      return outSlot;
     }
-    const wait1 = _budgetLogIn.length ? Math.max(0, _budgetLogIn[0].t + 60000 - now) : 0;
-    const wait2 = _budgetLogOut.length ? Math.max(0, _budgetLogOut[0].t + 60000 - now) : 0;
+    // Ждём не до выхода самой старой записи, а до момента, когда освободится
+    // столько, сколько нужно этому запросу (иначе отсчёт прыгал «~5 с» → «~45 с»).
+    const wait1 = budgetFreeAt(_budgetLogIn, usedIn, estIn, ITPM_BUDGET_PER_MIN, now);
+    const wait2 = budgetFreeAt(_budgetLogOut, usedOut, outEst, OTPM_BUDGET_PER_MIN, now);
     const waitMs = Math.max(1500, wait1, wait2, MIN_REQUEST_GAP_MS - (now - _lastRequestAt));
-    await sleep(Math.min(waitMs, 60000));
+    if (onWait && waitMs > 2500) onWait(Math.ceil(waitMs / 1000));
+    // Спим короткими шагами, чтобы обратный отсчёт в панели тикал.
+    await sleep(Math.min(waitMs, onWait ? 5000 : 60000));
   }
+}
+
+function waitNote(prefix) {
+  return (sec) => {
+    $("summary-placeholder").textContent = `${prefix} Жду окно бесплатного лимита Groq: ~${sec} с…`;
+  };
 }
 
 // Когда Groq отвечает 429 по OTPM, окно уже занято — наш скользящий бюджет об
@@ -290,10 +336,21 @@ const state = {
   comments: [],
   summary: null,
   activeTopic: null,
-  popularSort: false,
+  // фильтр вкладки «Все»: all | popular | questions | timecodes
+  commentFilter: "all",
+  commentQuery: "",
+  commentLimit: 60,
   settings: null,
   analyzing: false,
 };
+
+const COMMENTS_PAGE = 60;
+
+// Таймкоды дальше конца видео — скорее «10:30 утра», чем момент ролика.
+function maxSec() {
+  const d = Number(state.meta?.duration);
+  return Number.isFinite(d) && d > 0 ? d + 2 : Infinity;
+}
 
 const proxy = new GroqProxy();
 
@@ -313,6 +370,41 @@ function hl(text, query) {
     .split(re)
     .map((part, i) => (i % 2 ? `<mark>${esc(part)}</mark>` : esc(part)))
     .join("");
+}
+
+// Текст комментария: таймкоды становятся кнопками перемотки, остальное —
+// экранированный текст с подсветкой запроса.
+function richText(text, query) {
+  return splitTimecodes(text, maxSec())
+    .map((p) =>
+      typeof p === "string"
+        ? hl(p, query)
+        : `<button class="tc" data-t="${p.t}" title="Перемотать видео на ${esc(p.label)}">${esc(p.label)}</button>`
+    )
+    .join("");
+}
+
+// Единая карточка комментария (раньше было 4 копии разметки с расхождениями).
+function commentCard(c, { query = "", compact = false } = {}) {
+  const likes = Number(c.likes) || 0;
+  return `<article class="comment-card${compact ? " compact" : ""}">
+    ${
+      compact
+        ? ""
+        : `<span class="avatar-wrap" data-letter="${esc((c.author || "?").replace(/^@/, "").charAt(0).toUpperCase())}">${
+            c.avatar ? `<img class="avatar" src="${esc(c.avatar)}" alt="" loading="lazy" />` : ""
+          }</span>`
+    }
+    <div class="c-body">
+      <div class="c-meta">
+        <span class="c-author">${esc(c.author)}</span>
+        ${c.time ? `<span class="c-time">${esc(c.time)}</span>` : ""}
+        ${likes ? `<span class="c-likes" title="Лайки">♥ ${fmtNum(likes)}</span>` : ""}
+        ${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer" title="Открыть комментарий на YouTube">↗</a>` : ""}
+      </div>
+      <div class="c-text">${richText(c.text, query)}</div>
+    </div>
+  </article>`;
 }
 
 // CSP расширений (MV3) запрещает inline-обработчики вроде onerror="…" в разметке,
@@ -478,6 +570,64 @@ async function safeSessionSet(patch, { keepVideoId = null } = {}) {
     }
   }
 }
+// ---------------- История сводок (storage.local, переживает перезапуск) ----------------
+// storage.session живёт до закрытия браузера; сводка — самое дорогое по токенам
+// Groq, поэтому готовые сводки храним в local и показываем сразу при повторном
+// открытии видео. Темы ссылаются на комментарии по их id, а не по индексу:
+// после пересбора порядок комментариев может отличаться.
+const HIST_PREFIX = "hist:";
+const HIST_INDEX = "hist:index";
+const HIST_MAX = 60;
+
+async function saveHistory(videoId, summary, comments, meta) {
+  try {
+    const entry = {
+      ...summary,
+      topics: (summary.topics || []).map((t) => ({
+        name: t.name,
+        count: t.count,
+        cids: t.ids.map((i) => comments[i]?.id).filter(Boolean),
+      })),
+      commentCount: comments.length,
+      title: meta?.title || "",
+      savedAt: Date.now(),
+    };
+    const idx = (await chrome.storage.local.get(HIST_INDEX))[HIST_INDEX] || [];
+    const next = [videoId, ...idx.filter((v) => v !== videoId)];
+    const evicted = next.slice(HIST_MAX);
+    await chrome.storage.local.set({ [HIST_PREFIX + videoId]: entry, [HIST_INDEX]: next.slice(0, HIST_MAX) });
+    if (evicted.length) await chrome.storage.local.remove(evicted.map((v) => HIST_PREFIX + v));
+  } catch (e) {
+    console.warn("history save:", e);
+  }
+}
+
+async function loadHistory(videoId, comments) {
+  let entry;
+  try {
+    entry = (await chrome.storage.local.get(HIST_PREFIX + videoId))[HIST_PREFIX + videoId];
+  } catch (e) {
+    return null;
+  }
+  if (!entry) return null;
+  const pos = new Map(comments.map((c, i) => [c.id, i]));
+  return {
+    ...entry,
+    fromHistory: true,
+    topics: (entry.topics || []).map((t) => {
+      const ids = (t.cids || []).map((id) => pos.get(id)).filter((i) => i !== undefined);
+      return { name: t.name, count: t.count, ids };
+    }),
+  };
+}
+
+async function clearHistory() {
+  const all = await chrome.storage.local.get(null);
+  const keys = Object.keys(all).filter((k) => k.startsWith(HIST_PREFIX));
+  if (keys.length) await chrome.storage.local.remove(keys);
+  return keys.filter((k) => k !== HIST_INDEX).length;
+}
+
 async function loadFor(videoId) {
   if (!videoId) return;
   const obj = await chrome.storage.session.get([
@@ -486,25 +636,36 @@ async function loadFor(videoId) {
     `summary:${videoId}`,
     `collect:${videoId}`,
   ]);
+  const switched = state.videoId !== videoId;
   state.videoId = videoId;
-  state.meta = obj[`meta:${videoId}`] || null;
+  state.meta = obj[`meta:${videoId}`] || state.meta || null;
   state.comments = obj[`comments:${videoId}`] || [];
-  state.summary = obj[`summary:${videoId}`] || null;
+  state.summary = obj[`summary:${videoId}`] || (await loadHistory(videoId, state.comments));
+  if (switched) {
+    state.activeTopic = null;
+    state.commentLimit = COMMENTS_PAGE;
+    expandedTopic = null;
+    globalSearchResults = [];
+  }
   renderHeader();
   renderBottomMatters();
   const st = obj[`collect:${videoId}`];
   updateCollectStatus(st?.status, st?.fetched, st?.max, st?.error || null);
-  if (state.comments.length) {
-    renderComments();
-    renderTopics();
-    renderSummary();
-  } else {
-    setTab("summary");
-  }
+  renderAll();
+}
+
+function renderAll() {
+  renderSummary();
+  renderInsights();
+  renderMoments();
+  renderTopics();
+  renderComments();
+  renderSearchResults();
 }
 
 function renderBottomMatters() {
   $("empty-state").classList.toggle("hidden", Boolean(state.videoId));
+  $("empty-actions").classList.toggle("hidden", Boolean(state.videoId));
   $("video-header").classList.toggle("hidden", !state.videoId);
   $("collect-bar").classList.toggle("hidden", !state.videoId);
   $("tabs").classList.remove("hidden");
@@ -537,17 +698,42 @@ function renderHeader() {
   else if (m.thumbs?.hq) thumb.src = m.thumbs.hq;
 }
 
+function setProgress(id, frac) {
+  const el = $(id);
+  if (frac == null) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.classList.remove("hidden");
+  el.firstElementChild.style.width = `${Math.round(Math.min(1, Math.max(0, frac)) * 100)}%`;
+}
+
 function updateCollectStatus(status, fetched, max, error) {
   const el = $("collect-status");
+  el.classList.toggle("err", status === "error");
   if (status === "loading") {
-    el.textContent = `сбор: ${fetched || 0}/${max || "…"}`;
+    el.textContent = `Собираю: ${fetched || 0} из ${max || "…"}`;
+    setProgress("collect-progress", max ? (fetched || 0) / max : 0.05);
   } else if (status === "done") {
-    el.textContent = `✓ ${fetched || 0} комментариев`;
+    el.textContent = `${fetched || 0} комментариев`;
+    setProgress("collect-progress", null);
   } else if (status === "error") {
-    el.textContent = `✗ ${error || "ошибка"}`;
+    el.textContent = humanCollectError(error);
+    el.title = error || "";
+    setProgress("collect-progress", null);
   } else {
     el.textContent = "";
+    setProgress("collect-progress", null);
   }
+}
+
+// Технические коды ошибок сбора из content.js → понятный текст.
+function humanCollectError(error) {
+  const e = String(error || "");
+  if (/innerTubeBlocked/.test(e)) return "YouTube временно не отдаёт комментарии — нажми 🔄 чуть позже";
+  if (/innerTubeNoCommentsSection/.test(e)) return "Комментарии к видео отключены или не найдены";
+  if (/innerTubeTimeout|innerTubeNetwork/.test(e)) return "Нет ответа от YouTube — проверь сеть и нажми 🔄";
+  return "Не удалось собрать комментарии — нажми 🔄";
 }
 
 // ---------------- Вкладки ----------------
@@ -558,8 +744,13 @@ function setTab(name) {
   });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   $("view-" + name).classList.add("active");
+  $("content").scrollTop = 0;
   if (name === "topics") renderTopics();
-  if (name === "summary") renderSummary();
+  if (name === "summary") {
+    renderSummary();
+    renderInsights();
+  }
+  if (name === "moments") renderMoments();
   if (name === "comments") renderComments();
   if (name === "search") renderSearchResults();
   if (name === "settings") fillSettingsFields();
@@ -596,14 +787,18 @@ async function analyze() {
   }
   state.analyzing = true;
   $("btn-analyze").disabled = true;
-  $("summary-placeholder").textContent = "Анализирую… (куски)";
+  $("btn-analyze").classList.add("busy");
+  setTab("summary");
+  $("summary-history").classList.add("hidden");
+  $("summary-placeholder").classList.remove("hidden");
+  $("summary-placeholder").textContent = "Готовлю комментарии…";
+  setProgress("analyze-progress", 0.03);
   try {
     const nodes = buildChunks(state.comments);
-    if (!nodes.length) {
-      $("current-summary-short").textContent = "Нет комментариев для анализа.";
-    }
+    if (!nodes.length) throw new Error("Нет комментариев для анализа.");
 
     let baseOffset = 0;
+    let partLabel = "";
     const topicMap = {}; // name -> Set(globalIndices)
     const points = [];
     const notableIds = [];
@@ -663,7 +858,7 @@ async function analyze() {
       // ~400 токенов на чанк), а не запрошенный max_tokens. Поэтому резервируем
       // реалистичную оценку выхода: полный чанк ≈ 400 токенов → ~2 запроса/мин.
       const estOut = Math.min(500, 120 + Math.round(est * 0.15));
-      await paceRequest(est, estOut);
+      const slot = await paceRequest(est, estOut, waitNote(partLabel));
       try {
         const raw = await proxy.chat(
           [
@@ -672,6 +867,7 @@ async function analyze() {
           ],
           { jsonMode: true, maxTokens: CHUNK_MAX_OUTPUT_TOKENS, timeoutMs: 150000 }
         );
+        settleOutput(slot, raw);
         const data = extractJson(raw);
         if (!data) throw new Error("Модель вернула не JSON");
         absorb(data, localBase);
@@ -719,27 +915,33 @@ async function analyze() {
 
     for (let ci = 0; ci < nodes.length; ci++) {
       if (!state.analyzing) return;
-      $("summary-placeholder").textContent = `Анализирую кусок ${ci + 1} из ${nodes.length}…`;
+      partLabel = nodes.length > 1 ? `Часть ${ci + 1} из ${nodes.length}.` : "";
+      $("summary-placeholder").textContent =
+        nodes.length > 1 ? `Читаю комментарии: часть ${ci + 1} из ${nodes.length}…` : "Читаю комментарии…";
+      setProgress("analyze-progress", (ci + 0.3) / (nodes.length + 1));
       await processPortion(nodes[ci], baseOffset, 0);
       baseOffset += nodes[ci].length;
     }
+    setProgress("analyze-progress", nodes.length / (nodes.length + 1));
 
-    const topics = Object.entries(topicMap)
-      .map(([name, set]) => ({ name, count: set.size, ids: [...set] }))
-      .sort((a, b) => b.ids.length - a.ids.length)
+    const topics = mergeTopics(Object.entries(topicMap).map(([name, set]) => ({ name, ids: [...set] })))
+      .map((t) => ({ name: t.name, count: t.ids.length, ids: t.ids }))
       .slice(0, 12);
 
     if (notableIds.length) {
       for (const g of notableIds.slice(0, 6)) notableComments.push(state.comments[g]);
     }
 
-    $("summary-placeholder").textContent = "Собираю итоговую сводку…";
-    $("summary-text").innerHTML = '<div class="summary-title">Что говорят в комментариях</div>';
+    $("summary-placeholder").textContent = "Пишу итоговую сводку…";
+    $("summary-text").innerHTML =
+      '<div class="summary-title">Что говорят в комментариях</div><div class="skeleton"><i></i><i></i><i></i></div>';
     const liveSummary = $("summary-text");
     // Финальный запрос идёт сразу после чанков — OTPM ещё выбран, поэтому
     // заранее ждём место в окне под его выходные токены.
     const finIn = estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang: state.settings.lang }));
-    await paceRequest(finIn, 700);
+    // Сводка ≤380 символов ≈ 150–200 токенов: резервируем 350, а не max_tokens.
+    const finSlot = await paceRequest(finIn, 350, waitNote("Осталась итоговая сводка."));
+    $("summary-placeholder").textContent = "Пишу итоговую сводку…";
     let fin = "";
     // Финал обычно последний и самый «весомый» — именно он чаще всего упирается
     // в OTPM. На OTPM ждём окно и повторяем (дробление тут невозможно), на прочих
@@ -769,6 +971,7 @@ async function analyze() {
         throw fe;
       }
     }
+    settleOutput(finSlot, fin);
     const summary = clean(fin) || "Сводка не получена.";
     liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(summary);
 
@@ -780,26 +983,56 @@ async function analyze() {
       sentiment,
       updatedAt: Date.now(),
     };
+    state.summary.commentCount = state.comments.length;
     await safeSessionSet({ [`summary:${state.videoId}`]: state.summary }, { keepVideoId: state.videoId });
+    void saveHistory(state.videoId, state.summary, state.comments, state.meta);
+    $("summary-placeholder").textContent = "";
+    // Снимаем флаг до отрисовки: renderSummary() во время анализа ничего не
+    // рисует (бережёт живой прогресс), и без этого темы/тональность/мнения
+    // не появлялись до следующего переключения вкладки.
+    state.analyzing = false;
     renderSummary();
     renderTopics();
-    $("summary-placeholder").textContent = "";
     setTab("summary");
   } catch (e) {
     const msg = friendlyError(e);
+    $("summary-text").innerHTML = "";
     $("summary-placeholder").classList.remove("hidden");
     $("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
   } finally {
     state.analyzing = false;
     $("btn-analyze").disabled = false;
+    $("btn-analyze").classList.remove("busy");
+    setProgress("analyze-progress", null);
+  }
+}
+
+function fmtDate(ts) {
+  try {
+    return new Date(ts).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return "";
   }
 }
 
 function renderSummary() {
+  if (state.analyzing) return; // не затираем живой прогресс и стрим
   const s = state.summary;
   const ph = $("summary-placeholder");
+  const hist = $("summary-history");
+  if (s?.updatedAt) {
+    const n = s.commentCount ? ` · по ${s.commentCount} комментариям` : "";
+    hist.textContent = s.fromHistory
+      ? `Сохранённая сводка от ${fmtDate(s.updatedAt)}${n}. «Анализировать» — обновить.`
+      : `Сводка от ${fmtDate(s.updatedAt)}${n}`;
+    hist.classList.remove("hidden");
+  } else {
+    hist.classList.add("hidden");
+  }
   if (!s) {
-    ph.textContent = "Нажми «Анализировать», чтобы получить сводку обсуждения.";
+    ph.textContent = state.comments.length
+      ? "Нажми «🧠 Анализировать» — ИИ прочитает комментарии и сделает сводку обсуждения."
+      : "Комментарии ещё собираются — сводку можно будет сделать, когда сбор закончится.";
     ph.classList.remove("hidden");
     $("btn-copy-summary").classList.add("hidden");
     $("btn-export-summary").classList.add("hidden");
@@ -862,8 +1095,128 @@ function renderSummary() {
   $("summary-notable").innerHTML = "";
   if (s.notable?.length) {
     $("summary-notable").innerHTML =
-      '<div class="subhead">Яркие комментарии</div>' +
-      s.notable.map((c) => `<div class="comment-card"><div class="c-body"><div class="c-meta"><span class="c-author">${esc(c.author)}</span><span>· ${esc(c.time)}</span></div><div class="c-text">${esc(c.text)}</div></div></div>`).join("");
+      '<div class="subhead">Яркие комментарии</div>' + s.notable.map((c) => commentCard(c, { compact: true })).join("");
+  }
+}
+
+// ---------------- Обзор без ИИ ----------------
+// Считается локально сразу после сбора — даёт пользу ещё до «Анализировать»
+// и не тратит лимиты Groq.
+
+function renderInsights() {
+  const box = $("insights");
+  const list = state.comments;
+  if (!list.length) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  const st = commentStats(list, maxSec());
+  const words = topWords(list, 14);
+  const moments = topMoments(list, { maxSec: maxSec(), limit: 3 });
+  const stat = (n, label, filter) =>
+    `<button class="stat"${filter ? ` data-goto-filter="${filter}"` : " disabled"}><b>${fmtNum(n)}</b><span>${label}</span></button>`;
+  box.innerHTML = `
+    <div class="section-head"><span>Обзор</span><span class="hint">считается без ИИ</span></div>
+    <div class="stats">
+      ${stat(st.total, "комментариев", "all")}
+      ${stat(st.likes, "лайков", "popular")}
+      ${stat(st.questions, "вопросов", st.questions ? "questions" : "")}
+      ${stat(st.withTime, "с таймкодами", st.withTime ? "timecodes" : "")}
+    </div>
+    ${
+      words.length
+        ? `<div class="subhead">О чём чаще пишут</div><div class="word-cloud">${words
+            .map((w, i) => {
+              const size = i < 3 ? "l" : i < 7 ? "m" : "s";
+              return `<button class="word ${size}" data-word="${esc(w.word)}" title="${w.count} комментариев — показать">${esc(w.word)}<span>${w.count}</span></button>`;
+            })
+            .join("")}</div>`
+        : ""
+    }
+    ${
+      moments.length
+        ? `<div class="subhead">Популярные моменты <button class="link-btn" data-goto="moments">все →</button></div>
+           <div class="moment-chips">${moments
+             .map((m) => `<button class="tc tc-big" data-t="${m.t}">${esc(m.label)}<span>${m.count}</span></button>`)
+             .join("")}</div>`
+        : ""
+    }
+    ${
+      st.top && st.top.likes
+        ? `<div class="subhead">Самый залайканный</div>${commentCard(st.top, { compact: true })}`
+        : ""
+    }`;
+  box.classList.remove("hidden");
+}
+
+// ---------------- Моменты ----------------
+
+function renderMoments() {
+  const list = state.comments;
+  const moments = list.length ? topMoments(list, { maxSec: maxSec(), limit: 40 }) : [];
+  const badge = $("moments-badge");
+  badge.textContent = moments.length ? String(moments.length) : "";
+  badge.classList.toggle("hidden", !moments.length);
+  $("moments-empty").classList.toggle("hidden", Boolean(moments.length));
+  const line = $("moments-timeline");
+  const wrap = $("moments-list");
+  if (!moments.length) {
+    line.classList.add("hidden");
+    wrap.innerHTML = "";
+    return;
+  }
+  // Полоса-таймлайн: где в видео сгущаются отсылки зрителей.
+  const end = Number.isFinite(maxSec()) ? maxSec() : Math.max(...moments.map((m) => m.t)) * 1.05 + 1;
+  const maxCount = Math.max(...moments.map((m) => m.count));
+  line.innerHTML =
+    '<div class="tl-track">' +
+    moments
+      .map((m) => {
+        const left = Math.min(100, (m.t / end) * 100);
+        const size = 8 + Math.round((m.count / maxCount) * 10);
+        return `<button class="tl-dot" data-t="${m.t}" style="left:${left}%;width:${size}px;height:${size}px" title="${esc(m.label)} · ${m.count} комм."></button>`;
+      })
+      .join("") +
+    `</div><div class="tl-scale"><span>0:00</span><span>${Number.isFinite(maxSec()) ? fmtTime(end - 2) : ""}</span></div>`;
+  line.classList.remove("hidden");
+
+  wrap.innerHTML = moments
+    .map((m) => {
+      const cs = m.idxs.map((i) => list[i]);
+      const more = cs.length - 1;
+      return `<div class="moment">
+        <div class="moment-head">
+          <button class="tc tc-big" data-t="${m.t}" title="Перемотать">▶ ${esc(m.label)}</button>
+          <span class="moment-bar"><i style="width:${Math.round((m.count / maxCount) * 100)}%"></i></span>
+          <span class="hint">${m.count} комм.${m.likes ? ` · ♥ ${fmtNum(m.likes)}` : ""}</span>
+        </div>
+        ${commentCard(cs[0], { compact: true })}
+        ${
+          more > 0
+            ? `<details class="moment-more"><summary>ещё ${more}</summary>${cs
+                .slice(1, 12)
+                .map((c) => commentCard(c, { compact: true }))
+                .join("")}</details>`
+            : ""
+        }
+      </div>`;
+    })
+    .join("");
+}
+
+async function seekTo(t) {
+  const tab = await findActiveVideoTab();
+  if (!tab?.id) {
+    showToast("Не нашёл вкладку с видео.");
+    return;
+  }
+  try {
+    const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:seek", t, videoId: state.videoId });
+    if (!r?.ok) throw new Error("no video");
+    showToast(`▶ ${fmtTime(t)}`);
+  } catch (e) {
+    showToast("Не получилось перемотать — открой вкладку с этим видео.");
   }
 }
 
@@ -875,24 +1228,16 @@ function topicCommentsHtml(name) {
   const topic = s.topics.find((t) => t.name === name);
   if (!topic) return "";
   const ids = new Set(topic.ids);
-  const list = state.comments.filter((c, i) => ids.has(i)).slice(0, 20);
-  if (!list.length) return '<div class="placeholder">Комментарии по теме не найдены.</div>';
-  return list
-    .map(
-      (c) => `<div class="comment-card">
-        <img class="avatar" src="${esc(c.avatar || "")}" alt="" loading="lazy" />
-        <div class="c-body">
-          <div class="c-meta">
-            <span class="c-author">${esc(c.author)}</span>
-            <span>${esc(c.time)}</span>
-            <span>♥ ${fmtNum(c.likes)}</span>
-            <span>${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer">открыть ↗</a>` : ""}</span>
-          </div>
-          <div class="c-text">${esc(c.text)}</div>
-        </div>
-      </div>`
-    )
-    .join("");
+  const list = state.comments
+    .filter((c, i) => ids.has(i))
+    .sort((a, b) => (b.likes || 0) - (a.likes || 0))
+    .slice(0, 20);
+  if (!list.length) {
+    return `<div class="placeholder">${
+      state.summary?.fromHistory ? "Комментарии этой темы не попали в текущий сбор." : "Комментарии по теме не найдены."
+    }</div>`;
+  }
+  return list.map((c) => commentCard(c)).join("");
 }
 
 function expandTopicInline(name) {
@@ -922,13 +1267,12 @@ function renderTopics() {
          </div>`
     )
     .join("");
-  wrap.querySelectorAll(".topic-item").forEach((el) => {
-    el.addEventListener("click", () => {
-      const name = el.dataset.name;
-      const body = el.querySelector(".topic-body");
-      const caret = el.querySelector(".t-caret");
-      const wasOpen = expandedTopic === name;
-      expandedTopic = wasOpen ? null : name;
+  // Переключаем только по заголовку: раньше клик по комментарию внутри
+  // раскрытой темы (или по ссылке в нём) сворачивал тему обратно.
+  wrap.querySelectorAll(".topic-item .topic-head").forEach((head) => {
+    head.addEventListener("click", () => {
+      const name = head.parentElement.dataset.name;
+      expandedTopic = expandedTopic === name ? null : name;
       renderTopics();
     });
   });
@@ -938,45 +1282,53 @@ function renderTopics() {
 
 function filteredComments() {
   let list = state.comments;
-  if (state.activeTopic && state.summary) {
-    const t = state.summary.topics.find((x) => x.name === state.activeTopic);
-    if (t) {
-      const ids = new Set(t.ids);
-      list = list.filter((c, i) => ids.has(i));
-    }
+  const f = state.commentFilter;
+  if (f === "questions") list = list.filter((c) => isQuestion(c.text));
+  if (f === "timecodes") list = list.filter((c) => timecodesOf(c.text, maxSec()).length);
+  const q = state.commentQuery.trim().toLowerCase();
+  if (q) {
+    list = list.filter(
+      (c) => (c.text || "").toLowerCase().includes(q) || (c.author || "").toLowerCase().includes(q)
+    );
   }
-  if (state.popularSort) {
-    list = [...list].sort((a, b) => b.likes - a.likes);
-  }
+  if (f === "popular") list = [...list].sort((a, b) => (b.likes || 0) - (a.likes || 0));
   return list;
 }
 
+function setCommentFilter(filter, query = null) {
+  state.commentFilter = filter;
+  if (query !== null) {
+    state.commentQuery = query;
+    $("comments-filter").value = query;
+  }
+  state.commentLimit = COMMENTS_PAGE;
+  renderComments();
+}
+
+// Рендерим порциями: 2000 карточек разом заметно подвешивали панель.
 function renderComments() {
   const wrap = $("comments-list");
   const list = filteredComments();
-  $("comments-count").textContent = `${list.length}${state.activeTopic ? ` по теме «${state.activeTopic}»` : ""}`;
-  $("chip-all").classList.toggle("active", !state.activeTopic);
-  $("chip-popular").classList.toggle("active", state.popularSort);
+  const labels = { all: "", popular: " · по лайкам", questions: " · вопросы", timecodes: " · с таймкодами" };
+  $("comments-count").textContent = state.comments.length
+    ? `${list.length} из ${state.comments.length}${labels[state.commentFilter] || ""}`
+    : "";
+  document.querySelectorAll("#comments-chips .chip").forEach((b) => {
+    b.classList.toggle("active", b.dataset.filter === state.commentFilter);
+  });
+  const more = $("btn-more-comments");
   if (!list.length) {
-    wrap.innerHTML = '<div class="placeholder">Комментариев пока нет.</div>';
+    wrap.innerHTML = `<div class="placeholder">${
+      state.comments.length ? "Ничего не нашлось — смени фильтр." : "Комментариев пока нет."
+    }</div>`;
+    more.classList.add("hidden");
     return;
   }
-  wrap.innerHTML = list
-    .map(
-      (c) => `<div class="comment-card">
-        <img class="avatar" src="${esc(c.avatar || "")}" alt="" loading="lazy" />
-        <div class="c-body">
-          <div class="c-meta">
-            <span class="c-author">${esc(c.author)}</span>
-            <span>${esc(c.time)}</span>
-            <span>♥ ${fmtNum(c.likes)}</span>
-            <span>${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer">открыть ↗</a>` : ""}</span>
-          </div>
-          <div class="c-text">${esc(c.text)}</div>
-        </div>
-      </div>`
-    )
-    .join("");
+  const shown = list.slice(0, state.commentLimit);
+  wrap.innerHTML = shown.map((c) => commentCard(c, { query: state.commentQuery })).join("");
+  const rest = list.length - shown.length;
+  more.textContent = `Показать ещё ${Math.min(rest, COMMENTS_PAGE)} (осталось ${rest})`;
+  more.classList.toggle("hidden", rest <= 0);
 }
 
 // ---------------- Поиск ----------------
@@ -986,64 +1338,103 @@ let globalSearchResults = [];
 function renderSearchResults() {
   const wrap = $("search-results");
   const info = $("search-info");
-  const items = (globalSearchResults && globalSearchResults.items) || [];
+  const answer = $("search-answer");
+  const r = globalSearchResults || {};
+  const items = r.items || [];
+  if (r.answer) {
+    answer.innerHTML = `<div class="answer-label">Ответ по комментариям</div>${esc(r.answer)}`;
+    answer.classList.remove("hidden");
+  } else {
+    answer.classList.add("hidden");
+  }
+  info.textContent = r.info || "";
+  info.classList.toggle("err", Boolean(r.error));
   if (!items.length) {
-    wrap.innerHTML = '<div class="placeholder">Введи запрос и нажми «Найти».</div>';
-    info.textContent = "";
+    wrap.innerHTML = r.info
+      ? ""
+      : `<div class="placeholder">${
+          state.comments.length
+            ? "По тексту — мгновенный поиск слова. По смыслу — ИИ найдёт близкие по смыслу комментарии. Вопрос — ИИ ответит, что думают зрители."
+            : "Поиск заработает, когда соберутся комментарии."
+        }</div>`;
     return;
   }
-  const q = $("search-input").value.trim();
-  info.textContent = globalSearchResults.info || "";
-  wrap.innerHTML = items
-    .map(
-      (c) => `<div class="comment-card">
-        <img class="avatar" src="${esc(c.avatar || "")}" alt="" loading="lazy" />
-        <div class="c-body">
-          <div class="c-meta"><span class="c-author">${esc(c.author)}</span><span>${esc(c.time)}</span><span>♥ ${fmtNum(c.likes)}</span></div>
-          <div class="c-text">${hl(c.text, q)}</div>
-        </div>
-      </div>`
-    )
-    .join("");
+  wrap.innerHTML = items.map((c) => commentCard(c, { query: r.mode === "text" ? r.query : "" })).join("");
 }
+
+let searchSeq = 0;
 
 async function runSearch() {
   const q = $("search-input").value.trim();
   if (!q || !state.comments.length) return;
   const mode = document.querySelector('input[name="mode"]:checked').value;
+  const seq = ++searchSeq;
   $("btn-search").disabled = true;
   try {
     if (mode === "text") {
       const needle = q.toLowerCase();
-      const items = state.comments.filter((c) => (c.text || "").toLowerCase().includes(needle)).slice(0, 80);
-      globalSearchResults = { items, info: `Найдено по тексту: ${items.length}` };
+      const items = state.comments.filter((c) => (c.text || "").toLowerCase().includes(needle));
+      globalSearchResults = {
+        mode,
+        query: q,
+        items: items.slice(0, 100),
+        info: items.length ? `Нашлось: ${items.length}${items.length > 100 ? " (показаны первые 100)" : ""}` : "Ничего не нашлось. Попробуй поиск по смыслу.",
+      };
     } else {
       if (!proxy.configured) {
-        showToast("Настрой прокси (URL, секрет, модель).");
+        showToast("Заполни настройки сервера (URL, секрет, модель).");
         setTab("settings");
-        globalSearchResults = [];
-        renderSearchResults();
         return;
       }
-      $("search-info").textContent = "Ищу по смыслу…";
-      const slice = state.comments.slice(0, 400);
+      // Под бюджет бесплатного Groq: сначала комментарии со словами запроса,
+      // затем самые залайканные — сколько влезет в ~3.5 тыс. токенов.
+      const picked = pickForBudget(state.comments, q, { maxTokens: 3500 });
+      const subset = picked.map((p) => p.c);
+      const ask = mode === "ask";
+      globalSearchResults = { mode, query: q, items: [], info: ask ? "Думаю над ответом…" : "Ищу по смыслу…" };
+      renderSearchResults();
+      const sys = ask ? ASK_SYSTEM : SEARCH_SYSTEM;
+      const user = ask ? askUser(q, subset) : searchUser(q, subset);
+      const slot = await paceRequest(estimateRequestTokens(sys, user), 300, (sec) => {
+        $("search-info").textContent = `Жду окно бесплатного лимита Groq: ~${sec} с…`;
+      });
       const raw = await proxy.chat(
         [
-          { role: "system", content: SEARCH_SYSTEM },
-          { role: "user", content: searchUser(q, slice) },
+          { role: "system", content: sys },
+          { role: "user", content: user },
         ],
-        { jsonMode: true, maxTokens: 600, timeoutMs: 120000 }
+        { jsonMode: true, maxTokens: 500, timeoutMs: 120000 }
       );
+      settleOutput(slot, raw);
+      if (seq !== searchSeq) return; // пока ждали ответ, запустили новый поиск
       const data = extractJson(raw);
-      const ids = new Set((Array.isArray(data?.ids) ? data.ids : []).map(Number).filter(Number.isFinite));
-      const items = slice.filter((_, i) => ids.has(i)).slice(0, 80);
-      globalSearchResults = { items, info: `Найдено по смыслу: ${items.length}` + (data?.why ? ` — ${clean(data.why)}` : "") };
+      const ids = [...new Set((Array.isArray(data?.ids) ? data.ids : []).map(Number).filter(Number.isFinite))];
+      const items = ids.map((i) => subset[i]).filter(Boolean);
+      const scope =
+        subset.length < state.comments.length ? ` (ИИ смотрел ${subset.length} из ${state.comments.length} самых подходящих)` : "";
+      globalSearchResults = ask
+        ? {
+            mode,
+            query: q,
+            answer: normalizeSummary(data?.answer || "", 700) || "Модель не дала ответа — попробуй переформулировать вопрос.",
+            items,
+            info: items.length ? `На чём основан ответ: ${items.length} комм.${scope}` : scope.trim(),
+          }
+        : {
+            mode,
+            query: q,
+            items,
+            info: (items.length ? `Нашлось по смыслу: ${items.length}` : "По смыслу ничего не нашлось") + (data?.why ? ` — ${clean(data.why)}` : "") + scope,
+          };
     }
   } catch (e) {
-    globalSearchResults = { items: [], info: "Ошибка поиска: " + (e.message || e) };
+    if (seq !== searchSeq) return;
+    globalSearchResults = { mode, query: q, items: [], error: true, info: friendlyError(e) };
   } finally {
-    $("btn-search").disabled = false;
-    renderSearchResults();
+    if (seq === searchSeq) {
+      $("btn-search").disabled = false;
+      renderSearchResults();
+    }
   }
 }
 
@@ -1100,12 +1491,15 @@ function blobToDataURL(blob) {
   });
 }
 
+// Всплывающее уведомление внизу панели. Раньше подсказки писались в строку
+// статуса сбора и затирали её.
+let toastTimer = null;
 function showToast(text) {
-  const el = $("collect-status");
+  const el = $("toast");
   el.textContent = text;
-  setTimeout(() => {
-    if (el.textContent === text) el.textContent = "";
-  }, 4000);
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), Math.min(7000, 2200 + text.length * 35));
 }
 
 // ---------------- События от контент-скрипта ----------------
@@ -1137,6 +1531,7 @@ function onRuntimeMessage(msg) {
     expandedTopic = null;
     globalSearchResults = [];
     renderBottomMatters();
+    renderAll();
   }
 }
 
@@ -1252,9 +1647,8 @@ function bindEvents() {
     await chrome.storage.session.remove([`comments:${state.videoId}`, `summary:${state.videoId}`, `collect:${state.videoId}`]);
     state.comments = [];
     state.summary = null;
-    renderComments();
-    renderSummary();
-    renderTopics();
+    state.commentLimit = COMMENTS_PAGE;
+    renderAll();
     const tab = await findActiveVideoTab();
     if (tab?.id) {
       try {
@@ -1332,6 +1726,14 @@ function bindEvents() {
     if (s.notable?.length) {
       lines.push("", "## Яркие комментарии", ...s.notable.map((c) => `- ${c.author}: ${c.text}`));
     }
+    const moments = topMoments(state.comments, { maxSec: maxSec(), limit: 5 });
+    if (moments.length && state.videoId) {
+      lines.push(
+        "",
+        "## Популярные моменты",
+        ...moments.map((mo) => `- [${mo.label}](https://youtu.be/${state.videoId}?t=${mo.t}) — ${mo.count} комм.`)
+      );
+    }
     if (m.pageUrl) lines.push("", `Видео: ${m.pageUrl}`);
     const markdown = lines.join("\n");
     try {
@@ -1344,14 +1746,63 @@ function bindEvents() {
       showToast("Не удалось сохранить: " + (e.message || e));
     }
   });
-  $("chip-all").addEventListener("click", () => {
-    state.activeTopic = null;
+  $("comments-chips").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip[data-filter]");
+    if (chip) setCommentFilter(chip.dataset.filter);
+  });
+  let filterTimer = null;
+  $("comments-filter").addEventListener("input", (e) => {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => {
+      state.commentQuery = e.target.value;
+      state.commentLimit = COMMENTS_PAGE;
+      renderComments();
+    }, 120);
+  });
+  $("btn-more-comments").addEventListener("click", () => {
+    state.commentLimit += COMMENTS_PAGE;
     renderComments();
   });
-  $("chip-popular").addEventListener("click", () => {
-    state.popularSort = true;
-    state.activeTopic = null;
-    renderComments();
+  // Делегирование на всю панель: таймкоды (перемотка), переходы из «Обзора».
+  $("content").addEventListener("click", (e) => {
+    const tc = e.target.closest("[data-t]");
+    if (tc) {
+      e.preventDefault();
+      void seekTo(Number(tc.dataset.t));
+      return;
+    }
+    const goto = e.target.closest("[data-goto]");
+    if (goto) {
+      setTab(goto.dataset.goto);
+      return;
+    }
+    const gf = e.target.closest("[data-goto-filter]");
+    if (gf) {
+      setCommentFilter(gf.dataset.gotoFilter, "");
+      setTab("comments");
+      return;
+    }
+    const word = e.target.closest("[data-word]");
+    if (word) {
+      setCommentFilter("popular", word.dataset.word);
+      setTab("comments");
+    }
+  });
+  document.querySelectorAll('input[name="mode"]').forEach((r) =>
+    r.addEventListener("change", () => {
+      const ph = { text: "Слово или фраза…", ai: "Тема, о которой ищешь…", ask: "Например: что не понравилось зрителям?" };
+      $("search-input").placeholder = ph[r.value] || "";
+      $("btn-search").textContent = r.value === "ask" ? "Спросить" : "Найти";
+    })
+  );
+  $("btn-clear-history").addEventListener("click", async () => {
+    const n = await clearHistory();
+    $("history-status").textContent = n ? `Удалено сводок: ${n}` : "История пуста";
+    if (state.summary?.fromHistory) {
+      state.summary = null;
+      renderSummary();
+      renderTopics();
+    }
   });
   $("btn-search").addEventListener("click", runSearch);
   $("search-input").addEventListener("keydown", (e) => {

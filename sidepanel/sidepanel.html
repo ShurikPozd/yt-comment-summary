@@ -7,13 +7,6 @@
   </head>
   <body>
     <div id="app">
-      <div id="diag-bar">
-        <b id="ver-badge">v?</b>
-        <span class="diag-sep"></span>
-        <button id="btn-refresh-tab" title="Переискать вкладку с видео">найти вкладку</button>
-        <button id="btn-diag" title="Показать, какие вкладки видит панель">диагностика</button>
-      </div>
-      <div id="diag-out" class="hidden"></div>
       <header id="video-header" class="hidden">
         <div class="thumb-wrap">
           <img id="thumbnail" alt="превью" />
@@ -36,6 +29,9 @@
         <div class="empty-icon">💬</div>
         Открой страницу с видео на YouTube, и комментарии появятся здесь.
       </div>
+      <div id="empty-actions" class="empty-actions">
+        <button id="btn-refresh-tab" class="ghost" title="Переискать вкладку с видео">Найти вкладку с видео</button>
+      </div>
 
       <section id="collect-bar" class="toolbar hidden">
         <button id="btn-analyze" class="primary">🧠 Анализировать</button>
@@ -44,28 +40,41 @@
         </span>
         <button id="btn-restart" title="Собрать комментарии заново">🔄</button>
         <span id="collect-status" class="status"></span>
+        <div id="collect-progress" class="progress hidden"><i></i></div>
       </section>
 
       <nav id="tabs" class="tabs hidden">
         <button data-tab="summary" class="tab active">Сводка</button>
+        <button data-tab="moments" class="tab">Моменты<span id="moments-badge" class="tab-badge hidden"></span></button>
         <button data-tab="topics" class="tab">Темы</button>
         <button data-tab="search" class="tab">Поиск</button>
-        <button data-tab="comments" class="tab">Комментарии</button>
+        <button data-tab="comments" class="tab">Все</button>
         <button id="btn-settings" class="tab settings-tab" title="Настройки">⚙️</button>
       </nav>
 
       <main id="content">
         <div id="view-summary" class="view active">
-          <div id="summary-placeholder" class="placeholder">Нажми «Анализировать», чтобы получить сводку обсуждения.</div>
-          <div id="summary-topics" class="chip-row hidden"></div>
-          <div id="summary-sentiment" class="hidden"></div>
-          <div id="summary-text" class="summary-text"></div>
-          <div id="summary-points"></div>
-          <div id="summary-notable"></div>
-          <div class="summary-actions">
-            <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку в буфер">📋 Скопировать</button>
-            <button id="btn-export-summary" class="ghost copy-btn hidden" title="Скачать сводку в файл .md">💾 Сохранить</button>
-          </div>
+          <section class="ai-block">
+            <div id="summary-placeholder" class="placeholder">Нажми «Анализировать», чтобы получить сводку обсуждения.</div>
+            <div id="analyze-progress" class="progress hidden"><i></i></div>
+            <div id="summary-history" class="history-note hidden"></div>
+            <div id="summary-topics" class="chip-row hidden"></div>
+            <div id="summary-sentiment" class="hidden"></div>
+            <div id="summary-text" class="summary-text"></div>
+            <div id="summary-points"></div>
+            <div id="summary-notable"></div>
+            <div class="summary-actions">
+              <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку в буфер">📋 Скопировать</button>
+              <button id="btn-export-summary" class="ghost copy-btn hidden" title="Скачать сводку в файл .md">💾 Сохранить</button>
+            </div>
+          </section>
+          <section id="insights" class="insights hidden"></section>
+        </div>
+
+        <div id="view-moments" class="view">
+          <div id="moments-empty" class="placeholder">Здесь появятся моменты видео, на которые ссылаются зрители (таймкоды вида 1:23 в комментариях).</div>
+          <div id="moments-timeline" class="timeline hidden"></div>
+          <div id="moments-list"></div>
         </div>
 
         <div id="view-topics" class="view">
@@ -75,26 +84,32 @@
 
         <div id="view-search" class="view">
           <div class="search-row">
-            <input id="search-input" type="text" placeholder="Тема или ключевое слово…" autocomplete="off" />
+            <input id="search-input" type="text" placeholder="Слово, тема или вопрос…" autocomplete="off" />
             <button id="btn-search" class="primary">Найти</button>
           </div>
-          <div class="search-modes">
+          <div class="search-modes" role="radiogroup">
             <label><input type="radio" name="mode" value="text" checked /> по тексту</label>
             <label><input type="radio" name="mode" value="ai" /> по смыслу (ИИ)</label>
+            <label><input type="radio" name="mode" value="ask" /> вопрос (ИИ)</label>
           </div>
           <div id="search-info" class="hint"></div>
+          <div id="search-answer" class="answer-box hidden"></div>
           <div id="search-results"></div>
         </div>
 
         <div id="view-comments" class="view">
           <div class="comments-tools">
-            <span id="comments-count" class="hint"></span>
-            <div class="chip-row">
-              <button id="chip-all" class="chip active">Все</button>
-              <button id="chip-popular" class="chip">По лайкам</button>
+            <input id="comments-filter" type="search" placeholder="Фильтр по тексту или автору…" autocomplete="off" />
+            <div class="chip-row" id="comments-chips">
+              <button data-filter="all" class="chip active">Все</button>
+              <button data-filter="popular" class="chip">По лайкам</button>
+              <button data-filter="questions" class="chip">Вопросы</button>
+              <button data-filter="timecodes" class="chip">С таймкодами</button>
             </div>
+            <span id="comments-count" class="hint"></span>
           </div>
           <div id="comments-list"></div>
+          <button id="btn-more-comments" class="ghost more-btn hidden">Показать ещё</button>
         </div>
 
         <div id="view-settings" class="view">
@@ -146,13 +161,29 @@
           </div>
 
           <div class="settings-block">
+            <h3>История сводок</h3>
+            <p class="hint">Готовые сводки хранятся на этом компьютере (до 60 видео): при повторном открытии видео сводка появляется сразу, без запросов к Groq.</p>
+            <button id="btn-clear-history" class="ghost">Очистить историю</button>
+            <span id="history-status" class="hint"></span>
+          </div>
+
+          <div class="settings-block settings-actions">
             <button id="btn-save-settings" class="primary">Сохранить</button>
             <button id="btn-settings-back" class="ghost">Назад</button>
             <span id="settings-status"></span>
           </div>
+
+          <div class="settings-block diag-block">
+            <div class="diag-row">
+              <span>Версия <b id="ver-badge">v?</b></span>
+              <button id="btn-diag" class="link-btn" title="Показать, какие вкладки видит панель">диагностика</button>
+            </div>
+            <div id="diag-out" class="hidden"></div>
+          </div>
         </div>
       </main>
     </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="../local-config.js"></script>
     <script type="module" src="sidepanel.js"></script>
