@@ -1946,3 +1946,168 @@ kbd {
 .settings-block input.switch:checked:active::after {
   transform: translateX(12px);
 }
+
+/* =====================================================================
+   Дизайн-ревизия (итерация 9): цели нажатия, центровка, узкая ширина,
+   пространственные переходы.
+   ===================================================================== */
+
+/* Мелкие ссылки визуально те же, но зона нажатия не меньше ~28px:
+   отступы наружу компенсируются отрицательными полями. */
+.link-btn {
+  padding: 5px 6px;
+  margin: -5px -6px;
+  border-radius: 6px;
+}
+
+.channel-name {
+  padding: 4px 2px;
+  margin: -4px -2px;
+}
+
+.c-link {
+  padding: 5px;
+  margin: -5px -5px -5px auto;
+  border-radius: 6px;
+}
+
+.c-link:hover {
+  background: var(--bg-3);
+}
+
+/* Точки таймлайна: невидимый ореол увеличивает зону попадания */
+.tl-dot::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+}
+
+/* «ещё N», «Ответы», «Ещё ответы»: симметричные отступы — текст по центру,
+   а левый край по-прежнему вровень с текстом карточки. */
+.more-toggle,
+.reply-toggle,
+.more-replies {
+  height: 28px;
+  padding: 0 8px;
+  margin-left: -8px;
+}
+
+.more-toggle {
+  margin-top: 4px;
+}
+
+/* Отклик на нажатие: вкладки, заголовки тем, строки истории */
+.tab:active {
+  opacity: 0.7;
+}
+
+.topic-head {
+  transition: background-color var(--t-fast) ease;
+}
+
+.topic-head:hover {
+  background: color-mix(in srgb, var(--fg) 3%, transparent);
+}
+
+.topic-head:active {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.history-item:active {
+  transform: scale(0.99);
+}
+
+/* Пространственная согласованность: вкладка правее въезжает справа,
+   левее — слева (--dir ставит setTab). */
+.view.active {
+  animation: view-slide var(--t) var(--ease);
+}
+
+@keyframes view-slide {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--dir, 0) * 14px)) translateY(calc((1 - var(--dir-abs, 0)) * 6px));
+  }
+}
+
+/* Узкая панель: в плитках число над подписью, чтобы подпись не обрезалась */
+@media (max-width: 360px) {
+  .stat {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+
+  .stat span {
+    white-space: normal;
+  }
+
+  #content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  #video-header,
+  .toolbar,
+  .status-row {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  #collect-progress {
+    left: 12px;
+    right: 12px;
+  }
+}
+
+/* Длинный комментарий — 6 строк и «Показать полностью» */
+.c-text.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.more-text[hidden] {
+  display: none;
+}
+
+.more-text {
+  margin-top: 2px;
+  padding: 3px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color var(--t-fast) ease;
+}
+
+.more-text:hover {
+  color: var(--fg);
+}
+
+/* Фильтры комментариев — одна строка с прокруткой и мягким краем,
+   без «сиротливого» чипа на второй строке. */
+#comments-chips {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 0 16px;
+  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 24px), transparent 100%);
+}
+
+#comments-chips::-webkit-scrollbar {
+  display: none;
+}
+
+#comments-chips .chip {
+  flex: none;
+}
+
+@media (max-width: 360px) {
+  #comments-chips {
+    margin: 0 -12px;
+    padding: 0 12px;
+  }
+}

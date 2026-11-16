@@ -128,22 +128,6 @@
 
         <div id="view-settings" class="view">
           <div class="settings-block">
-            <h3>Сервер с ИИ</h3>
-            <label>URL сервера
-              <input id="set-base-url" type="text" placeholder="https://my-bot.onrender.com" spellcheck="false" />
-            </label>
-            <label>Секрет (EXT_SECRET из .env бота)
-              <input id="set-token" type="password" spellcheck="false" />
-            </label>
-            <label>Модель Groq
-              <input id="set-model" type="text" value="qwen/qwen3.8-27b" spellcheck="false" />
-            </label>
-            <p class="hint">Расширение зовёт <code>{URL}/api/chat</code> с заголовком <code>X-Sec-Token</code>. Ключ Groq хранится на сервере и не попадает в браузер.</p>
-            <button id="btn-test" class="ghost">Проверить связь</button>
-            <span id="test-result"></span>
-          </div>
-
-          <div class="settings-block">
             <h3>Плеер YouTube</h3>
             <label class="switch-row">
               <span class="sw-text">
@@ -198,6 +182,22 @@
             <div id="history-list" class="history-list"></div>
             <button id="btn-clear-history" class="ghost">Очистить историю</button>
             <span id="history-status" class="hint"></span>
+          </div>
+
+          <div class="settings-block">
+            <h3>Сервер с ИИ</h3>
+            <label>URL сервера
+              <input id="set-base-url" type="text" placeholder="https://my-bot.onrender.com" spellcheck="false" />
+            </label>
+            <label>Секрет (EXT_SECRET из .env бота)
+              <input id="set-token" type="password" spellcheck="false" />
+            </label>
+            <label>Модель Groq
+              <input id="set-model" type="text" value="qwen/qwen3.8-27b" spellcheck="false" />
+            </label>
+            <p class="hint">Расширение зовёт <code>{URL}/api/chat</code> с заголовком <code>X-Sec-Token</code>. Ключ Groq хранится на сервере и не попадает в браузер.</p>
+            <button id="btn-test" class="ghost">Проверить связь</button>
+            <span id="test-result"></span>
           </div>
 
           <div class="settings-block settings-actions">

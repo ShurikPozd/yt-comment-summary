@@ -411,8 +411,11 @@ function richText(text, query) {
 function commentCard(c, { query = "", compact = false, reply = false } = {}) {
   const likes = Number(c.likes) || 0;
   // Кнопка ответов — только если YouTube дал токен ветки (ответы грузятся по клику).
+  // В компактных карточках (сводка, моменты) ответы не раскрываем — там
+  // важна краткость; ветки — во «Все», «Темах» и «Поиске».
+  const canReplies = !reply && !compact && c.replies > 0 && c.replyToken && c.id;
   const repliesUi =
-    !reply && c.replies > 0 && c.replyToken && c.id
+    canReplies
       ? `<div class="c-replies">
           <button class="reply-toggle" data-cid="${esc(c.id)}">${icon("reply", { size: 13 })}<span>Ответы · ${fmtNum(c.replies)}</span></button>
           <div class="collapse"><div class="collapse-inner"></div></div>
@@ -428,20 +431,42 @@ function commentCard(c, { query = "", compact = false, reply = false } = {}) {
     }
     <div class="c-body">
       <div class="c-meta">
-        <span class="c-author">${esc(c.author)}</span>
+        <span class="c-author" title="${esc(c.author)}">${esc(c.author)}</span>
         ${c.isCreator ? '<span class="badge" title="Комментарий автора канала">автор</span>' : ""}
         ${state.newIds?.has(c.id) ? '<span class="badge badge-new" title="Появился после прошлой сводки">новый</span>' : ""}
         ${c.time ? `<span class="c-time">${esc(c.time)}</span>` : ""}
         ${likes ? `<span class="c-stat" title="Лайки">${icon("heart", { size: 12 })}${fmtNum(likes)}</span>` : ""}
-        ${c.replies ? `<span class="c-stat" title="Ответов в ветке">${icon("reply", { size: 12 })}${fmtNum(c.replies)}</span>` : ""}
+        ${c.replies && !canReplies ? `<span class="c-stat" title="Ответов в ветке">${icon("reply", { size: 12 })}${fmtNum(c.replies)}</span>` : ""}
         ${c.hearted ? `<span class="c-heart" title="Автору канала понравилось">${icon("heart", { size: 12 })}</span>` : ""}
         ${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer" title="Открыть комментарий на YouTube" aria-label="Открыть на YouTube">${icon("external", { size: 13 })}</a>` : ""}
       </div>
-      <div class="c-text">${richText(c.text, query)}</div>
+      <div class="c-text${compact ? "" : " clamp"}">${richText(c.text, query)}</div>
+      ${compact ? "" : '<button class="more-text" hidden>Показать полностью</button>'}
       ${repliesUi}
     </div>
   </article>`;
 }
+
+// Длинные комментарии свёрнуты до 6 строк (CSS). Кнопку «Показать полностью»
+// показываем только там, где текст реально не влез — меряем после отрисовки,
+// а не по числу символов (в узкой панели и 250 символов — это 9 строк).
+let clampTimer = null;
+function fitClamps() {
+  clearTimeout(clampTimer);
+  clampTimer = setTimeout(() => {
+    for (const el of document.querySelectorAll("#content .c-text.clamp:not([data-fit])")) {
+      if (!el.offsetParent) continue; // в скрытой вкладке — посчитаем, когда откроют
+      el.dataset.fit = "1";
+      const btn = el.nextElementSibling;
+      if (el.scrollHeight > el.clientHeight + 2) {
+        if (btn?.classList.contains("more-text")) btn.hidden = false;
+      } else {
+        el.classList.remove("clamp");
+      }
+    }
+  }, 0);
+}
+new MutationObserver(fitClamps).observe(document.getElementById("content"), { childList: true, subtree: true });
 
 // ---------------- Ответы в ветках ----------------
 // Грузятся по клику через контент-скрипт вкладки с видео (те же запросы, что
@@ -941,13 +966,22 @@ function humanCollectError(error) {
 
 // ---------------- Вкладки ----------------
 
+const TAB_ORDER = ["summary", "moments", "topics", "search", "comments", "settings"];
+let currentTab = "summary";
+
 function setTab(name) {
+  // направление перехода для анимации: правее → въезд справа, левее → слева
+  const dir = Math.sign(TAB_ORDER.indexOf(name) - TAB_ORDER.indexOf(currentTab));
+  document.documentElement.style.setProperty("--dir", String(dir));
+  document.documentElement.style.setProperty("--dir-abs", String(Math.abs(dir)));
+  currentTab = name;
   document.querySelectorAll(".tab[data-tab]").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === name);
   });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   $("view-" + name).classList.add("active");
   $("app").classList.toggle("on-settings", name === "settings");
+  fitClamps();
   $("btn-settings").classList.toggle("active", name === "settings");
   moveTabInk();
   $("content").scrollTop = 0;
@@ -2153,6 +2187,13 @@ function bindEvents() {
   });
   // Делегирование на всю панель: таймкоды (перемотка), переходы из «Обзора».
   $("content").addEventListener("click", (e) => {
+    const mt = e.target.closest(".more-text");
+    if (mt) {
+      const txt = mt.previousElementSibling;
+      const open = txt.classList.toggle("clamp") === false;
+      mt.textContent = open ? "Свернуть" : "Показать полностью";
+      return;
+    }
     const rt = e.target.closest(".reply-toggle");
     if (rt) {
       void toggleReplies(rt);
