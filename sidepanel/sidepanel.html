@@ -64,6 +64,8 @@
               <div class="cta-body">
                 <div class="cta-title">Сводка обсуждения от ИИ</div>
                 <div class="cta-text">Темы, настроение зрителей, главные мнения и яркие комментарии. Бесплатно, обычно около минуты.</div>
+                <div id="server-hint" class="server-hint hidden"></div>
+                <button id="btn-cta-settings" class="ghost cta-btn hidden">Открыть настройки</button>
               </div>
             </div>
             <div id="summary-placeholder" class="placeholder"></div>
@@ -103,6 +105,12 @@
             <label><input type="radio" name="mode" value="text" checked /> по тексту</label>
             <label><input type="radio" name="mode" value="ai" /> по смыслу (ИИ)</label>
             <label><input type="radio" name="mode" value="ask" /> вопрос (ИИ)</label>
+          </div>
+          <div id="ask-suggest" class="suggest hidden">
+            <button class="chip" data-ask="Что зрителям больше всего понравилось?">Что понравилось?</button>
+            <button class="chip" data-ask="На что жалуются и что не понравилось зрителям?">Что не понравилось?</button>
+            <button class="chip" data-ask="Какие вопросы зрители задают автору?">О чём спрашивают?</button>
+            <button class="chip" data-ask="О чём зрители спорят, где мнения расходятся?">О чём спорят?</button>
           </div>
           <div id="search-info" class="hint"></div>
           <div id="search-answer" class="answer-box hidden"></div>

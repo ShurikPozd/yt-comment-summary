@@ -468,6 +468,70 @@ function fitClamps() {
 }
 new MutationObserver(fitClamps).observe(document.getElementById("content"), { childList: true, subtree: true });
 
+// ---------------- Сервер: пробуждение заранее ----------------
+// Бесплатный Render засыпает после ~15 минут простоя, и первый запрос ждёт
+// до минуты. Будим сервер тихим запросом к /healthz сразу при открытии
+// панели — пока человек смотрит обзор, сервер успевает проснуться.
+const server = { status: "unknown", slow: false, checkedAt: 0 };
+
+async function wakeServer() {
+  const base = String(state.settings?.baseUrl || "").replace(/\/+$/, "");
+  if (!base || !proxy.configured) return renderServerHint();
+  if (server.status === "waking") return;
+  if (server.status === "ok" && Date.now() - server.checkedAt < 5 * 60 * 1000) return;
+  server.status = "waking";
+  server.slow = false;
+  const slowTimer = setTimeout(() => {
+    if (server.status !== "waking") return;
+    server.slow = true;
+    renderServerHint();
+  }, 2500);
+  const ctrl = new AbortController();
+  const abortTimer = setTimeout(() => ctrl.abort(), 90000);
+  try {
+    const r = await fetch(`${base}/healthz`, { cache: "no-store", signal: ctrl.signal });
+    server.status = r.ok ? "ok" : "down";
+  } catch (e) {
+    server.status = "down";
+  } finally {
+    clearTimeout(slowTimer);
+    clearTimeout(abortTimer);
+  }
+  const wasSlow = server.slow;
+  server.slow = false;
+  server.checkedAt = Date.now();
+  renderServerHint(wasSlow);
+}
+
+function renderServerHint(justWoke = false) {
+  const el = $("server-hint");
+  if (!el) return;
+  let html = "";
+  let cls = "";
+  if (!proxy.configured) {
+    html = "";
+  } else if (server.status === "waking" && server.slow) {
+    html = `<span class="dot pulse"></span>Сервер просыпается после простоя — обычно до минуты. Обзор ниже уже готов.`;
+  } else if (server.status === "ok" && justWoke) {
+    html = `${icon("check", { size: 13 })}Сервер готов`;
+    cls = "ok";
+  } else if (server.status === "down") {
+    html = `Сервер не отвечает. Проверьте адрес в настройках или попробуйте позже.`;
+    cls = "err";
+  }
+  el.className = `server-hint ${cls}`.trim();
+  el.innerHTML = html;
+  el.classList.toggle("hidden", !html);
+  // «Сервер готов» — короткое подтверждение, потом тихо исчезает
+  clearTimeout(renderServerHint.timer);
+  if (cls === "ok") {
+    renderServerHint.timer = setTimeout(() => {
+      el.classList.add("fade-out");
+      setTimeout(() => el.classList.add("hidden"), 300);
+    }, 4000);
+  }
+}
+
 // ---------------- Ответы в ветках ----------------
 // Грузятся по клику через контент-скрипт вкладки с видео (те же запросы, что
 // делает сам YouTube при «Показать ответы»), кэшируются на время сессии.
@@ -670,6 +734,9 @@ async function saveSettings(showFeedback = true) {
   proxy.baseUrl = state.settings.baseUrl;
   proxy.token = state.settings.token;
   proxy.model = state.settings.model;
+  server.checkedAt = 0;
+  if (server.status !== "waking") server.status = "unknown";
+  void wakeServer();
   if (showFeedback) {
     const el = $("settings-status");
     el.textContent = "Сохранено";
@@ -1321,6 +1388,14 @@ function renderSummary() {
     hist.classList.add("hidden");
   }
   $("summary-cta").classList.toggle("hidden", Boolean(s) || !state.comments.length);
+  // Сервер не настроен — карточка объясняет, что делать, вместо ошибки по клику.
+  const needSetup = !proxy.configured;
+  $("summary-cta").querySelector(".cta-title").textContent = needSetup ? "Подключите сервер с ИИ" : "Сводка обсуждения от ИИ";
+  $("summary-cta").querySelector(".cta-text").textContent = needSetup
+    ? "Для сводки нужен адрес сервера и секрет. Обзор, моменты и поиск по тексту работают и без этого."
+    : "Темы, настроение зрителей, главные мнения и яркие комментарии. Бесплатно, обычно около минуты.";
+  $("btn-cta-settings").classList.toggle("hidden", !needSetup);
+  renderServerHint();
   if (!s) {
     // Есть комментарии — показываем карточку-приглашение; идёт сбор — короткую строку.
     ph.textContent = state.comments.length ? "" : "Комментарии ещё собираются — сводку можно будет сделать, когда сбор закончится.";
@@ -2239,6 +2314,7 @@ function bindEvents() {
       const ph = { text: "Слово или фраза…", ai: "Тема, о которой ищешь…", ask: "Например: что не понравилось зрителям?" };
       $("search-input").placeholder = ph[r.value] || "";
       $("btn-search").textContent = r.value === "ask" ? "Спросить" : "Найти";
+      $("ask-suggest").classList.toggle("hidden", r.value !== "ask");
     })
   );
   $("btn-clear-history").addEventListener("click", async () => {
@@ -2252,6 +2328,18 @@ function bindEvents() {
     }
   });
   $("btn-search").addEventListener("click", runSearch);
+  $("btn-cta-settings").addEventListener("click", () => {
+    fillSettingsFields();
+    setTab("settings");
+    $("set-base-url").focus();
+  });
+  $("ask-suggest").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ask]");
+    if (!b) return;
+    $("search-input").value = b.dataset.ask;
+    document.querySelector('input[name="mode"][value="ask"]').checked = true;
+    void runSearch();
+  });
   // Переключатели плеера применяются сразу: контент-скрипт слушает storage.
   for (const [id, on, off] of [
     ["set-no-autoplay", "Видео больше не будут запускаться сами", "Автозапуск видео снова как обычно"],
@@ -2309,6 +2397,7 @@ function bindEvents() {
     if (info.status === "complete") refreshFromActiveTab();
   });
   window.addEventListener("focus", refreshFromActiveTab);
+  window.addEventListener("focus", () => void wakeServer());
 }
 
 function showFatal(message, detail) {
@@ -2335,6 +2424,16 @@ async function main() {
   proxy.model = state.settings.model;
   bindEvents();
   chrome.runtime.onMessage.addListener(onRuntimeMessage);
+  // Переключатели плеера могут поменять из контекстного меню — держим панель
+  // в курсе, иначе следующее «Сохранить» вернуло бы старые значения.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes.settings?.newValue) return;
+    const nv = changes.settings.newValue;
+    for (const key of ["noAutoplay", "hideProgress"]) state.settings[key] = Boolean(nv[key]);
+    $("set-no-autoplay").checked = Boolean(nv.noAutoplay);
+    $("set-hide-progress").checked = Boolean(nv.hideProgress);
+  });
+  void wakeServer();
   await refreshFromActiveTab();
   // Возвращаемся на вкладку, открытую в прошлый раз (кроме настроек).
   try {

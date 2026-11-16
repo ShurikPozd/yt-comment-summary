@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео в отдельной вкладке и инфо о канале.",
   "permissions": [
     "storage",
     "sidePanel",
     "downloads",
-    "tabs"
+    "tabs",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -17,7 +18,8 @@
     "https://*.onrender.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
     {

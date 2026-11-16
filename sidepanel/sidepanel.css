@@ -2111,3 +2111,70 @@ kbd {
     padding: 0 12px;
   }
 }
+
+/* ---------- Статус сервера и первый запуск ---------- */
+.server-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  animation: view-in var(--t) var(--ease);
+}
+
+.server-hint.ok {
+  color: var(--pos);
+}
+
+.server-hint.err {
+  color: var(--neg);
+}
+
+.dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.dot.pulse {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
+.cta-btn {
+  margin-top: 10px;
+  height: 30px;
+  font-size: 12.5px;
+}
+
+/* ---------- Быстрые вопросы ---------- */
+.suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 14px;
+  animation: view-in var(--t) var(--ease);
+}
+
+.suggest .chip {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.suggest .chip:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.server-hint.fade-out {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
