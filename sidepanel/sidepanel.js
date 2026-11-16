@@ -29,6 +29,10 @@ import {
   dedupeTexts,
 } from "./insights.js";
 import { DEFAULTS } from "../config.js";
+import { icon, hydrateIcons } from "./icons.js";
+import { renderSummaryCard } from "./card.js";
+
+hydrateIcons();
 
 const LOCAL_CONFIG =
   (typeof window !== "undefined" && window.__EXT_LOCAL_CONFIG__) || {};
@@ -354,7 +358,7 @@ const state = {
   comments: [],
   summary: null,
   activeTopic: null,
-  // фильтр вкладки «Все»: all | popular | questions | timecodes
+  // фильтр вкладки «Все»: all | popular | replies | questions | timecodes
   commentFilter: "all",
   commentQuery: "",
   commentLimit: 60,
@@ -416,9 +420,12 @@ function commentCard(c, { query = "", compact = false } = {}) {
     <div class="c-body">
       <div class="c-meta">
         <span class="c-author">${esc(c.author)}</span>
+        ${c.isCreator ? '<span class="badge" title="Комментарий автора канала">автор</span>' : ""}
         ${c.time ? `<span class="c-time">${esc(c.time)}</span>` : ""}
-        ${likes ? `<span class="c-likes" title="Лайки">♥ ${fmtNum(likes)}</span>` : ""}
-        ${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer" title="Открыть комментарий на YouTube">↗</a>` : ""}
+        ${likes ? `<span class="c-stat" title="Лайки">${icon("heart", { size: 12 })}${fmtNum(likes)}</span>` : ""}
+        ${c.replies ? `<span class="c-stat" title="Ответов в ветке">${icon("reply", { size: 12 })}${fmtNum(c.replies)}</span>` : ""}
+        ${c.hearted ? `<span class="c-heart" title="Автору канала понравилось">${icon("heart", { size: 12 })}</span>` : ""}
+        ${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer" title="Открыть комментарий на YouTube" aria-label="Открыть на YouTube">${icon("external", { size: 13 })}</a>` : ""}
       </div>
       <div class="c-text">${richText(c.text, query)}</div>
     </div>
@@ -540,7 +547,7 @@ async function saveSettings(showFeedback = true) {
   proxy.model = state.settings.model;
   if (showFeedback) {
     const el = $("settings-status");
-    el.textContent = "Сохранено ✓";
+    el.textContent = "Сохранено";
     el.className = "ok";
     setTimeout(() => (el.textContent = ""), 1800);
   }
@@ -640,6 +647,35 @@ async function loadHistory(videoId, comments) {
       return { name: t.name, count: t.count, ids };
     }),
   };
+}
+
+// Список «Недавние сводки» в настройках: клик открывает видео, а панель
+// сразу покажет сохранённую сводку.
+async function renderHistoryList() {
+  const box = $("history-list");
+  let entries = [];
+  try {
+    const idx = (await chrome.storage.local.get(HIST_INDEX))[HIST_INDEX] || [];
+    const all = await chrome.storage.local.get(idx.map((v) => HIST_PREFIX + v));
+    entries = idx.map((v) => ({ id: v, ...(all[HIST_PREFIX + v] || {}) })).filter((e) => e.summary);
+  } catch (e) {
+    /* нет доступа к хранилищу — просто пустой список */
+  }
+  if (!entries.length) {
+    box.innerHTML = '<div class="hint">Пока пусто — сводки появятся здесь после анализа.</div>';
+    return;
+  }
+  box.innerHTML = entries
+    .map(
+      (e) => `<a class="history-item${e.id === state.videoId ? " current" : ""}" href="https://www.youtube.com/watch?v=${esc(e.id)}" target="_blank" rel="noreferrer">
+        <img src="https://i.ytimg.com/vi/${esc(e.id)}/default.jpg" alt="" loading="lazy" />
+        <span class="hi-body">
+          <span class="hi-title">${esc(e.title || e.id)}</span>
+          <span class="hint">${fmtDate(e.updatedAt || e.savedAt)}${e.commentCount ? ` · ${fmtNum(e.commentCount)} комм.` : ""}</span>
+        </span>
+      </a>`
+    )
+    .join("");
 }
 
 async function clearHistory() {
@@ -756,7 +792,7 @@ function updateCollectStatus(status, fetched, max, error) {
     el.textContent = `Собираю: ${fetched || 0} из ${max || "…"}`;
     setProgress("collect-progress", max ? (fetched || 0) / max : 0.05);
   } else if (status === "done") {
-    el.textContent = `✓ ${fetched || 0} комм.`;
+    el.innerHTML = `${icon("check", { size: 13 })} ${fetched || 0} комм.`;
     el.title = `Собрано комментариев: ${fetched || 0}`;
     setProgress("collect-progress", null);
   } else if (status === "error") {
@@ -772,10 +808,10 @@ function updateCollectStatus(status, fetched, max, error) {
 // Технические коды ошибок сбора из content.js → понятный текст.
 function humanCollectError(error) {
   const e = String(error || "");
-  if (/innerTubeBlocked/.test(e)) return "YouTube временно не отдаёт комментарии — нажми 🔄 чуть позже";
+  if (/innerTubeBlocked/.test(e)) return "YouTube временно не отдаёт комментарии — попробуй «Собрать заново» чуть позже";
   if (/innerTubeNoCommentsSection/.test(e)) return "Комментарии к видео отключены или не найдены";
-  if (/innerTubeTimeout|innerTubeNetwork/.test(e)) return "Нет ответа от YouTube — проверь сеть и нажми 🔄";
-  return "Не удалось собрать комментарии — нажми 🔄";
+  if (/innerTubeTimeout|innerTubeNetwork/.test(e)) return "Нет ответа от YouTube — проверь сеть и нажми «Собрать заново»";
+  return "Не удалось собрать комментарии — нажми «Собрать заново»";
 }
 
 // ---------------- Вкладки ----------------
@@ -795,7 +831,13 @@ function setTab(name) {
   if (name === "moments") renderMoments();
   if (name === "comments") renderComments();
   if (name === "search") renderSearchResults();
-  if (name === "settings") fillSettingsFields();
+  if (name === "settings") {
+    fillSettingsFields();
+    void renderHistoryList();
+  } else {
+    // запоминаем вкладку: при следующем открытии панели вернёмся на неё
+    void chrome.storage.local.set({ "ui:tab": name }).catch(() => {});
+  }
 }
 
 // ---------------- Сводка ----------------
@@ -819,11 +861,11 @@ async function analyze() {
       }
     }
     if (st?.status === "loading") {
-      showToast(`Сбор ещё идёт: ${st.fetched || 0}/${st.max || "…"}. Подожди, пока появится «✓».`);
+      showToast(`Сбор ещё идёт: ${st.fetched || 0}/${st.max || "…"}. Подожди, пока он закончится.`);
     } else if (st?.status === "error") {
-      showToast(`Сбор комментариев упал: ${st.error || "ошибка"}. Нажми 🔄, чтобы повторить.`);
+      showToast(`Сбор комментариев упал: ${st.error || "ошибка"}. Нажми «Собрать заново», чтобы повторить.`);
     } else {
-      showToast("Сначала собери комментарии — нажми 🔄 или открой видео заново.");
+      showToast("Сначала собери комментарии — нажми «Собрать заново» или открой видео ещё раз.");
     }
     return;
   }
@@ -1105,10 +1147,11 @@ function renderSummary() {
   }
   if (!s) {
     ph.textContent = state.comments.length
-      ? "Нажми «🧠 Анализировать» — ИИ прочитает комментарии и сделает сводку обсуждения."
+      ? "Нажми «Анализировать» — ИИ прочитает комментарии и сделает сводку обсуждения."
       : "Комментарии ещё собираются — сводку можно будет сделать, когда сбор закончится.";
     ph.classList.remove("hidden");
     $("btn-copy-summary").classList.add("hidden");
+    $("btn-image-summary").classList.add("hidden");
     $("btn-export-summary").classList.add("hidden");
     $("summary-topics").classList.add("hidden");
     $("summary-sentiment").classList.add("hidden");
@@ -1120,6 +1163,7 @@ function renderSummary() {
   ph.textContent = "";
   ph.classList.add("hidden");
   $("btn-copy-summary").classList.remove("hidden");
+  $("btn-image-summary").classList.remove("hidden");
   $("btn-export-summary").classList.remove("hidden");
 
   const chips = (s.topics || []).slice(0, 5);
@@ -1188,6 +1232,12 @@ function renderInsights() {
   const st = commentStats(list, maxSec());
   const words = topWords(list, 14);
   const moments = topMoments(list, { maxSec: maxSec(), limit: 3 });
+  // ветка с наибольшим числом ответов (не считая комментария автора канала —
+  // он обычно закреплён и собирает ответы по другой причине)
+  const hot = list.reduce(
+    (best, c) => (!c.isCreator && (c.replies || 0) > (best?.replies || 0) ? c : best),
+    null
+  );
   const stat = (n, label, filter) =>
     `<button class="stat"${filter ? ` data-goto-filter="${filter}"` : " disabled"}><b>${fmtNum(n)}</b><span>${label}</span></button>`;
   box.innerHTML = `
@@ -1219,6 +1269,11 @@ function renderInsights() {
     ${
       st.top && st.top.likes
         ? `<div class="subhead">Самый залайканный</div>${commentCard(st.top, { compact: true })}`
+        : ""
+    }
+    ${
+      hot && hot !== st.top
+        ? `<div class="subhead">Самая жаркая ветка <button class="link-btn" data-goto-filter="replies">все обсуждаемые →</button></div>${commentCard(hot, { compact: true })}`
         : ""
     }`;
   box.classList.remove("hidden");
@@ -1261,9 +1316,9 @@ function renderMoments() {
       const more = cs.length - 1;
       return `<div class="moment">
         <div class="moment-head">
-          <button class="tc tc-big" data-t="${m.t}" title="Перемотать">▶ ${esc(m.label)}</button>
+          <button class="tc tc-big" data-t="${m.t}" title="Перемотать">${icon("play", { size: 11 })}${esc(m.label)}</button>
           <span class="moment-bar"><i style="width:${Math.round((m.count / maxCount) * 100)}%"></i></span>
-          <span class="hint">${m.count} комм.${m.likes ? ` · ♥ ${fmtNum(m.likes)}` : ""}</span>
+          <span class="hint">${m.count} комм.${m.likes ? ` · ${fmtNum(m.likes)} лайков` : ""}</span>
         </div>
         ${commentCard(cs[0], { compact: true })}
         ${
@@ -1288,7 +1343,7 @@ async function seekTo(t) {
   try {
     const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:seek", t, videoId: state.videoId });
     if (!r?.ok) throw new Error("no video");
-    showToast(`▶ ${fmtTime(t)}`);
+    showToast(`Перемотано на ${fmtTime(t)}`);
   } catch (e) {
     showToast("Не получилось перемотать — открой вкладку с этим видео.");
   }
@@ -1339,7 +1394,7 @@ function renderTopics() {
         `<div class="topic-item" data-idx="${i}" data-name="${esc(t.name)}">
            <div class="topic-head">
              <span class="t-name">${esc(t.name)}</span>
-             <span class="t-count">${t.count} <span class="t-caret">${t.name === expandedTopic ? "▾" : "▸"}</span></span>
+             <span class="t-count">${t.count} <span class="t-caret${t.name === expandedTopic ? " open" : ""}">${icon("chevron", { size: 14 })}</span></span>
            </div>
            <div class="topic-body${t.name === expandedTopic ? "" : " hidden"}">${t.name === expandedTopic ? topicCommentsHtml(t.name) : ""}</div>
          </div>`
@@ -1370,6 +1425,7 @@ function filteredComments() {
     );
   }
   if (f === "popular") list = [...list].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+  if (f === "replies") list = list.filter((c) => c.replies > 0).sort((a, b) => b.replies - a.replies);
   return list;
 }
 
@@ -1387,7 +1443,7 @@ function setCommentFilter(filter, query = null) {
 function renderComments() {
   const wrap = $("comments-list");
   const list = filteredComments();
-  const labels = { all: "", popular: " · по лайкам", questions: " · вопросы", timecodes: " · с таймкодами" };
+  const labels = { all: "", popular: " · по лайкам", replies: " · по числу ответов", questions: " · вопросы", timecodes: " · с таймкодами" };
   $("comments-count").textContent = state.comments.length
     ? `${list.length} из ${state.comments.length}${labels[state.commentFilter] || ""}`
     : "";
@@ -1720,7 +1776,7 @@ async function refreshFromActiveTab() {
   el.innerHTML =
     "Контент-скрипт не подключился к этой вкладке.<br>Перезагрузи страницу видео (F5), чтобы начать сбор комментариев." +
     `<div class="hint">Вкладка: <b>${esc(tab.url || "")}</b></div>` +
-    '<button id="btn-reload-tab" class="primary" style="margin-top:10px">🔄 Перезагрузить вкладку</button>';
+    `<button id="btn-reload-tab" class="primary" style="margin-top:10px">${icon("refresh", { size: 14 })}Перезагрузить вкладку</button>`;
   $("btn-reload-tab")?.addEventListener("click", async () => {
     try {
       await chrome.tabs.reload(tab.id);
@@ -1775,7 +1831,7 @@ function bindEvents() {
     state.settings.maxComments = v;
     $("set-max").value = v;
     await saveSettings(false);
-    showToast(`Лимит сбора: ${v} комментариев. Нажми 🔄, чтобы собрать заново.`);
+    showToast(`Лимит сбора: ${v} комментариев. Нажми «Собрать заново», чтобы применить.`);
   });
   $("btn-analyze").addEventListener("click", () => {
     const quick = parseInt($("quick-max").value, 10);
@@ -1810,9 +1866,35 @@ function bindEvents() {
     }
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
-      showToast("Сводка скопирована в буфер ✓");
+      showToast("Сводка скопирована текстом");
     } catch (e) {
       showToast("Не удалось скопировать: " + (e.message || e));
+    }
+  });
+  // Сводка картинкой: PNG в буфер (вставить в Telegram — Ctrl+V); если буфер
+  // недоступен — скачиваем файлом.
+  $("btn-image-summary").addEventListener("click", async () => {
+    const s = state.summary;
+    if (!s) return;
+    const btn = $("btn-image-summary");
+    btn.disabled = true;
+    let png;
+    try {
+      png = await renderSummaryCard(s, state.meta);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      showToast("Картинка со сводкой в буфере — вставь в чат через Ctrl+V");
+    } catch (e) {
+      try {
+        if (!png) throw e;
+        const url = await blobToDataURL(png);
+        const name = `${sanitizeFilename(state.meta?.title || state.videoId || "сводка")} — сводка.png`;
+        await chrome.downloads.download({ url, filename: name, saveAs: false, conflictAction: "uniquify" });
+        showToast("Буфер недоступен — картинка сохранена в загрузки");
+      } catch (e2) {
+        showToast("Не удалось сделать картинку: " + (e2.message || e2));
+      }
+    } finally {
+      btn.disabled = false;
     }
   });
   $("btn-export-summary").addEventListener("click", async () => {
@@ -1905,6 +1987,7 @@ function bindEvents() {
   $("btn-clear-history").addEventListener("click", async () => {
     const n = await clearHistory();
     $("history-status").textContent = n ? `Удалено сводок: ${n}` : "История пуста";
+    void renderHistoryList();
     if (state.summary?.fromHistory) {
       state.summary = null;
       renderSummary();
@@ -1923,7 +2006,7 @@ function bindEvents() {
     await saveSettings(false);
     try {
       const ok = await proxy.test();
-      let diag = ok ? "Связь есть ✓" : "Ответ пустой";
+      let diag = ok ? "Связь есть" : "Ответ пустой";
       diag += ` | v${chrome.runtime.getManifest().version}`;
       diag += ` · модель ${state.settings.model || "?"}`;
       el.textContent = diag;
@@ -1963,6 +2046,13 @@ async function main() {
   bindEvents();
   chrome.runtime.onMessage.addListener(onRuntimeMessage);
   await refreshFromActiveTab();
+  // Возвращаемся на вкладку, открытую в прошлый раз (кроме настроек).
+  try {
+    const saved = (await chrome.storage.local.get("ui:tab"))["ui:tab"];
+    if (saved && saved !== "summary" && saved !== "settings" && $("view-" + saved)) setTab(saved);
+  } catch (e) {
+    /* не критично */
+  }
 }
 
 // Страховка: если init завис (например, на storage), панель не должна молчать

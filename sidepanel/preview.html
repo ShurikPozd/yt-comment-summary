@@ -10,19 +10,19 @@
   <body data-theme="dark">
     <div id="pv-app">
       <header id="pv-bar">
-        <button id="pv-back" class="pv-icon" title="Закрыть (Esc)">✕</button>
+        <button id="pv-back" class="pv-icon" title="Закрыть (Esc)" aria-label="Закрыть"><span data-icon="close" data-size="16"></span></button>
         <div class="pv-head">
           <div id="pv-title" class="pv-title"></div>
           <div id="pv-meta" class="pv-meta"></div>
         </div>
         <div id="pv-quality" class="pv-quality" role="radiogroup" aria-label="Качество"></div>
-        <button id="pv-copy" class="ghost" title="Скопировать картинку в буфер (C)">Копировать</button>
-        <button id="pv-download" class="primary" title="Скачать (D)">⬇ Скачать</button>
+        <button id="pv-copy" class="ghost" title="Скопировать картинку в буфер (C)"><span data-icon="copy" data-size="14"></span>Копировать</button>
+        <button id="pv-download" class="primary" title="Скачать (D)"><span data-icon="download" data-size="14"></span>Скачать</button>
       </header>
       <main id="pv-stage">
         <img id="pv-image" alt="превью видео" draggable="false" />
         <div id="pv-error" class="hidden">
-          <div class="pv-error-icon">🖼️</div>
+          <div class="pv-error-icon" data-icon="image" data-size="44"></div>
           <div>Превью не удалось загрузить.</div>
           <button id="pv-retry" class="ghost">Повторить</button>
         </div>

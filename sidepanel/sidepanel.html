@@ -11,8 +11,8 @@
         <div class="thumb-wrap">
           <img id="thumbnail" alt="превью" />
           <div class="thumb-actions">
-            <button id="btn-view-thumb" title="Открыть превью в отдельной вкладке">👁</button>
-            <button id="btn-download-thumb" title="Скачать превью (имя по шаблону)">⬇</button>
+            <button id="btn-view-thumb" title="Открыть превью в отдельной вкладке" aria-label="Открыть превью"><span data-icon="eye" data-size="14"></span></button>
+            <button id="btn-download-thumb" title="Скачать превью (имя по шаблону)" aria-label="Скачать превью"><span data-icon="download" data-size="14"></span></button>
           </div>
         </div>
         <div class="video-info">
@@ -26,7 +26,7 @@
       </header>
 
       <div id="empty-state" class="empty">
-        <div class="empty-icon">💬</div>
+        <div class="empty-icon" data-icon="chat" data-size="40"></div>
         Открой страницу с видео на YouTube, и комментарии появятся здесь.
       </div>
       <div id="empty-actions" class="empty-actions">
@@ -34,12 +34,12 @@
       </div>
 
       <section id="collect-bar" class="toolbar hidden">
-        <button id="btn-analyze" class="primary">🧠 Анализировать</button>
+        <button id="btn-analyze" class="primary"><span data-icon="sparkles"></span>Анализировать</button>
         <label class="max-wrap" title="Сколько комментариев собрать с видео (10–2000). После изменения нажми 🔄">
           <span>собрать</span>
           <input id="quick-max" type="number" min="10" max="2000" step="10" value="120" />
         </label>
-        <button id="btn-restart" title="Собрать комментарии заново">🔄</button>
+        <button id="btn-restart" class="icon-btn" title="Собрать комментарии заново" aria-label="Собрать заново"><span data-icon="refresh" data-size="15"></span></button>
         <span id="collect-status" class="status"></span>
         <div id="collect-progress" class="progress hidden"><i></i></div>
       </section>
@@ -50,7 +50,7 @@
         <button data-tab="topics" class="tab">Темы</button>
         <button data-tab="search" class="tab">Поиск</button>
         <button data-tab="comments" class="tab">Все</button>
-        <button id="btn-settings" class="tab settings-tab" title="Настройки">⚙️</button>
+        <button id="btn-settings" class="tab settings-tab" title="Настройки" aria-label="Настройки"><span data-icon="settings" data-size="18"></span></button>
       </nav>
 
       <main id="content">
@@ -65,8 +65,9 @@
             <div id="summary-points"></div>
             <div id="summary-notable"></div>
             <div class="summary-actions">
-              <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку в буфер">📋 Скопировать</button>
-              <button id="btn-export-summary" class="ghost copy-btn hidden" title="Скачать сводку в файл .md">💾 Сохранить</button>
+              <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку текстом"><span data-icon="copy" data-size="14"></span>Текст</button>
+              <button id="btn-export-summary" class="ghost copy-btn hidden" title="Скачать сводку в файл .md"><span data-icon="file" data-size="14"></span>.md</button>
+              <button id="btn-image-summary" class="ghost copy-btn hidden" title="Сводка картинкой — скопировать в буфер (удобно отправить в Telegram)"><span data-icon="image" data-size="14"></span>Картинка</button>
             </div>
           </section>
           <section id="insights" class="insights hidden"></section>
@@ -104,6 +105,7 @@
             <div class="chip-row" id="comments-chips">
               <button data-filter="all" class="chip active">Все</button>
               <button data-filter="popular" class="chip">По лайкам</button>
+              <button data-filter="replies" class="chip">Обсуждаемые</button>
               <button data-filter="questions" class="chip">Вопросы</button>
               <button data-filter="timecodes" class="chip">С таймкодами</button>
             </div>
@@ -162,8 +164,9 @@
           </div>
 
           <div class="settings-block">
-            <h3>История сводок</h3>
+            <h3>Недавние сводки</h3>
             <p class="hint">Готовые сводки хранятся на этом компьютере (до 60 видео): при повторном открытии видео сводка появляется сразу, без запросов к Groq.</p>
+            <div id="history-list" class="history-list"></div>
             <button id="btn-clear-history" class="ghost">Очистить историю</button>
             <span id="history-status" class="hint"></span>
           </div>

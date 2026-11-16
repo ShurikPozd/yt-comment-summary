@@ -1,4 +1,7 @@
 import { sanitizeFilename } from "../groq.js";
+import { hydrateIcons } from "./icons.js";
+
+hydrateIcons();
 
 const params = new URLSearchParams(location.search);
 const urls = (params.get("urls") || "")
@@ -93,7 +96,7 @@ async function download() {
       fr.readAsDataURL(blob);
     });
     await chrome.downloads.download({ url: dataUrl, filename: fileName, conflictAction: "uniquify", saveAs: false });
-    toast("Скачано ✓ " + fileName);
+    toast("Скачано: " + fileName);
   } catch (e) {
     toast("Не удалось скачать: " + (e.message || e));
   }
@@ -108,7 +111,7 @@ async function copyImage() {
     canvas.getContext("2d").drawImage(bitmap, 0, 0);
     const png = await canvas.convertToBlob({ type: "image/png" });
     await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-    toast("Картинка скопирована в буфер ✓");
+    toast("Картинка скопирована в буфер");
   } catch (e) {
     toast("Не удалось скопировать: " + (e.message || e));
   }

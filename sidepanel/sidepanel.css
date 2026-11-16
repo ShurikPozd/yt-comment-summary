@@ -1431,3 +1431,137 @@ ol.points li::before {
 .topic-note {
   padding: 8px 0 2px;
 }
+
+/* ---------- Иконки ---------- */
+.ic {
+  flex: none;
+  display: inline-block;
+  vertical-align: -0.18em;
+}
+
+button.primary,
+button.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.icon-btn,
+.thumb-actions button,
+.tab.settings-tab {
+  display: inline-grid;
+  place-items: center;
+}
+
+.tab.settings-tab {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.t-caret {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  transition: transform 0.18s var(--ease);
+}
+
+.t-caret.open {
+  transform: rotate(90deg);
+}
+
+.tc-big .ic {
+  margin-right: -2px;
+}
+
+#collect-status .ic {
+  color: var(--pos);
+}
+
+/* ---------- Бейджи комментария ---------- */
+.c-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-heart {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.c-heart .ic {
+  fill: currentColor;
+}
+
+.badge {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
+.c-link {
+  display: inline-flex;
+}
+
+/* ---------- Недавние сводки ---------- */
+.history-list {
+  display: grid;
+  gap: 2px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0 -6px 12px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: var(--r-s);
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.history-item:hover,
+.history-item.current {
+  background: var(--bg-3);
+}
+
+.history-item img {
+  flex: none;
+  width: 64px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--bg-3);
+  color: transparent;
+}
+
+.hi-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.hi-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

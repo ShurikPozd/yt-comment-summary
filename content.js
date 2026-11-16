@@ -324,6 +324,10 @@
     const muts = data?.frameworkUpdates?.entityBatchUpdate?.mutations;
     if (Array.isArray(muts)) {
       for (const m of muts) {
+        // Состояние тулбара (сердечко от автора) — отдельная сущность,
+        // на неё ссылается properties.toolbarStateKey комментария.
+        const st = m?.payload?.engagementToolbarStateEntityPayload;
+        if (st?.key) map.set("state:" + st.key, st);
         const cep = m?.payload?.commentEntityPayload;
         if (!cep || !cep.properties) continue;
         if (cep.key) map.set(cep.key, cep);
@@ -370,15 +374,20 @@
       time: time.trim(),
       likes: c.likeCount || 0,
       likesLabel: c.likeCount ? String(c.likeCount) : "",
+      replies: Number(c.replyCount) || 0,
+      isCreator: Boolean(c.authorIsChannelOwner),
+      hearted: Boolean(c.actionButtons?.commentActionButtonsRenderer?.creatorHeart?.creatorHeartRenderer?.isHearted),
       link: `https://www.youtube.com/watch?v=${videoId}&lc=${c.commentId}`,
     };
   }
 
-  function parseThreadV2(entity, videoId) {
+  function parseThreadV2(entity, videoId, entities) {
     const p = entity?.properties || {};
     const content = p.content?.content || "";
     if (!content.trim()) return null;
-    const likesLabel = entity.toolbar?.likeCountLiked || entity.toolbar?.likeCountNotliked || "";
+    // Notliked — счётчик без нашего собственного лайка (Liked = +1, если зритель лайкнул сам).
+    const likesLabel = entity.toolbar?.likeCountNotliked || entity.toolbar?.likeCountLiked || "";
+    const state = p.toolbarStateKey && entities ? entities.get("state:" + p.toolbarStateKey) : null;
     return {
       id: p.commentId || null,
       author: (entity.author?.displayName || "").trim() || "?",
@@ -387,6 +396,10 @@
       time: (p.publishedTime || "").trim(),
       likes: parseLikes(likesLabel),
       likesLabel,
+      // всё это приходит в том же ответе YouTube — бесплатно
+      replies: parseLikes(entity.toolbar?.replyCount),
+      isCreator: Boolean(entity.author?.isCreator),
+      hearted: state?.heartState === "TOOLBAR_HEART_STATE_HEARTED",
       link: p.commentId ? `https://www.youtube.com/watch?v=${videoId}&lc=${p.commentId}` : null,
     };
   }
@@ -450,7 +463,7 @@
 
         let parsed = null;
         if (entity) {
-          parsed = parseThreadV2(entity, videoId);
+          parsed = parseThreadV2(entity, videoId, entities);
         } else if (ctr?.commentRenderer) {
           parsed = parseThread({ commentRenderer: ctr.commentRenderer }, videoId);
         }
