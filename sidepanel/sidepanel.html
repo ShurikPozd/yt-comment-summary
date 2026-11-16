@@ -9,7 +9,7 @@
     <div id="app">
       <header id="video-header" class="hidden">
         <div class="thumb-wrap">
-          <img id="thumbnail" alt="превью" />
+          <img id="thumbnail" alt="" />
           <div class="thumb-actions">
             <button id="btn-view-thumb" title="Открыть превью в отдельной вкладке" aria-label="Открыть превью"><span data-icon="eye" data-size="14"></span></button>
             <button id="btn-download-thumb" title="Скачать превью (имя по шаблону)" aria-label="Скачать превью"><span data-icon="download" data-size="14"></span></button>
@@ -26,23 +26,25 @@
       </header>
 
       <div id="empty-state" class="empty">
-        <div class="empty-icon" data-icon="chat" data-size="40"></div>
-        Открой страницу с видео на YouTube, и комментарии появятся здесь.
+        <div class="empty-icon" data-icon="chat" data-size="28"></div>
+        <div class="empty-title">Откройте видео на YouTube</div>
+        <div class="empty-text">Комментарии соберутся автоматически, а здесь появятся обзор, моменты и сводка.</div>
       </div>
       <div id="empty-actions" class="empty-actions">
-        <button id="btn-refresh-tab" class="ghost" title="Переискать вкладку с видео">Найти вкладку с видео</button>
+        <button id="btn-refresh-tab" class="ghost" title="Переискать вкладку с видео"><span data-icon="search" data-size="14"></span>Найти вкладку с видео</button>
+        <button id="btn-open-settings" class="ghost" title="Настройки"><span data-icon="settings" data-size="14"></span>Настройки</button>
       </div>
 
       <section id="collect-bar" class="toolbar hidden">
         <button id="btn-analyze" class="primary"><span data-icon="sparkles"></span>Анализировать</button>
-        <label class="max-wrap" title="Сколько комментариев собрать с видео (10–2000). После изменения нажми 🔄">
+        <label class="max-wrap" title="Сколько комментариев собрать с видео (10–2000). После изменения нажми «Собрать заново»">
           <span>собрать</span>
           <input id="quick-max" type="number" min="10" max="2000" step="10" value="120" />
         </label>
         <button id="btn-restart" class="icon-btn" title="Собрать комментарии заново" aria-label="Собрать заново"><span data-icon="refresh" data-size="15"></span></button>
-        <span id="collect-status" class="status"></span>
         <div id="collect-progress" class="progress hidden"><i></i></div>
       </section>
+      <div id="status-row" class="status-row hidden"><span id="collect-status" class="status"></span></div>
 
       <nav id="tabs" class="tabs hidden">
         <button data-tab="summary" class="tab active">Сводка</button>
@@ -51,17 +53,25 @@
         <button data-tab="search" class="tab">Поиск</button>
         <button data-tab="comments" class="tab">Все</button>
         <button id="btn-settings" class="tab settings-tab" title="Настройки" aria-label="Настройки"><span data-icon="settings" data-size="18"></span></button>
+        <span class="tab-ink" aria-hidden="true"></span>
       </nav>
 
       <main id="content">
         <div id="view-summary" class="view active">
           <section class="ai-block">
-            <div id="summary-placeholder" class="placeholder">Нажми «Анализировать», чтобы получить сводку обсуждения.</div>
+            <div id="summary-cta" class="cta hidden">
+              <div class="cta-icon" data-icon="sparkles" data-size="20"></div>
+              <div class="cta-body">
+                <div class="cta-title">Сводка обсуждения от ИИ</div>
+                <div class="cta-text">Темы, настроение зрителей, главные мнения и яркие комментарии. Бесплатно, обычно около минуты.</div>
+              </div>
+            </div>
+            <div id="summary-placeholder" class="placeholder"></div>
             <div id="analyze-progress" class="progress hidden"><i></i></div>
             <div id="summary-history" class="history-note hidden"></div>
-            <div id="summary-topics" class="chip-row hidden"></div>
-            <div id="summary-sentiment" class="hidden"></div>
             <div id="summary-text" class="summary-text"></div>
+            <div id="summary-sentiment" class="hidden"></div>
+            <div id="summary-topics" class="chip-row hidden"></div>
             <div id="summary-points"></div>
             <div id="summary-notable"></div>
             <div class="summary-actions">
@@ -117,7 +127,7 @@
 
         <div id="view-settings" class="view">
           <div class="settings-block">
-            <h3>Прокси (твой сервер)</h3>
+            <h3>Сервер с ИИ</h3>
             <label>URL сервера
               <input id="set-base-url" type="text" placeholder="https://my-bot.onrender.com" spellcheck="false" />
             </label>

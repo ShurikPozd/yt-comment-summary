@@ -740,7 +740,11 @@ function renderBottomMatters() {
   $("empty-actions").classList.toggle("hidden", Boolean(state.videoId));
   $("video-header").classList.toggle("hidden", !state.videoId);
   $("collect-bar").classList.toggle("hidden", !state.videoId);
+  $("status-row").classList.toggle("hidden", !state.videoId);
   $("tabs").classList.remove("hidden");
+  // Без видео остаются только настройки (вкладки данных прячет CSS по этому классу).
+  $("app").classList.toggle("no-video", !state.videoId);
+  requestAnimationFrame(moveTabInk);
   if (!state.videoId) return;
   $("btn-analyze").disabled = state.analyzing;
 }
@@ -759,6 +763,7 @@ function renderHeader() {
     : `https://www.youtube.com/results?search_query=${encodeURIComponent(m.channelName || "")}`;
   const avatar = $("channel-avatar");
   avatar.src = m.channelAvatar || "";
+  avatar.hidden = !m.channelAvatar; // без аватарки не оставляем пустое место
   avatar.onerror = () => (avatar.style.visibility = "hidden");
   const thumb = $("thumbnail");
   const nextThumb = () => {
@@ -774,6 +779,20 @@ function renderHeader() {
   else if (m.thumbs?.sd) thumb.src = m.thumbs.sd;
   else if (m.thumbs?.hq) thumb.src = m.thumbs.hq;
 }
+
+// Индикатор активной вкладки плавно переезжает под нужную кнопку.
+function moveTabInk() {
+  const ink = document.querySelector(".tab-ink");
+  const active = document.querySelector(".tab.active");
+  if (!ink || !active || !active.offsetWidth) {
+    if (ink) ink.style.opacity = "0";
+    return;
+  }
+  ink.style.opacity = "1";
+  ink.style.width = `${active.offsetWidth - 16}px`;
+  ink.style.transform = `translateX(${active.offsetLeft + 8}px)`;
+}
+window.addEventListener("resize", () => requestAnimationFrame(moveTabInk));
 
 function setProgress(id, frac) {
   const el = $(id);
@@ -822,6 +841,9 @@ function setTab(name) {
   });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   $("view-" + name).classList.add("active");
+  $("app").classList.toggle("on-settings", name === "settings");
+  $("btn-settings").classList.toggle("active", name === "settings");
+  moveTabInk();
   $("content").scrollTop = 0;
   if (name === "topics") renderTopics();
   if (name === "summary") {
@@ -874,6 +896,7 @@ async function analyze() {
   $("btn-analyze").classList.add("busy");
   setTab("summary");
   $("summary-history").classList.add("hidden");
+  $("summary-cta").classList.add("hidden");
   $("summary-placeholder").classList.remove("hidden");
   $("summary-placeholder").textContent = "Готовлю комментарии…";
   setProgress("analyze-progress", 0.03);
@@ -1044,7 +1067,7 @@ async function analyze() {
 
     $("summary-placeholder").textContent = "Пишу итоговую сводку…";
     $("summary-text").innerHTML =
-      '<div class="summary-title">Что говорят в комментариях</div><div class="skeleton"><i></i><i></i><i></i></div>';
+      `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div><div class="skeleton"><i></i><i></i><i></i></div>`;
     const liveSummary = $("summary-text");
     // Финальный запрос идёт сразу после чанков — OTPM ещё выбран, поэтому
     // заранее ждём место в окне под его выходные токены.
@@ -1065,7 +1088,7 @@ async function analyze() {
           ],
           { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
           (full) => {
-            liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(full);
+            liveSummary.innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
           }
         );
         break;
@@ -1083,7 +1106,7 @@ async function analyze() {
     }
     settleOutput(finSlot, fin);
     const summary = clean(fin) || "Сводка не получена.";
-    liveSummary.innerHTML = '<div class="summary-title">Что говорят в комментариях</div>' + esc(summary);
+    liveSummary.innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
 
     state.summary = {
       summary,
@@ -1145,11 +1168,11 @@ function renderSummary() {
   } else {
     hist.classList.add("hidden");
   }
+  $("summary-cta").classList.toggle("hidden", Boolean(s) || !state.comments.length);
   if (!s) {
-    ph.textContent = state.comments.length
-      ? "Нажми «Анализировать» — ИИ прочитает комментарии и сделает сводку обсуждения."
-      : "Комментарии ещё собираются — сводку можно будет сделать, когда сбор закончится.";
-    ph.classList.remove("hidden");
+    // Есть комментарии — показываем карточку-приглашение; идёт сбор — короткую строку.
+    ph.textContent = state.comments.length ? "" : "Комментарии ещё собираются — сводку можно будет сделать, когда сбор закончится.";
+    ph.classList.toggle("hidden", Boolean(state.comments.length));
     $("btn-copy-summary").classList.add("hidden");
     $("btn-image-summary").classList.add("hidden");
     $("btn-export-summary").classList.add("hidden");
@@ -1171,7 +1194,7 @@ function renderSummary() {
   if (chips.length) {
     chipWrap.classList.remove("hidden");
     chipWrap.innerHTML =
-      '<span class="chips-label">Ключевые темы:</span>' +
+      '<span class="chips-label">Главные темы</span>' +
       chips
         .map(
           (t) => `<button class="chip" data-topic="${esc(t.name)}">${esc(t.name)} <span class="count">${t.count}</span></button>`
@@ -1181,26 +1204,32 @@ function renderSummary() {
     chipWrap.classList.add("hidden");
   }
 
-  const total = Math.max(1, s.sentiment.positive + s.sentiment.neutral + s.sentiment.negative);
-  const pct = (n) => (n ? Math.max(4, Math.round((n / total) * 100)) : 0);
-  $("summary-sentiment").classList.remove("hidden");
-  $("summary-sentiment").innerHTML = `
-    <div class="sentiment-label">Настроение зрителей</div>
-    <div class="sentiment-bar">
-      <div style="display:flex;height:100%;min-width:0">
-        ${pct(s.sentiment.positive) ? `<div class="sentiment-fill positive" style="width:${pct(s.sentiment.positive)}%" title="Положительные"></div>` : ""}
-        ${pct(s.sentiment.neutral) ? `<div class="sentiment-fill neutral" style="width:${pct(s.sentiment.neutral)}%" title="Нейтральные"></div>` : ""}
-        ${pct(s.sentiment.negative) ? `<div class="sentiment-fill negative" style="width:${pct(s.sentiment.negative)}%" title="Негативные"></div>` : ""}
-      </div>
-    </div>
-    <div class="sentiment-legend">
-      <span class="lg lg-pos">${s.sentiment.positive} положит.</span>
-      <span class="lg lg-neu">${s.sentiment.neutral} нейтр.</span>
-      <span class="lg lg-neg">${s.sentiment.negative} негатив.</span>
-    </div>`;
+  const sp = s.sentiment || {};
+  const total = (sp.positive || 0) + (sp.neutral || 0) + (sp.negative || 0);
+  const box = $("summary-sentiment");
+  if (total) {
+    const parts = [
+      ["positive", sp.positive || 0, "позитив"],
+      ["neutral", sp.neutral || 0, "нейтрально"],
+      ["negative", sp.negative || 0, "негатив"],
+    ];
+    const pct = (n) => Math.round((n / total) * 100);
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <div class="subhead">Настроение зрителей</div>
+      <div class="sentiment-bar">${parts
+        .filter(([, n]) => n)
+        .map(([k, n, label]) => `<i class="sentiment-fill ${k}" style="flex:${n}" title="${label}: ${n} из ${total}"></i>`)
+        .join("")}</div>
+      <div class="sentiment-legend">${parts
+        .map(([k, n, label]) => `<span class="lg lg-${k}" title="${n} из ${total}"><b>${pct(n)}%</b> ${label}</span>`)
+        .join("")}</div>`;
+  } else {
+    box.classList.add("hidden");
+  }
 
   $("summary-text").innerHTML =
-      '<div class="summary-title">Что говорят в комментариях</div>' + esc(s.summary || "");
+      `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(s.summary || "");
 
   $("summary-points").innerHTML = "";
   if (s.points?.length) {
@@ -1239,7 +1268,7 @@ function renderInsights() {
     null
   );
   const stat = (n, label, filter) =>
-    `<button class="stat"${filter ? ` data-goto-filter="${filter}"` : " disabled"}><b>${fmtNum(n)}</b><span>${label}</span></button>`;
+    `<button class="stat"${filter ? ` data-goto-filter="${filter}"` : " disabled"}><b data-n="${n}">${fmtNum(n)}</b><span>${label}</span></button>`;
   box.innerHTML = `
     <div class="section-head"><span>Обзор</span><span class="hint">считается без ИИ</span></div>
     <div class="stats">
@@ -1277,6 +1306,23 @@ function renderInsights() {
         : ""
     }`;
   box.classList.remove("hidden");
+  countUp(box.querySelectorAll(".stat b[data-n]"));
+}
+
+// Числа в обзоре плавно «досчитываются» от нуля — один раз на новые данные.
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+function countUp(nodes, ms = 550) {
+  if (prefersReducedMotion.matches) return;
+  const items = [...nodes].map((el) => ({ el, n: Number(el.dataset.n) || 0 })).filter((x) => x.n > 1);
+  if (!items.length) return;
+  const t0 = performance.now();
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  const tick = (now) => {
+    const k = ease(Math.min(1, (now - t0) / ms));
+    for (const { el, n } of items) el.textContent = fmtNum(Math.round(n * k));
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 // ---------------- Моменты ----------------
@@ -1323,10 +1369,11 @@ function renderMoments() {
         ${commentCard(cs[0], { compact: true })}
         ${
           more > 0
-            ? `<details class="moment-more"><summary>ещё ${more}</summary>${cs
+            ? `<div class="collapse"><div class="collapse-inner">${cs
                 .slice(1, 12)
                 .map((c) => commentCard(c, { compact: true }))
-                .join("")}</details>`
+                .join("")}</div></div>
+               <button class="more-toggle" data-more="${more}">${icon("chevron", { size: 13 })}<span>ещё ${more}</span></button>`
             : ""
         }
       </div>`;
@@ -1388,27 +1435,48 @@ function renderTopics() {
     return;
   }
   empty.classList.add("hidden");
+  const maxCount = Math.max(1, ...s.topics.map((t) => t.count || 0));
   wrap.innerHTML = s.topics
-    .map(
-      (t, i) =>
-        `<div class="topic-item" data-idx="${i}" data-name="${esc(t.name)}">
-           <div class="topic-head">
-             <span class="t-name">${esc(t.name)}</span>
-             <span class="t-count">${t.count} <span class="t-caret${t.name === expandedTopic ? " open" : ""}">${icon("chevron", { size: 14 })}</span></span>
-           </div>
-           <div class="topic-body${t.name === expandedTopic ? "" : " hidden"}">${t.name === expandedTopic ? topicCommentsHtml(t.name) : ""}</div>
-         </div>`
-    )
+    .map((t, i) => {
+      const open = t.name === expandedTopic;
+      return `<div class="topic-item${open ? " open" : ""}" data-idx="${i}" data-name="${esc(t.name)}">
+           <button class="topic-head" aria-expanded="${open}">
+             <span class="t-main">
+               <span class="t-name">${esc(t.name)}</span>
+               <span class="t-bar"><i style="width:${Math.round(((t.count || 0) / maxCount) * 100)}%"></i></span>
+             </span>
+             <span class="t-count">${t.count}</span>
+             <span class="t-caret">${icon("chevron", { size: 14 })}</span>
+           </button>
+           <div class="collapse"><div class="collapse-inner"${open ? ' data-filled="1"' : ""}>${open ? topicCommentsHtml(t.name) : ""}</div></div>
+         </div>`;
+    })
     .join("");
   // Переключаем только по заголовку: раньше клик по комментарию внутри
-  // раскрытой темы (или по ссылке в нём) сворачивал тему обратно.
+  // раскрытой темы (или по ссылке в нём) сворачивал тему обратно. Список не
+  // перерисовывается — меняется класс, и высота раскрывается плавно.
   wrap.querySelectorAll(".topic-item .topic-head").forEach((head) => {
-    head.addEventListener("click", () => {
-      const name = head.parentElement.dataset.name;
-      expandedTopic = expandedTopic === name ? null : name;
-      renderTopics();
-    });
+    head.addEventListener("click", () => toggleTopic(head.parentElement));
   });
+}
+
+function toggleTopic(item) {
+  const willOpen = !item.classList.contains("open");
+  item.parentElement.querySelectorAll(".topic-item.open").forEach((o) => {
+    if (o === item) return;
+    o.classList.remove("open");
+    o.querySelector(".topic-head").setAttribute("aria-expanded", "false");
+  });
+  if (willOpen) {
+    const inner = item.querySelector(".collapse-inner");
+    if (!inner.dataset.filled) {
+      inner.innerHTML = topicCommentsHtml(item.dataset.name);
+      inner.dataset.filled = "1";
+    }
+  }
+  item.classList.toggle("open", willOpen);
+  item.querySelector(".topic-head").setAttribute("aria-expanded", String(willOpen));
+  expandedTopic = willOpen ? item.dataset.name : null;
 }
 
 // ---------------- Комментарии ----------------
@@ -1735,20 +1803,23 @@ async function findActiveVideoTab() {
   return pool.find((t) => t.active) || pool[0] || null;
 }
 
+// Пустой экран: иконка в круге, заголовок, пояснение и, при нужде, кнопка.
+function setEmptyState(iconName, title, text, extra = "") {
+  $("empty-state").innerHTML = `
+    <div class="empty-icon">${icon(iconName, { size: 28 })}</div>
+    <div class="empty-title">${esc(title)}</div>
+    <div class="empty-text">${esc(text)}</div>
+    ${extra ? `<div class="empty-extra">${extra}</div>` : ""}`;
+}
+
 async function refreshFromActiveTab() {
   const tab = await findActiveVideoTab();
   if (!tab?.id || !YT_VIDEO_RE.test(tab.url || "")) {
     renderBottomMatters();
-    const el = $("empty-state");
-    const focusHint = tab?.url
-      ? `<div class="hint">Активная вкладка: <b>${esc(tab.url)}</b><br>Нужен YouTube с открытым видео (watch/shorts).</div>`
-      : `<div class="hint">Видео-вкладка не найдена. Открой страницу с видео на YouTube.</div>`;
-    if (tab?.url && !/youtube\.com/i.test(tab.url)) {
-      el.innerHTML = "Активная вкладка — не YouTube." + focusHint;
-    } else if (tab?.url && !/\/watch|\/shorts/.test(tab.url)) {
-      el.innerHTML = "Это YouTube, но без страницы видео (главная/лента)." + focusHint;
+    if (tab?.url && /youtube\.com/i.test(tab.url)) {
+      setEmptyState("chat", "Откройте видео", "Это YouTube, но не страница видео. Откройте ролик или Shorts — комментарии соберутся сами.");
     } else {
-      el.innerHTML = "Открой страницу с видео на YouTube, и комментарии появятся здесь." + focusHint;
+      setEmptyState("chat", "Откройте видео на YouTube", "Комментарии соберутся автоматически, а здесь появятся обзор, моменты и сводка.");
     }
     return;
   }
@@ -1771,12 +1842,13 @@ async function refreshFromActiveTab() {
   }
   // контент-скрипт так и не ответил: расширение установлено/обновлено после открытия вкладки
   renderBottomMatters();
-  const el = $("empty-state");
-  el.classList.remove("hidden");
-  el.innerHTML =
-    "Контент-скрипт не подключился к этой вкладке.<br>Перезагрузи страницу видео (F5), чтобы начать сбор комментариев." +
-    `<div class="hint">Вкладка: <b>${esc(tab.url || "")}</b></div>` +
-    `<button id="btn-reload-tab" class="primary" style="margin-top:10px">${icon("refresh", { size: 14 })}Перезагрузить вкладку</button>`;
+  setEmptyState(
+    "refresh",
+    "Обновите страницу видео",
+    "Расширение установлено или обновлено после того, как вкладка открылась. Перезагрузите её — сбор начнётся сам.",
+    `<button id="btn-reload-tab" class="primary">${icon("refresh", { size: 14 })}Перезагрузить вкладку</button>`
+  );
+  $("empty-state").classList.remove("hidden");
   $("btn-reload-tab")?.addEventListener("click", async () => {
     try {
       await chrome.tabs.reload(tab.id);
@@ -1797,6 +1869,10 @@ function bindEvents() {
     setTab("settings");
   });
   $("btn-settings-back").addEventListener("click", () => setTab("summary"));
+  $("btn-open-settings").addEventListener("click", () => {
+    fillSettingsFields();
+    setTab("settings");
+  });
   $("btn-restart").addEventListener("click", async () => {
     if (!state.videoId) return;
     const quick = parseInt($("quick-max").value, 10);
@@ -1954,6 +2030,13 @@ function bindEvents() {
   });
   // Делегирование на всю панель: таймкоды (перемотка), переходы из «Обзора».
   $("content").addEventListener("click", (e) => {
+    const more = e.target.closest(".more-toggle");
+    if (more) {
+      const m = more.closest(".moment");
+      const open = m.classList.toggle("open");
+      more.querySelector("span").textContent = open ? "свернуть" : `ещё ${more.dataset.more}`;
+      return;
+    }
     const tc = e.target.closest("[data-t]");
     if (tc) {
       e.preventDefault();
@@ -2029,10 +2112,12 @@ function showFatal(message, detail) {
   const el = $("empty-state");
   if (el) {
     el.classList.remove("hidden");
-    el.innerHTML =
-      `<b>Панель не запустилась.</b><br>${esc(message)}` +
-      (detail ? `<div class="hint">${esc(String(detail).slice(0, 300))}</div>` : "") +
-      `<div class="hint">Обнови расширение на chrome://extensions и перезагрузи страницу видео (F5).</div>`;
+    setEmptyState(
+      "close",
+      "Панель не запустилась",
+      `${message} Обновите расширение на chrome://extensions и перезагрузите страницу видео (F5).`,
+      detail ? `<div class="hint">${esc(String(detail).slice(0, 300))}</div>` : ""
+    );
   }
   console.error("sidepanel:", message, detail);
 }
@@ -2060,7 +2145,7 @@ async function main() {
 const _initWatchdog = setTimeout(() => {
   const el = $("empty-state");
   if (state.videoId) return; // видео уже найдено — панель в работе, не мешаем
-  if (el && !el.classList.contains("hidden") && el.textContent.includes("Открой страницу")) {
+  if (el && !el.classList.contains("hidden") && el.textContent.includes("Откройте видео")) {
     showFatal(
       "Панель не успела загрузиться за 6 секунд.",
       "Вероятнее всего, вкладка YouTube открыта до обновления расширения — её контент-скрипт устарел."
