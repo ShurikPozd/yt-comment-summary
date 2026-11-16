@@ -721,6 +721,7 @@ function fillSettingsFields() {
   $("set-theme").value = state.settings.theme || "auto";
   $("set-mode").value = state.settings.collectMode || "auto";
   $("set-thumb-template").value = state.settings.thumbTemplate || "";
+  $("set-order").value = state.settings.commentOrder === "new" ? "new" : "top";
   $("set-no-autoplay").checked = Boolean(state.settings.noAutoplay);
   $("set-hide-progress").checked = Boolean(state.settings.hideProgress);
   $("quick-max").value = state.settings.maxComments;
@@ -735,6 +736,7 @@ function readSettingsFromFields() {
   state.settings.theme = $("set-theme").value;
   state.settings.collectMode = $("set-mode").value;
   state.settings.thumbTemplate = $("set-thumb-template").value.trim() || "{title} - {channel}";
+  state.settings.commentOrder = $("set-order").value;
   state.settings.noAutoplay = $("set-no-autoplay").checked;
   state.settings.hideProgress = $("set-hide-progress").checked;
   $("quick-max").value = state.settings.maxComments;
@@ -1120,6 +1122,7 @@ function cancelAnalysis(reason) {
   if (!state.analyzing) return;
   analyzeRun++;
   state.analyzing = false;
+  $("btn-cancel-analyze").classList.add("hidden");
   $("btn-analyze").disabled = false;
   $("btn-analyze").classList.remove("busy");
   setProgress("analyze-progress", null);
@@ -1156,6 +1159,7 @@ async function analyze() {
     return;
   }
   state.analyzing = true;
+  $("btn-cancel-analyze").classList.remove("hidden");
   const run = ++analyzeRun;
   const live = () => run === analyzeRun;
   // анализируем именно это видео и этот набор комментариев, что бы ни случилось с панелью
@@ -1417,6 +1421,7 @@ async function analyze() {
   } finally {
     if (live()) {
       state.analyzing = false;
+      $("btn-cancel-analyze").classList.add("hidden");
       $("btn-analyze").disabled = false;
       $("btn-analyze").classList.remove("busy");
       setProgress("analyze-progress", null);
@@ -1441,7 +1446,16 @@ function fmtDate(ts) {
   }
 }
 
+function renderAnalyzeLabel() {
+  const b = $("btn-analyze");
+  const label = state.summary ? "Обновить сводку" : "Анализировать";
+  if (b.dataset.label === label) return;
+  b.dataset.label = label;
+  b.innerHTML = `${icon("sparkles", { size: 16 })}${label}`;
+}
+
 function renderSummary() {
+  renderAnalyzeLabel();
   if (state.analyzing) return; // не затираем живой прогресс и стрим
   const s = state.summary;
   const ph = $("summary-placeholder");
@@ -2429,6 +2443,14 @@ function bindEvents() {
     }
   });
   $("btn-search").addEventListener("click", runSearch);
+  $("btn-cancel-analyze").addEventListener("click", () => {
+    cancelAnalysis("Анализ отменён");
+    renderSummary();
+  });
+  $("set-order").addEventListener("change", async () => {
+    await saveSettings(false);
+    showToast("Порядок сбора изменён — нажмите «Собрать заново», чтобы применить");
+  });
   $("btn-topics-analyze").addEventListener("click", () => $("btn-analyze").click());
   // chrome:// нельзя открыть обычной ссылкой — открываем вкладкой через API
   $("btn-shortcuts").addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));

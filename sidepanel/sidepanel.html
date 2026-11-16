@@ -70,6 +70,7 @@
             </div>
             <div id="summary-placeholder" class="placeholder"></div>
             <div id="analyze-progress" class="progress hidden"><i></i></div>
+            <div class="analyze-actions"><button id="btn-cancel-analyze" class="link-btn hidden">Отменить анализ</button></div>
             <div id="summary-history" class="history-note hidden"></div>
             <div id="summary-text" class="summary-text"></div>
             <div id="summary-sentiment" class="hidden"></div>
@@ -172,6 +173,12 @@
             <h3>Сбор и анализ</h3>
             <label>Максимум комментариев
               <input id="set-max" type="number" min="10" max="2000" step="10" value="120" />
+            </label>
+            <label>Какие комментарии собирать
+              <select id="set-order">
+                <option value="top">Сначала популярные</option>
+                <option value="new">Сначала новые</option>
+              </select>
             </label>
             <label>Язык сводки
               <select id="set-lang">

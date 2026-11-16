@@ -2287,3 +2287,13 @@ kbd {
 .shortcuts .link-btn {
   margin-left: auto;
 }
+
+.analyze-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 12px;
+}
+
+.analyze-actions:not(:has(button:not(.hidden))) {
+  display: none;
+}

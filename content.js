@@ -434,7 +434,21 @@
     return resp.json();
   }
 
-  async function collectViaInnerTube(videoId, limit, onBatch, mine) {
+  // Токен сортировки «Новые» из меню заголовка панели комментариев
+  // (проверено на живом YouTube: engagementPanelTitleHeaderRenderer.menu.
+  // sortFilterSubMenuRenderer.subMenuItems[1] — «Новые», [0] — «Сначала популярные»).
+  function newestSortToken(data) {
+    for (const panel of data.engagementPanels || []) {
+      const items =
+        panel?.engagementPanelSectionListRenderer?.header?.engagementPanelTitleHeaderRenderer?.menu
+          ?.sortFilterSubMenuRenderer?.subMenuItems;
+      const tok = Array.isArray(items) ? items[1]?.serviceEndpoint?.continuationCommand?.token : null;
+      if (tok) return tok;
+    }
+    return null;
+  }
+
+  async function collectViaInnerTube(videoId, limit, onBatch, mine, order = "top") {
     const out = [];
     const seen = new Set();
 
@@ -443,7 +457,8 @@
     {
       if (collector !== mine || collector?.cancelled) throw new Error("cancelled");
       const page = await innerTubePost({ context: baseContext(), videoId });
-      token = commentSectionToken(page);
+      // «Сначала новые» — стартуем с токена сортировки; если его нет — как обычно
+      token = (order === "new" && newestSortToken(page)) || commentSectionToken(page);
     }
     if (!token) throw new Error("innerTubeNoCommentsSection");
 
@@ -628,6 +643,7 @@
     const settings = (await chrome.storage.local.get("settings")).settings || {};
     const max = Math.min(Math.max(parseInt(settings.maxComments, 10) || DEFAULT_MAX, 10), 2000);
     const mode = settings.collectMode || "auto";
+    const order = settings.commentOrder === "new" ? "new" : "top";
 
     // Другой сбор уже запущен после нас (новая навигация/force) — отступаем.
     if (collector && collector.gen > gen) return;
@@ -650,7 +666,7 @@
     try {
       if (mode === "innerTube" || mode === "auto") {
         try {
-          comments = await collectViaInnerTube(videoId, max, onBatch, mine);
+          comments = await collectViaInnerTube(videoId, max, onBatch, mine, order);
           if (mode === "auto" && !comments.length) {
             // InnerTube технически ответил, но комментарии не разобрались —
             // добираем из DOM, пока не набрали лимит.
@@ -1128,6 +1144,15 @@
   // SPA-навигация YouTube
   window.addEventListener("yt-navigate-finish", () => handlePage());
   window.addEventListener("popstate", () => handlePage());
+  // Shorts и часть переходов YouTube меняют адрес без yt-navigate-finish —
+  // дешёвая проверка адреса раз в 700 мс ловит и их (handlePage сам
+  // игнорирует повтор того же видео).
+  let lastHref = location.href;
+  setInterval(() => {
+    if (location.href === lastHref) return;
+    lastHref = location.href;
+    void handlePage();
+  }, 700);
   // Подменять history.pushState здесь бесполезно: контент-скрипт живёт в
   // изолированном мире, и вызовы pushState самой страницы этот код не видит.
   // Навигацию YouTube ловит yt-navigate-finish выше.
