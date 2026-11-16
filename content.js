@@ -708,6 +708,7 @@
       collector.cancelled = true;
     }
     currentVideoId = id;
+    armAutoplayStop(); // новое видео — снова не даём ему стартовать само
     void touchVideoOrder(id);
 
     // светимся на новом видео
@@ -733,6 +734,102 @@
     } else {
       void runCollection(id, forceCollect);
     }
+  }
+
+  // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
+  // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
+  // включаются в настройках панели и применяются сразу, без перезагрузки.
+  const playerPrefs = { noAutoplay: false, hideProgress: false };
+
+  // Классы плеера проверены на живом YouTube: полоса — .ytp-progress-bar-container,
+  // «/ 1:58:54» — .ytp-time-separator + .ytp-time-duration. Текущее время оставляем.
+  const HIDE_PROGRESS_CSS = `
+    .ytp-progress-bar-container,
+    .ytp-time-separator,
+    .ytp-time-duration,
+    .ytp-bound-time-right { display: none !important; }`;
+
+  function applyHideProgress() {
+    let el = document.getElementById("ytcs-hide-progress");
+    if (playerPrefs.hideProgress) {
+      if (!el) {
+        el = document.createElement("style");
+        el.id = "ytcs-hide-progress";
+        el.textContent = HIDE_PROGRESS_CSS;
+        (document.head || document.documentElement).appendChild(el);
+      }
+    } else {
+      el?.remove();
+    }
+  }
+
+  function readPlayerPrefs(settings) {
+    playerPrefs.noAutoplay = Boolean(settings?.noAutoplay);
+    playerPrefs.hideProgress = Boolean(settings?.hideProgress);
+    applyHideProgress();
+  }
+
+  chrome.storage.local
+    .get("settings")
+    .then((o) => {
+      readPlayerPrefs(o.settings);
+      // настройки читаются асинхронно — первое видео страницы взводим здесь
+      armAutoplayStop();
+    })
+    .catch(() => {});
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.settings) readPlayerPrefs(changes.settings.newValue);
+  });
+
+  // Автозапуск: пока «взведено», любой запуск основного плеера без вашего
+  // действия ставится на паузу. Действием считается клик по самому плееру или
+  // клавиша play/pause — клик по превью в ленте не считается (так и работал
+  // AutoplayStopper). После вашего запуска — снимаем взвод до следующего видео.
+  let autoplayArmed = false;
+  let lastPlayerGestureAt = 0;
+  const isWatchPage = () => location.pathname === "/watch";
+  const mainVideo = () => document.querySelector("#movie_player video, video.html5-main-video");
+
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.isTrusted && e.target.closest?.("#movie_player, ytd-player")) lastPlayerGestureAt = Date.now();
+    },
+    true
+  );
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (!e.isTrusted) return;
+      const typing = e.target.closest?.("input, textarea, [contenteditable='true'], [contenteditable='']");
+      if (typing) return;
+      if ([" ", "k", "K", "л", "Л", "MediaPlayPause", "MediaPlay"].includes(e.key)) lastPlayerGestureAt = Date.now();
+    },
+    true
+  );
+
+  // play не всплывает, но проходит фазу захвата — ловим на document.
+  document.addEventListener(
+    "play",
+    (e) => {
+      const v = e.target;
+      if (!playerPrefs.noAutoplay || !autoplayArmed || !isWatchPage()) return;
+      if (!(v instanceof HTMLVideoElement) || !v.closest("#movie_player, ytd-player")) return;
+      if (Date.now() - lastPlayerGestureAt < 1500) {
+        autoplayArmed = false; // это вы нажали play — дальше не мешаем
+        return;
+      }
+      v.pause();
+    },
+    true
+  );
+
+  function armAutoplayStop() {
+    if (!playerPrefs.noAutoplay || !isWatchPage()) return;
+    autoplayArmed = true;
+    // Скрипт мог загрузиться, когда видео уже пошло, — останавливаем.
+    const v = mainVideo();
+    if (v && !v.paused && Date.now() - lastPlayerGestureAt > 1500) v.pause();
   }
 
   // ---------------- Сообщения ----------------

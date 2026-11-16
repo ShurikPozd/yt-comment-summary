@@ -619,6 +619,8 @@ function fillSettingsFields() {
   $("set-theme").value = state.settings.theme || "dark";
   $("set-mode").value = state.settings.collectMode || "auto";
   $("set-thumb-template").value = state.settings.thumbTemplate || "";
+  $("set-no-autoplay").checked = Boolean(state.settings.noAutoplay);
+  $("set-hide-progress").checked = Boolean(state.settings.hideProgress);
   $("quick-max").value = state.settings.maxComments;
 }
 
@@ -631,6 +633,8 @@ function readSettingsFromFields() {
   state.settings.theme = $("set-theme").value;
   state.settings.collectMode = $("set-mode").value;
   state.settings.thumbTemplate = $("set-thumb-template").value.trim() || "{title} - {channel}";
+  state.settings.noAutoplay = $("set-no-autoplay").checked;
+  state.settings.hideProgress = $("set-hide-progress").checked;
   $("quick-max").value = state.settings.maxComments;
 }
 
@@ -2207,6 +2211,16 @@ function bindEvents() {
     }
   });
   $("btn-search").addEventListener("click", runSearch);
+  // Переключатели плеера применяются сразу: контент-скрипт слушает storage.
+  for (const [id, on, off] of [
+    ["set-no-autoplay", "Видео больше не будут запускаться сами", "Автозапуск видео снова как обычно"],
+    ["set-hide-progress", "Полоса прогресса и длительность скрыты", "Полоса прогресса снова видна"],
+  ]) {
+    $(id).addEventListener("change", async (e) => {
+      await saveSettings(false);
+      showToast(e.target.checked ? on : off);
+    });
+  }
   // Горячие клавиши: 1–5 — вкладки, / — поиск, Esc — убрать фокус из поля.
   // Не мешают вводу: в полях и с модификаторами не срабатывают.
   document.addEventListener("keydown", (e) => {

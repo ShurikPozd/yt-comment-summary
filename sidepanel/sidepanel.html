@@ -144,6 +144,24 @@
           </div>
 
           <div class="settings-block">
+            <h3>Плеер YouTube</h3>
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Не запускать видео автоматически</span>
+                <span class="hint">Видео ждёт, пока вы сами нажмёте play (клик по плееру, K или пробел). Shorts листаются как обычно.</span>
+              </span>
+              <input type="checkbox" id="set-no-autoplay" class="switch" />
+            </label>
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Скрыть полосу прогресса и длительность</span>
+                <span class="hint">Не видно, сколько осталось до конца. Текущее время и перемотка стрелками остаются.</span>
+              </span>
+              <input type="checkbox" id="set-hide-progress" class="switch" />
+            </label>
+          </div>
+
+          <div class="settings-block">
             <h3>Сбор и анализ</h3>
             <label>Максимум комментариев
               <input id="set-max" type="number" min="10" max="2000" step="10" value="120" />
