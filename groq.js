@@ -13,7 +13,9 @@ export const stripMarkdown = (text) => {
   text = String(text || "").trim();
   text = text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
   text = text.replace(/\*\*/g, "").replace(/__/g, "");
-  text = text.replace(/`([^`]*)`/g, "$1");
+  // \x60 = обратная кавычка: литеральная ` в регулярке сбивает check-consts.mjs,
+  // он принимает её за шаблонную строку и пропускает объявления ниже.
+  text = text.replace(/\x60([^\x60]*)\x60/g, "$1");
   text = text.replace(/\*/g, "_");
   text = text.replace(/_/g, "");
   text = text.replace(/^\s*\[\d+\]\s*/gm, "");
@@ -107,6 +109,52 @@ function isTokenLimitErr(e) {
   );
 }
 
+// Текст «Сервер недоступен» / «таймаут» sidepanel распознаёт и показывает
+// дружелюбное сообщение — не менять формулировки без правки friendlyError().
+const NETWORK_ERR_MSG =
+  "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй.";
+const TIMEOUT_ERR_MSG = "Сервер не ответил вовремя (таймаут). Попробуй ещё раз.";
+
+// Сколько ждать следующую порцию стрима, прежде чем считать соединение зависшим.
+const STREAM_IDLE_MS = 45000;
+
+function proxyError(message, retryable) {
+  const e = new Error(message);
+  e.retryable = retryable;
+  return e;
+}
+
+function friendlyLLMError(data) {
+  let msg = "Модель не ответила (временный сбой на сервере). Попробуй ещё раз.";
+  if (data?.detail) msg = `Модель не ответила: ${data.detail} Попробуй ещё раз.`;
+  return msg;
+}
+
+async function errorFromResponse(resp) {
+  const data = await resp.json().catch(() => ({}));
+  switch (resp.status) {
+    case 403:
+      return proxyError("Отказано прокси (403): проверьте секрет / доступ к серверу.", false);
+    case 400:
+    case 413:
+      return proxyError(data.error || `Прокси отклонил запрос (${resp.status}).`, false);
+    case 502:
+      return proxyError(friendlyLLMError(data), true);
+    default:
+      return proxyError(`Прокси ответил ${resp.status}`, resp.status >= 500);
+  }
+}
+
+/** Приводит сетевые сбои и таймауты к понятным сообщениям; повторять стоит только их и 5xx. */
+function normalizeError(e, timedOut) {
+  if (timedOut || e?.name === "AbortError") return proxyError(TIMEOUT_ERR_MSG, true);
+  if (/Failed to fetch|fetch failed|NetworkError|network error/i.test(String(e?.message || e))) {
+    return proxyError(NETWORK_ERR_MSG, true);
+  }
+  if (typeof e?.retryable !== "boolean") e.retryable = false;
+  return e;
+}
+
 export class GroqProxy {
   constructor({ baseUrl = "", token = "", model = "" } = {}) {
     this.baseUrl = (baseUrl || "").replace(/\/+$/, "");
@@ -127,63 +175,9 @@ export class GroqProxy {
     return { "Content-Type": "application/json", "X-Sec-Token": this.token };
   }
 
-  /**
-   * Один вызов прокси. Возвращает строку content; при ошибке бросает.
-   */
+  /** Один вызов прокси. Возвращает строку content; при ошибке бросает. */
   chat(messages, { jsonMode = false, maxTokens = 800, temperature = 0.1, timeoutMs = 120000 } = {}) {
-    if (!this.configured) throw new Error("Настройки прокси не заполнены (URL/секрет/модель).");
-    return this.queue.push(async () => {
-      let lastErr = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), timeoutMs);
-          let resp;
-          try {
-            resp = await fetch(this.endpoint(), {
-              method: "POST",
-              headers: this._headers(),
-              signal: controller.signal,
-              body: JSON.stringify({
-                messages,
-                model: this.model,
-                json_mode: jsonMode,
-                max_tokens: Math.max(1, Math.min(maxTokens, 2000)),
-                temperature,
-              }),
-            });
-          } finally {
-            clearTimeout(timer);
-          }
-          if (resp.status === 403) {
-            throw new Error("Отказано прокси (403): проверьте секрет / доступ к серверу.");
-          }
-          if (resp.status === 400 || resp.status === 413) {
-            const data = await resp.json().catch(() => ({}));
-            throw new Error(data.error || "Прокси отклонил запрос (" + resp.status + ").");
-          }
-          if (resp.status === 502) {
-            const data = await resp.json().catch(() => ({}));
-            let msg = "Модель не ответила (временный сбой на сервере). Попробуй ещё раз.";
-            if (data?.detail) msg = `Модель не ответила: ${data.detail} Попробуй ещё раз.`;
-            throw new Error(msg);
-          }
-          if (!resp.ok) throw new Error("Прокси ответил " + resp.status);
-          const data = await resp.json();
-          if (!data || typeof data.content !== "string") throw new Error("Пустой ответ прокси.");
-          return data.content;
-        } catch (e) {
-          lastErr = /Failed to fetch|fetch failed/i.test(String(e?.message || e))
-            ? new Error(
-                "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй."
-              )
-            : e;
-          if (isTokenLimitErr(e)) throw lastErr;
-          await sleep(3000 * (attempt + 1));
-        }
-      }
-      throw lastErr;
-    });
+    return this._run(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream: false });
   }
 
   /** Проверка настроек: тривиальный вызов. */
@@ -201,88 +195,107 @@ export class GroqProxy {
    * Возвращает полный текст; при ошибке бросает.
    */
   chatStream(messages, { jsonMode = false, maxTokens = 800, temperature = 0.1, timeoutMs = 150000 } = {}, onDelta) {
+    return this._run(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream: true, onDelta });
+  }
+
+  async _run(messages, opts) {
     if (!this.configured) throw new Error("Настройки прокси не заполнены (URL/секрет/модель).");
     return this.queue.push(async () => {
       let lastErr = null;
       for (let attempt = 0; attempt < 2; attempt++) {
+        const progress = { received: false };
         try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), timeoutMs);
-          let resp;
-          try {
-            resp = await fetch(this.endpoint(), {
-              method: "POST",
-              headers: this._headers(),
-              signal: controller.signal,
-              body: JSON.stringify({
-                messages,
-                model: this.model,
-                json_mode: jsonMode,
-                max_tokens: Math.max(1, Math.min(maxTokens, 2000)),
-                temperature,
-                stream: true,
-              }),
-            });
-          } finally {
-            clearTimeout(timer);
-          }
-          if (resp.status === 403) {
-            throw new Error("Отказано прокси (403): проверьте секрет / доступ к серверу.");
-          }
-          if (resp.status === 400 || resp.status === 413) {
-            const data = await resp.json().catch(() => ({}));
-            throw new Error(data.error || "Прокси отклонил запрос (" + resp.status + ").");
-          }
-          if (!resp.ok) throw new Error("Прокси ответил " + resp.status);
-          const reader = resp.body.getReader();
-          const decoder = new TextDecoder();
-          let buf = "";
-          let full = "";
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            let idx;
-            while ((idx = buf.indexOf("\n")) >= 0) {
-              const line = buf.slice(0, idx).replace(/\r$/, "").trim();
-              buf = buf.slice(idx + 1);
-              if (!line.startsWith("data:")) continue;
-              const payload = line.slice(5).trim();
-              if (!payload || payload === "[DONE]") continue;
-              let evt;
-              try {
-                evt = JSON.parse(payload);
-              } catch {
-                continue;
-              }
-              if (evt.error) {
-                throw new Error(friendlyLLMError(evt));
-              }
-              if (typeof evt.delta === "string") {
-                full += evt.delta;
-                onDelta?.(full);
-              }
-            }
-          }
-          if (!full) throw new Error("Пустой ответ прокси.");
-          return full;
+          return await this._once(messages, opts, progress);
         } catch (e) {
-          lastErr = /Failed to fetch|fetch failed/i.test(String(e?.message || e))
-            ? new Error(
-                "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй."
-              )
-            : e;
-          if (isTokenLimitErr(e)) throw lastErr;
-          await sleep(3000 * (attempt + 1));
+          lastErr = e;
+          // Лимиты токенов решает вызывающий код; 400/403 повтором не лечатся;
+          // стрим, который уже показал часть текста, не перезапускаем с нуля.
+          if (isTokenLimitErr(e) || !e.retryable || progress.received) throw e;
+          if (attempt === 0) await sleep(3000);
         }
       }
       throw lastErr;
     });
   }
-}
 
-function friendlyLLMError(evt) {
-  let msg = "Модель не ответила (временный сбой на сервере). Попробуй ещё раз.";
-  if (evt.detail) msg = `Модель не ответила: ${evt.detail} Попробуй ещё раз.`;
-  return msg;
+  /**
+   * Один HTTP-запрос. Таймаут покрывает и чтение тела ответа: раньше он
+   * снимался сразу после заголовков, и зависший стрим держал SerialQueue
+   * (а с ней — все последующие запросы к модели) бесконечно.
+   */
+  async _once(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream, onDelta }, progress) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const abort = () => {
+      timedOut = true;
+      controller.abort();
+    };
+    const totalTimer = setTimeout(abort, timeoutMs);
+    let idleTimer = null;
+    const bumpIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(abort, STREAM_IDLE_MS);
+    };
+    try {
+      const resp = await fetch(this.endpoint(), {
+        method: "POST",
+        headers: this._headers(),
+        signal: controller.signal,
+        body: JSON.stringify({
+          messages,
+          model: this.model,
+          json_mode: jsonMode,
+          max_tokens: Math.max(1, Math.min(maxTokens, 2000)),
+          temperature,
+          ...(stream ? { stream: true } : {}),
+        }),
+      });
+      if (!resp.ok) throw await errorFromResponse(resp);
+
+      if (!stream) {
+        const data = await resp.json();
+        if (!data || typeof data.content !== "string") throw proxyError("Пустой ответ прокси.", true);
+        return data.content;
+      }
+
+      bumpIdle();
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let full = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bumpIdle();
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, idx).replace(/\r$/, "").trim();
+          buf = buf.slice(idx + 1);
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          let evt;
+          try {
+            evt = JSON.parse(payload);
+          } catch {
+            continue;
+          }
+          if (evt.error) throw proxyError(friendlyLLMError(evt), true);
+          if (typeof evt.delta === "string") {
+            full += evt.delta;
+            progress.received = true;
+            onDelta?.(full);
+          }
+        }
+      }
+      if (!full) throw proxyError("Пустой ответ прокси.", true);
+      return full;
+    } catch (e) {
+      throw normalizeError(e, timedOut);
+    } finally {
+      clearTimeout(totalTimer);
+      clearTimeout(idleTimer);
+    }
+  }
 }

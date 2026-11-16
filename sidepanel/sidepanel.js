@@ -27,7 +27,7 @@ const YT_VIDEO_RE = /^https:\/\/([a-z0-9-]+\.)*youtube\.com\/(watch|shorts|live)
 
 /* =======================================================================
    Диагностика: ставится СИНХРОННО, до любого await и до main().
-   Смысл: если в шапке видно «v0.2.6» — модуль загрузился и мы внутри кода.
+   Смысл: если в шапке видно «vX.Y.Z» (версия из manifest.json) — модуль загрузился и мы внутри кода.
    Если шапки нет вовсе — браузер отдаёт старый/битый файл, и версии здесь ни при чём.
    Любая необработанная ошибка тоже рисуется в панель, а не теряется в консоли.
    ======================================================================= */
@@ -301,13 +301,31 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// Подсветка ищется по исходному тексту, а экранируется каждый кусок отдельно.
+// Раньше регулярка шла по уже экранированному тексту, и запрос вроде «amp»
+// или «quot» попадал внутрь &amp; / &quot; и ломал разметку.
 function hl(text, query) {
-  const safe = esc(text);
   const q = (query || "").trim().slice(0, 80);
-  if (!q) return safe;
-  const re = new RegExp("(" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split(/\s+/).join("|") + ")", "gi");
-  return safe.replace(re, "<mark>$1</mark>");
+  if (!q) return esc(text);
+  const words = q.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp("(" + words.join("|") + ")", "gi");
+  return String(text ?? "")
+    .split(re)
+    .map((part, i) => (i % 2 ? `<mark>${esc(part)}</mark>` : esc(part)))
+    .join("");
 }
+
+// CSP расширений (MV3) запрещает inline-обработчики вроде onerror="…" в разметке,
+// поэтому битые аватарки прячем одним перехватчиком: error не всплывает,
+// но ловится на фазе захвата.
+document.addEventListener(
+  "error",
+  (e) => {
+    const t = e.target;
+    if (t instanceof HTMLImageElement && t.classList.contains("avatar")) t.style.visibility = "hidden";
+  },
+  true
+);
 
 function fmtNum(n) {
   n = n || 0;
@@ -862,13 +880,13 @@ function topicCommentsHtml(name) {
   return list
     .map(
       (c) => `<div class="comment-card">
-        <img class="avatar" src="${esc(c.avatar || "")}" onerror="this.style.visibility='hidden'" alt="" loading="lazy" />
+        <img class="avatar" src="${esc(c.avatar || "")}" alt="" loading="lazy" />
         <div class="c-body">
           <div class="c-meta">
             <span class="c-author">${esc(c.author)}</span>
             <span>${esc(c.time)}</span>
             <span>♥ ${fmtNum(c.likes)}</span>
-            <span>${c.id ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer">открыть ↗</a>` : ""}</span>
+            <span>${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer">открыть ↗</a>` : ""}</span>
           </div>
           <div class="c-text">${esc(c.text)}</div>
         </div>
@@ -946,13 +964,13 @@ function renderComments() {
   wrap.innerHTML = list
     .map(
       (c) => `<div class="comment-card">
-        <img class="avatar" src="${esc(c.avatar || "")}" onerror="this.style.visibility='hidden'" alt="" loading="lazy" />
+        <img class="avatar" src="${esc(c.avatar || "")}" alt="" loading="lazy" />
         <div class="c-body">
           <div class="c-meta">
             <span class="c-author">${esc(c.author)}</span>
             <span>${esc(c.time)}</span>
             <span>♥ ${fmtNum(c.likes)}</span>
-            <span>${c.id ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer">открыть ↗</a>` : ""}</span>
+            <span>${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer">открыть ↗</a>` : ""}</span>
           </div>
           <div class="c-text">${esc(c.text)}</div>
         </div>
@@ -979,7 +997,7 @@ function renderSearchResults() {
   wrap.innerHTML = items
     .map(
       (c) => `<div class="comment-card">
-        <img class="avatar" src="${esc(c.avatar || "")}" onerror="this.style.visibility='hidden'" alt="" loading="lazy" />
+        <img class="avatar" src="${esc(c.avatar || "")}" alt="" loading="lazy" />
         <div class="c-body">
           <div class="c-meta"><span class="c-author">${esc(c.author)}</span><span>${esc(c.time)}</span><span>♥ ${fmtNum(c.likes)}</span></div>
           <div class="c-text">${hl(c.text, q)}</div>

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео в отдельной вкладке и инфо о канале.",
   "permissions": [
     "storage",
@@ -35,7 +35,7 @@
     "default_path": "sidepanel/sidepanel.html"
   },
   "action": {
-    "default_title": "РЎРІРѕРґРєР° РєРѕРјРјРµРЅС‚Р°СЂРёРµРІ YouTube",
+    "default_title": "Сводка комментариев YouTube",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

@@ -1,9 +1,29 @@
 "use strict";
 
 (() => {
-  const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
-  const INNERTUBE_API = `https://www.youtube.com/youtubei/v1/next?key=${INNERTUBE_KEY}`;
-  const CLIENT_VERSION = "2.20260910.00.00";
+  // Запасные значения: настоящие берём из ytcfg страницы (см. innerTubeConfig),
+  // иначе после очередного обновления YouTube сбор через API тихо сломается.
+  const FALLBACK_INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+  const FALLBACK_CLIENT_VERSION = "2.20260910.00.00";
+  let ytcfgCache = null;
+
+  // Контент-скрипт живёт в изолированном мире и не видит window.ytcfg,
+  // но inline-скрипты страницы с ytcfg.set({...}) лежат в DOM — читаем оттуда.
+  function innerTubeConfig() {
+    if (ytcfgCache) return ytcfgCache;
+    let key = null;
+    let version = null;
+    for (const s of document.scripts) {
+      const t = s.textContent;
+      if (!t || !t.includes("INNERTUBE_")) continue;
+      key ||= t.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/)?.[1] || null;
+      version ||= t.match(/"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"/)?.[1] || null;
+      if (key && version) break;
+    }
+    const cfg = { key: key || FALLBACK_INNERTUBE_KEY, version: version || FALLBACK_CLIENT_VERSION };
+    if (key && version) ytcfgCache = cfg; // кэшируем только найденное, иначе попробуем снова позже
+    return cfg;
+  }
 
   const K = {
     meta: (id) => `meta:${id}`,
@@ -113,7 +133,9 @@
         // квота session: выбиваем самое старое видео
         const order = await getSessionOrder();
         if (order.length) {
-          evictVideoFromSession(order[order.length - 1]);
+          // await обязателен: без него повтор записи шёл раньше, чем место
+          // освобождалось, и все 12 попыток сгорали впустую.
+          await evictVideoFromSession(order[order.length - 1]);
           continue;
         }
         // порядок пуст/не сохранился — удаляем все чужие кэши субэкстрейнов (comments/collect/meta),
@@ -205,7 +227,7 @@
     return {
       client: {
         clientName: "WEB",
-        clientVersion: CLIENT_VERSION,
+        clientVersion: innerTubeConfig().version,
         androidSdkVersion: 0,
         hl: (navigator.language || "ru-RU").replace("-", "_"),
         gl: "US",
@@ -312,7 +334,8 @@
     let n = parseFloat(m[1]);
     const suf = m[2] || "";
     if (["тыс", "k", "т"].includes(suf)) n *= 1000;
-    else if (["млн", "m", "b"].includes(suf)) n *= 1e6;
+    else if (["млн", "m"].includes(suf)) n *= 1e6;
+    else if (suf === "b") n *= 1e9;
     return Math.round(n) || 0;
   }
 
@@ -364,14 +387,15 @@
   async function innerTubePost(payload, timeoutMs = 20000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const cfg = innerTubeConfig();
     let resp;
     try {
-      resp = await fetch(INNERTUBE_API, {
+      resp = await fetch(`https://www.youtube.com/youtubei/v1/next?key=${cfg.key}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-YouTube-Client-Name": "1",
-          "X-YouTube-Client-Version": CLIENT_VERSION,
+          "X-YouTube-Client-Version": cfg.version,
         },
         credentials: "include",
         signal: controller.signal,
@@ -482,6 +506,10 @@
 
   async function collectViaDom(videoId, limit, onBatch, mine) {
     const out = [];
+    // Ключ дедупликации: настоящий comment-id, а без него — автор+текст.
+    // Раньше без comment-id каждому проходу доставался новый случайный id,
+    // и одни и те же комментарии добавлялись снова, пока не набирался лимит.
+    const seen = new Set();
     const tab = location.pathname.startsWith("/shorts");
     let stagnant = 0;
     for (let i = 0; i < 60 && out.length < limit; i++) {
@@ -491,9 +519,11 @@
       for (const n of nodes) {
         if (out.length >= limit) break;
         const parsed = readDomComment(n);
-        if (parsed && !out.some((c) => c.id === parsed.id)) {
-          out.push(parsed);
-        }
+        if (!parsed) continue;
+        const key = parsed.link ? parsed.id : `${parsed.author}\u0000${parsed.text}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(parsed);
       }
       if (!tab) {
         // На обычном видео (не шортсах) — доскроллить к комментариям, чтобы
@@ -683,11 +713,9 @@
   // SPA-навигация YouTube
   window.addEventListener("yt-navigate-finish", () => handlePage());
   window.addEventListener("popstate", () => handlePage());
-  const _pushState = history.pushState.bind(history);
-  history.pushState = (...args) => {
-    _pushState(...args);
-    setTimeout(() => handlePage(), 60);
-  };
+  // Подменять history.pushState здесь бесполезно: контент-скрипт живёт в
+  // изолированном мире, и вызовы pushState самой страницы этот код не видит.
+  // Навигацию YouTube ловит yt-navigate-finish выше.
 
   handlePage();
 })();
