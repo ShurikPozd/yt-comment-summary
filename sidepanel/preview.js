@@ -6,88 +6,135 @@ const urls = (params.get("urls") || "")
   .map((u) => u.trim())
   .filter(Boolean);
 const title = params.get("title") || "";
+// Имя файла приходит из панели — уже по шаблону из настроек.
+const fileName = params.get("name") || sanitizeFilename((title || "thumbnail") + " (превью)") + ".jpg";
 if (title) document.title = "Превью — " + title;
 
 const $ = (id) => document.getElementById(id);
 const img = $("pv-image");
-const bar = $("pv-bar");
 const errBox = $("pv-error");
 
-function setBackgroundMode(dark) {
-  document.body.style.background = dark ? "#000" : "#181818";
+const LABELS = { maxresdefault: "Макс.", sddefault: "SD", hqdefault: "HQ" };
+const labelOf = (u) => LABELS[(u.match(/\/(\w+)\.jpg/) || [])[1]] || "—";
+
+// Какие качества реально есть: maxres у части видео отсутствует, и YouTube
+// отдаёт вместо него серую заглушку 120×90 (с 404). Такие пропускаем.
+const available = new Map(); // url -> {w, h}
+let current = null;
+
+function probe(url) {
+  return new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => resolve(im.naturalWidth > 120 ? { w: im.naturalWidth, h: im.naturalHeight } : null);
+    im.onerror = () => resolve(null);
+    im.src = url;
+  });
 }
 
-let index = 0;
-function showNext() {
-  if (index >= urls.length) {
+let toastTimer = null;
+function toast(text) {
+  const el = $("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+function renderQuality() {
+  const box = $("pv-quality");
+  box.innerHTML = urls
+    .filter((u) => available.has(u))
+    .map((u) => {
+      const { w, h } = available.get(u);
+      return `<button class="chip${u === current ? " active" : ""}" data-url="${u}" role="radio" aria-checked="${u === current}" title="${w}×${h}">${labelOf(u)}</button>`;
+    })
+    .join("");
+}
+
+function show(url) {
+  current = url;
+  const { w, h } = available.get(url);
+  img.src = url;
+  img.style.display = "";
+  errBox.classList.add("hidden");
+  $("pv-meta").textContent = `${w}×${h} · ${fileName}`;
+  renderQuality();
+}
+
+async function init() {
+  $("pv-title").textContent = title;
+  $("pv-title").title = title;
+  const results = await Promise.all(urls.map(probe));
+  results.forEach((r, i) => r && available.set(urls[i], r));
+  const best = urls.find((u) => available.has(u));
+  if (!best) {
     img.style.display = "none";
     errBox.classList.remove("hidden");
-    setBackgroundMode(true);
+    $("pv-meta").textContent = "";
     return;
   }
-  const url = urls[index];
-  img.onload = () => {
-    errBox.classList.add("hidden");
-    img.style.display = "";
-  };
-  img.onerror = () => {
-    index++;
-    showNext();
-  };
-  img.src = url;
+  show(best);
 }
 
-// Первым делом пытаемся показать максимальный размер картинки;
-// затем красиво вписываем оставшиеся. Заодно пишем заголовок.
-$("pv-title").textContent = title;
-$("pv-title").title = title;
+async function currentBlob() {
+  const resp = await fetch(current);
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
+  return resp.blob();
+}
 
-img.addEventListener("dblclick", () => {
-  // двойной клик — открыть оригинал в новой вкладке целиком
-  if (urls.length) window.open(urls[0], "_blank", "noopener");
-});
-
-$("pv-back").addEventListener("click", () => {
-  if (window.history.length > 1) window.history.back();
-  else window.close();
-});
-
-$("pv-retry").addEventListener("click", () => {
-  index = 0;
-  errBox.classList.add("hidden");
-  img.style.display = "";
-  showNext();
-});
-
-$("pv-download").addEventListener("click", async () => {
-  const url = img.src || urls[0];
-  if (!url) return;
-  const final = sanitizeFilename((title || "thumbnail") + " (превью)") + ".jpg";
+async function download() {
+  if (!current) return;
   try {
-    const resp = await fetch(url);
-    const blob = await resp.blob();
+    const blob = await currentBlob();
     const dataUrl = await new Promise((resolve, reject) => {
       const fr = new FileReader();
       fr.onload = () => resolve(fr.result);
       fr.onerror = reject;
       fr.readAsDataURL(blob);
     });
-    await chrome.downloads.download({
-      url: dataUrl,
-      filename: final,
-      conflictAction: "uniquify",
-      saveAs: false,
-    });
-    $("pv-title").textContent = "Скачано ✓";
-    setTimeout(() => ($("pv-title").textContent = title), 2000);
+    await chrome.downloads.download({ url: dataUrl, filename: fileName, conflictAction: "uniquify", saveAs: false });
+    toast("Скачано ✓ " + fileName);
   } catch (e) {
-    $("pv-download").textContent = "Ошибка";
-    setTimeout(() => ($("pv-download").textContent = "⬇ Скачать"), 2000);
+    toast("Не удалось скачать: " + (e.message || e));
   }
+}
+
+// Буфер обмена принимает только PNG — перерисовываем JPEG через canvas.
+async function copyImage() {
+  if (!current) return;
+  try {
+    const bitmap = await createImageBitmap(await currentBlob());
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    canvas.getContext("2d").drawImage(bitmap, 0, 0);
+    const png = await canvas.convertToBlob({ type: "image/png" });
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    toast("Картинка скопирована в буфер ✓");
+  } catch (e) {
+    toast("Не удалось скопировать: " + (e.message || e));
+  }
+}
+
+function close() {
+  if (window.history.length > 1) window.history.back();
+  else window.close();
+}
+
+$("pv-quality").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-url]");
+  if (b) show(b.dataset.url);
 });
+$("pv-download").addEventListener("click", download);
+$("pv-copy").addEventListener("click", copyImage);
+$("pv-back").addEventListener("click", close);
+$("pv-retry").addEventListener("click", init);
+img.addEventListener("dblclick", () => current && window.open(current, "_blank", "noopener"));
 
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && window.history.length > 1) window.history.back();
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === "escape") close();
+  else if (k === "d" || k === "в") download();
+  else if (k === "c" || k === "с") copyImage();
 });
 
-showNext();
+init();

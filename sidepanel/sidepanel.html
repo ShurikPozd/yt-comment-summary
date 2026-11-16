@@ -35,9 +35,10 @@
 
       <section id="collect-bar" class="toolbar hidden">
         <button id="btn-analyze" class="primary">🧠 Анализировать</button>
-        <span class="max-wrap" title="Сколько комментариев собрать">
+        <label class="max-wrap" title="Сколько комментариев собрать с видео (10–2000). После изменения нажми 🔄">
+          <span>собрать</span>
           <input id="quick-max" type="number" min="10" max="2000" step="10" value="120" />
-        </span>
+        </label>
         <button id="btn-restart" title="Собрать комментарии заново">🔄</button>
         <span id="collect-status" class="status"></span>
         <div id="collect-progress" class="progress hidden"><i></i></div>

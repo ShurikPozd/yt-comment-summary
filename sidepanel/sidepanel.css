@@ -322,19 +322,44 @@ button.ghost:hover {
   color: var(--neg);
 }
 
-.max-wrap input {
-  width: 64px;
+.max-wrap {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 10px;
   background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 5px 6px;
+  font-size: 11px;
+  color: var(--muted);
+  transition: border-color 0.15s ease;
+}
+
+.max-wrap:focus-within {
+  border-color: var(--accent);
+}
+
+.max-wrap input {
+  width: 52px;
+  background: none;
+  border: none;
+  padding: 5px 6px 5px 2px;
   font-size: 12px;
+  font-weight: 600;
   text-align: center;
+  color: var(--fg);
+  -moz-appearance: textfield;
+}
+
+.max-wrap input::-webkit-inner-spin-button,
+.max-wrap input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .max-wrap input:focus {
   outline: none;
-  border-color: var(--accent);
 }
 
 #btn-restart {

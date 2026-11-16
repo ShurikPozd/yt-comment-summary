@@ -26,7 +26,7 @@ echo "== разбор как ESM =="
 tmp=".syntaxcheck.mjs"
 err=$(mktemp)
 fail=0
-for f in sidepanel/sidepanel.js sidepanel/insights.js groq.js prompts.js config.js content.js background.js; do
+for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/preview.js groq.js prompts.js config.js content.js background.js; do
   [ -f "$f" ] || continue
   cp "$f" "$tmp"
   if node --check "$tmp" 2>"$err"; then

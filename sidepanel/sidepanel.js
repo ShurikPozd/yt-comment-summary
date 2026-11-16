@@ -437,10 +437,13 @@ document.addEventListener(
   true
 );
 
+// 950 → «950», 1240 → «1 240», 22000 → «22 тыс.», 163900 → «164 тыс.», 2100000 → «2,1 млн»
 function fmtNum(n) {
-  n = n || 0;
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "К";
-  return String(n);
+  n = Number(n) || 0;
+  const short = (v, unit) => `${(v >= 100 ? Math.round(v) : Math.round(v * 10) / 10).toLocaleString("ru-RU")} ${unit}`;
+  if (n >= 1e6) return short(n / 1e6, "млн");
+  if (n >= 1e4) return short(n / 1e3, "тыс.");
+  return n.toLocaleString("ru-RU");
 }
 
 let LAST_RAW_ERROR = "";
@@ -722,9 +725,14 @@ function renderHeader() {
   avatar.src = m.channelAvatar || "";
   avatar.onerror = () => (avatar.style.visibility = "hidden");
   const thumb = $("thumbnail");
-  thumb.onerror = () => {
+  const nextThumb = () => {
     if (thumb.src.includes("maxresdefault")) thumb.src = m.thumbs.sd || m.thumbs.hq;
     else if (thumb.src.includes("sddefault")) thumb.src = m.thumbs.hq;
+  };
+  thumb.onerror = nextThumb;
+  // Нет maxres → YouTube отдаёт серую заглушку 120×90 как «успешную» картинку.
+  thumb.onload = () => {
+    if (thumb.naturalWidth <= 120) nextThumb();
   };
   if (m.thumbs?.maxres) thumb.src = m.thumbs.maxres;
   else if (m.thumbs?.sd) thumb.src = m.thumbs.sd;
@@ -748,7 +756,8 @@ function updateCollectStatus(status, fetched, max, error) {
     el.textContent = `Собираю: ${fetched || 0} из ${max || "…"}`;
     setProgress("collect-progress", max ? (fetched || 0) / max : 0.05);
   } else if (status === "done") {
-    el.textContent = `${fetched || 0} комментариев`;
+    el.textContent = `✓ ${fetched || 0} комм.`;
+    el.title = `Собрано комментариев: ${fetched || 0}`;
     setProgress("collect-progress", null);
   } else if (status === "error") {
     el.textContent = humanCollectError(error);
@@ -1509,33 +1518,56 @@ async function runSearch() {
 
 // ---------------- Превью и канал ----------------
 
+// Имя файла превью по шаблону из настроек — одно для панели и страницы превью.
+function thumbFilename(m) {
+  const tpl = state.settings?.thumbTemplate || "{title} - {channel}";
+  const name = tpl
+    .replaceAll("{title}", sanitizeFilename(m.title || "video"))
+    .replaceAll("{channel}", sanitizeFilename(m.channelName || "channel"))
+    .replaceAll("{videoid}", m.videoId || "");
+  return sanitizeFilename(name) + ".jpg";
+}
+
+function thumbUrls(m) {
+  return [m?.thumbs?.maxres, m?.thumbs?.sd, m?.thumbs?.hq].filter(Boolean);
+}
+
 function openThumbTab() {
   const m = state.meta;
-  if (!m?.thumbs) return;
-  const urls = [m.thumbs.maxres, m.thumbs.sd, m.thumbs.hq].filter(Boolean).join(",");
-  if (!urls) return;
+  const urls = thumbUrls(m);
+  if (!urls.length) return;
   const page = chrome.runtime.getURL("sidepanel/preview.html");
-  const qs = "?urls=" + encodeURIComponent(urls) + "&title=" + encodeURIComponent(m.title || "");
-  chrome.tabs.create({ url: page + qs });
+  const qs = new URLSearchParams({ urls: urls.join(","), title: m.title || "", name: thumbFilename(m) });
+  chrome.tabs.create({ url: `${page}?${qs}` });
+}
+
+// Лучшее доступное превью. У многих видео нет maxresdefault: YouTube отвечает
+// 404, но с серой картинкой-заглушкой 120×90 — раньше её и скачивали.
+async function fetchBestThumb(urls) {
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      if (blob.size < 2000) continue; // заглушка
+      return blob;
+    } catch (e) {
+      /* пробуем следующее качество */
+    }
+  }
+  throw new Error("превью недоступно");
 }
 
 async function downloadThumb() {
   if (!state.meta) return;
   const m = state.meta;
-  const url = m.thumbs?.maxres || m.thumbs?.sd || m.thumbs?.hq;
-  if (!url) return;
+  const urls = thumbUrls(m);
+  if (!urls.length) return;
   try {
-    const resp = await fetch(url);
-    const blob = await resp.blob();
+    const blob = await fetchBestThumb(urls);
     const dataUrl = await blobToDataURL(blob);
-    const tpl = state.settings?.thumbTemplate || "{title} - {channel}";
-    const title = sanitizeFilename(m.title || "video");
-    const channel = sanitizeFilename(m.channelName || "channel");
-    const name = tpl
-      .replaceAll("{title}", title)
-      .replaceAll("{channel}", channel)
-      .replaceAll("{videoid}", m.videoId);
-    const filename = sanitizeFilename(name) + ".jpg";
+    const filename = thumbFilename(m);
+    showToast(`Скачиваю превью: ${filename}`);
     await chrome.downloads.download({
       url: dataUrl,
       filename,
