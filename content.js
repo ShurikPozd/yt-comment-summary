@@ -663,6 +663,19 @@
     // светимся на новом видео
     const meta = extractMeta();
     await storeMeta(meta);
+    // Сразу после загрузки/перехода YouTube ещё не дорисовал шапку: название и
+    // канал бывают пустыми (проверено на живой странице). Дочитываем позже.
+    if (!meta?.title || !meta?.channelName || !meta?.duration) {
+      for (const delay of [1500, 4000]) {
+        setTimeout(() => {
+          if (currentVideoId !== id) return;
+          const again = extractMeta();
+          if (again && (again.channelName !== meta?.channelName || again.title !== meta?.title || again.duration !== meta?.duration)) {
+            void storeMeta(again);
+          }
+        }, delay);
+      }
+    }
     const { [K.state(id)]: st } = await sessionGet([K.state(id)]);
     if (st?.status === "done") {
       send({ type: "yt:progress", videoId: id, status: "done", fetched: st.fetched, max: st.fetched });

@@ -1613,7 +1613,13 @@ function onRuntimeMessage(msg) {
       state.meta = msg.meta;
       renderBottomMatters();
     } else if (msg.meta.videoId === state.videoId) {
+      const durChanged = msg.meta.duration && msg.meta.duration !== state.meta?.duration;
       state.meta = msg.meta;
+      // длительность фильтрует таймкоды и задаёт шкалу моментов
+      if (durChanged) {
+        renderInsights();
+        renderMoments();
+      }
     }
     renderHeader();
   } else if (msg.type === "yt:progress") {
