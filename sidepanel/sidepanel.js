@@ -692,15 +692,20 @@ async function loadSettings() {
       lang: DEFAULTS.lang,
       collectMode: DEFAULTS.collectMode,
       thumbTemplate: DEFAULTS.thumbTemplate,
-      theme: "dark",
+      theme: "auto", // как в системе
     },
     obj.settings || {}
   );
   applyTheme();
 }
 
+// при теме «как в системе» следим за переключением темы ОС на лету
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if ((state.settings?.theme || "auto") === "auto") applyTheme();
+});
+
 function applyTheme() {
-  const t = state.settings?.theme || "dark";
+  const t = state.settings?.theme || "auto";
   let dark = true;
   if (t === "light") dark = false;
   else if (t === "auto") dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -713,7 +718,7 @@ function fillSettingsFields() {
   $("set-model").value = state.settings.model || DEFAULTS.model;
   $("set-max").value = state.settings.maxComments;
   $("set-lang").value = state.settings.lang || "ru";
-  $("set-theme").value = state.settings.theme || "dark";
+  $("set-theme").value = state.settings.theme || "auto";
   $("set-mode").value = state.settings.collectMode || "auto";
   $("set-thumb-template").value = state.settings.thumbTemplate || "";
   $("set-no-autoplay").checked = Boolean(state.settings.noAutoplay);
@@ -2425,6 +2430,8 @@ function bindEvents() {
   });
   $("btn-search").addEventListener("click", runSearch);
   $("btn-topics-analyze").addEventListener("click", () => $("btn-analyze").click());
+  // chrome:// нельзя открыть обычной ссылкой — открываем вкладкой через API
+  $("btn-shortcuts").addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
   $("btn-cta-settings").addEventListener("click", () => {
     fillSettingsFields();
     setTab("settings");

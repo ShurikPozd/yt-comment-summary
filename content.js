@@ -768,11 +768,22 @@
     }
   }
 
-  function readPlayerPrefs(settings) {
+  function readPlayerPrefs(settings, { announce = false } = {}) {
+    const before = { ...playerPrefs };
     playerPrefs.noAutoplay = Boolean(settings?.noAutoplay);
     playerPrefs.hideProgress = Boolean(settings?.hideProgress);
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
+    // Переключили из панели, системного меню или горячей клавишей — короткая
+    // плашка на странице подтверждает, что сработало (в открытом меню плеера
+    // и так виден переключатель — там не дублируем).
+    if (announce && !uiMenu?.classList.contains("open")) {
+      if (before.noAutoplay !== playerPrefs.noAutoplay) {
+        showPageToast(playerPrefs.noAutoplay ? "Видео не будут запускаться сами" : "Автозапуск видео — как обычно", UI_ICONS.pause);
+      } else if (before.hideProgress !== playerPrefs.hideProgress) {
+        showPageToast(playerPrefs.hideProgress ? "Полоса прогресса скрыта" : "Полоса прогресса видна", UI_ICONS.bar);
+      }
+    }
   }
 
   chrome.storage.local
@@ -784,7 +795,7 @@
     })
     .catch(() => {});
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.settings) readPlayerPrefs(changes.settings.newValue);
+    if (area === "local" && changes.settings) readPlayerPrefs(changes.settings.newValue, { announce: true });
   });
 
   // Автозапуск: пока «взведено», любой запуск основного плеера без вашего
@@ -879,7 +890,17 @@
     .ytcs-item[aria-checked="true"] .ytcs-switch::after { transform: translateX(14px); }
     .ytcs-note { padding: 4px 16px 6px; font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, .55); min-height: 0; }
     .ytcs-note:empty { display: none; }
-    @media (prefers-reduced-motion: reduce) { .ytcs-menu, .ytcs-switch, .ytcs-switch::after { transition: none; } }`;
+    .ytcs-toast { position: absolute; top: 16px; left: 50%; z-index: 80; display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px 11px 14px; border-radius: 999px; background: rgba(28, 28, 30, .86);
+      -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
+      color: #f1f1f1; font: 500 14px/1.3 "YouTube Noto", Roboto, Arial, sans-serif; white-space: nowrap;
+      opacity: 0; transform: translate(-50%, -8px) scale(.97); pointer-events: none;
+      transition: opacity .18s ease, transform .26s cubic-bezier(.22, 1, .36, 1); }
+    .ytcs-toast.page { position: fixed; top: 72px; z-index: 9999; }
+    .ytcs-toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    .ytcs-toast svg { width: 18px; height: 18px; flex: none; color: #ff6b85; }
+    @media (prefers-reduced-motion: reduce) { .ytcs-menu, .ytcs-switch, .ytcs-switch::after, .ytcs-toast { transition: none; } }`;
 
   const SVG = (paths) =>
     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -968,6 +989,28 @@
     }
     if (act === "download") setNote(r?.ok ? "Превью сохранено в загрузки." : "Не получилось скачать превью.");
     else openMenu(false);
+  }
+
+  // Плашка-подтверждение в стиле плеера: в плеере — сверху по центру,
+  // вне просмотра — вверху страницы.
+  let toastTimer = null;
+  function showPageToast(text, iconSvg = "") {
+    ensureUiStyle();
+    let t = document.getElementById("ytcs-toast");
+    const host = (isWatchPage() && document.querySelector("#movie_player")) || document.body;
+    if (!t) {
+      t = document.createElement("div");
+      t.id = "ytcs-toast";
+      t.setAttribute("role", "status");
+    }
+    if (t.parentElement !== host) host.appendChild(t);
+    t.className = "ytcs-toast" + (host === document.body ? " page" : "");
+    t.innerHTML = `${iconSvg}<span></span>`;
+    t.querySelector("span").textContent = text;
+    void t.offsetHeight; // перезапуск появления
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
   }
 
   function ensurePlayerButton() {

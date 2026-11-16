@@ -2266,3 +2266,24 @@ kbd {
   flex-wrap: wrap;
   column-gap: 4px;
 }
+
+/* Горячие клавиши в блоке «Плеер YouTube» */
+.shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shortcuts kbd {
+  margin: 0 1px;
+}
+
+.shortcuts .link-btn {
+  margin-left: auto;
+}

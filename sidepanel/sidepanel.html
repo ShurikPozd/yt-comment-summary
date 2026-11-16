@@ -160,6 +160,12 @@
               </span>
               <input type="checkbox" id="set-hide-progress" class="switch" />
             </label>
+            <div class="shortcuts">
+              <span><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> автозапуск</span>
+              <span><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd> полоса</span>
+              <span><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd> панель</span>
+              <button id="btn-shortcuts" class="link-btn" title="Открыть настройки сочетаний клавиш Chrome">изменить</button>
+            </div>
           </div>
 
           <div class="settings-block">
@@ -175,9 +181,9 @@
             </label>
             <label>Тема интерфейса
               <select id="set-theme">
+                <option value="auto">Как в системе</option>
                 <option value="dark">Тёмная</option>
                 <option value="light">Светлая</option>
-                <option value="auto">Как в системе</option>
               </select>
             </label>
             <label>Режим сбора

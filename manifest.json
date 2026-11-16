@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео в отдельной вкладке и инфо о канале.",
   "permissions": [
     "storage",
@@ -49,5 +49,25 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+Y"
+      },
+      "description": "Открыть панель «Сводка комментариев»"
+    },
+    "toggle-no-autoplay": {
+      "suggested_key": {
+        "default": "Alt+Shift+K"
+      },
+      "description": "Вкл/выкл: не запускать видео автоматически"
+    },
+    "toggle-hide-progress": {
+      "suggested_key": {
+        "default": "Alt+Shift+H"
+      },
+      "description": "Вкл/выкл: скрыть полосу прогресса и длительность"
+    }
   }
 }

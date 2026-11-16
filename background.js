@@ -203,3 +203,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   run.then((ok) => sendResponse({ ok })).catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
   return true;
 });
+
+// ---------------- Горячие клавиши ----------------
+// Alt+Shift+Y открывает панель (_execute_action — Chrome делает это сам),
+// Alt+Shift+K / Alt+Shift+H переключают режимы плеера. Поменять сочетания
+// можно на chrome://extensions/shortcuts.
+const COMMAND_TOGGLES = { "toggle-no-autoplay": "noAutoplay", "toggle-hide-progress": "hideProgress" };
+
+chrome.commands.onCommand.addListener(async (command) => {
+  const key = COMMAND_TOGGLES[command];
+  if (!key) return;
+  const s = await readSettings();
+  s[key] = !s[key];
+  // контент-скрипт увидит изменение и покажет плашку-подтверждение на странице
+  await chrome.storage.local.set({ settings: s });
+});
