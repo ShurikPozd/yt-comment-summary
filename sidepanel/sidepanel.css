@@ -1774,3 +1774,90 @@ ol.points li::before {
     padding-left: 4px;
   }
 }
+
+/* ---------- Ответы в ветке ---------- */
+.c-replies {
+  margin-top: 6px;
+}
+
+.reply-toggle,
+.more-replies {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  margin-left: -6px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  transition: background-color var(--t-fast) ease, opacity var(--t-fast) ease;
+}
+
+.reply-toggle:hover,
+.more-replies:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.reply-toggle.loading,
+.more-replies:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.more-replies .ic {
+  transform: rotate(90deg);
+}
+
+.replies-list {
+  margin-top: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-strong);
+}
+
+.comment-card.reply {
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.comment-card.reply .avatar-wrap {
+  width: 24px;
+  height: 24px;
+}
+
+.comment-card.reply .avatar-wrap::before {
+  font-size: 10.5px;
+}
+
+/* ---------- Новые с прошлой сводки ---------- */
+.badge-new {
+  background: var(--accent);
+  color: #fff;
+}
+
+.chip-new:not(.active) {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.new-link {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.keys-hint {
+  margin-top: 8px;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--fg-2);
+  font: 600 11px/18px "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+}

@@ -114,6 +114,7 @@
             <input id="comments-filter" type="search" placeholder="Фильтр по тексту или автору…" autocomplete="off" />
             <div class="chip-row" id="comments-chips">
               <button data-filter="all" class="chip active">Все</button>
+              <button data-filter="new" class="chip chip-new hidden">Новые</button>
               <button data-filter="popular" class="chip">По лайкам</button>
               <button data-filter="replies" class="chip">Обсуждаемые</button>
               <button data-filter="questions" class="chip">Вопросы</button>
@@ -192,6 +193,7 @@
               <span>Версия <b id="ver-badge">v?</b></span>
               <button id="btn-diag" class="link-btn" title="Показать, какие вкладки видит панель">диагностика</button>
             </div>
+            <div class="hint keys-hint">Клавиши: <kbd>1</kbd>–<kbd>5</kbd> — вкладки, <kbd>/</kbd> — поиск, <kbd>Esc</kbd> — выйти из поля.</div>
             <div id="diag-out" class="hidden"></div>
           </div>
         </div>

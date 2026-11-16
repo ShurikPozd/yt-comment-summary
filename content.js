@@ -468,6 +468,11 @@
           parsed = parseThread({ commentRenderer: ctr.commentRenderer }, videoId);
         }
         if (!parsed || !parsed.text.trim() || seen.has(parsed.id)) continue;
+        // Токен ветки ответов: панель подгрузит их по клику «Ответы (N)».
+        const replyToken = (ctr?.replies?.commentRepliesRenderer?.contents || []).find(
+          (x) => x?.continuationItemRenderer
+        )?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+        if (replyToken) parsed.replyToken = replyToken;
         seen.add(parsed.id);
         out.push(parsed);
       }
@@ -486,6 +491,38 @@
       await sleep(350);
     }
     return out;
+  }
+
+  // Порция ответов в ветке (обычно по 10) и токен следующей порции.
+  // Формат проверен на живом YouTube: ответы — commentViewModel.commentKey,
+  // «Другие ответы» — continuationItemRenderer.button…continuationCommand.
+  async function fetchReplies(token) {
+    const videoId = videoIdFromUrl();
+    const data = await innerTubePost({ context: baseContext(), continuation: token });
+    const entities = buildEntityMap(data);
+    const replies = [];
+    let next = null;
+    walk(
+      data,
+      (o) => {
+        const key = o.commentViewModel?.commentKey || o.commentViewModel?.commentViewModel?.commentKey;
+        if (key) {
+          const e = entities.get(key) || entities.get(decodeBase64Url(key));
+          const parsed = e ? parseThreadV2(e, videoId, entities) : null;
+          if (parsed) replies.push(parsed);
+          return true;
+        }
+        const ci = o.continuationItemRenderer;
+        const tok =
+          ci?.button?.buttonRenderer?.command?.continuationCommand?.token ||
+          ci?.continuationEndpoint?.continuationCommand?.token;
+        if (tok) next = tok;
+        return false;
+      },
+      0,
+      14
+    );
+    return { replies, next };
   }
 
   function decodeBase64Url(s) {
@@ -729,6 +766,16 @@
         if (collector) collector.cancelled = true;
         sendResponse({ ok: true });
         return false;
+      case "yt:replies": {
+        if (!msg.token) {
+          sendResponse({ ok: false, error: "no token" });
+          return false;
+        }
+        fetchReplies(msg.token)
+          .then((r) => sendResponse({ ok: true, ...r }))
+          .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true; // ответ асинхронный
+      }
       case "yt:seek": {
         // Перемотка по таймкоду из комментария. DOM общий с страницей, так что
         // изолированный мир контент-скрипта может управлять <video> напрямую.

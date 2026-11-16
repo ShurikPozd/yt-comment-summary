@@ -27,6 +27,7 @@ import {
   pickForBudget,
   mergeTopics,
   dedupeTexts,
+  newSince,
 } from "./insights.js";
 import { DEFAULTS } from "../config.js";
 import { icon, hydrateIcons } from "./icons.js";
@@ -407,9 +408,17 @@ function richText(text, query) {
 }
 
 // Единая карточка комментария (раньше было 4 копии разметки с расхождениями).
-function commentCard(c, { query = "", compact = false } = {}) {
+function commentCard(c, { query = "", compact = false, reply = false } = {}) {
   const likes = Number(c.likes) || 0;
-  return `<article class="comment-card${compact ? " compact" : ""}">
+  // Кнопка ответов — только если YouTube дал токен ветки (ответы грузятся по клику).
+  const repliesUi =
+    !reply && c.replies > 0 && c.replyToken && c.id
+      ? `<div class="c-replies">
+          <button class="reply-toggle" data-cid="${esc(c.id)}">${icon("reply", { size: 13 })}<span>Ответы · ${fmtNum(c.replies)}</span></button>
+          <div class="collapse"><div class="collapse-inner"></div></div>
+        </div>`
+      : "";
+  return `<article class="comment-card${compact ? " compact" : ""}${reply ? " reply" : ""}"${c.id ? ` data-cid="${esc(c.id)}"` : ""}>
     ${
       compact
         ? ""
@@ -421,6 +430,7 @@ function commentCard(c, { query = "", compact = false } = {}) {
       <div class="c-meta">
         <span class="c-author">${esc(c.author)}</span>
         ${c.isCreator ? '<span class="badge" title="Комментарий автора канала">автор</span>' : ""}
+        ${state.newIds?.has(c.id) ? '<span class="badge badge-new" title="Появился после прошлой сводки">новый</span>' : ""}
         ${c.time ? `<span class="c-time">${esc(c.time)}</span>` : ""}
         ${likes ? `<span class="c-stat" title="Лайки">${icon("heart", { size: 12 })}${fmtNum(likes)}</span>` : ""}
         ${c.replies ? `<span class="c-stat" title="Ответов в ветке">${icon("reply", { size: 12 })}${fmtNum(c.replies)}</span>` : ""}
@@ -428,8 +438,94 @@ function commentCard(c, { query = "", compact = false } = {}) {
         ${c.link ? `<a class="c-link" href="${esc(c.link)}" target="_blank" rel="noreferrer" title="Открыть комментарий на YouTube" aria-label="Открыть на YouTube">${icon("external", { size: 13 })}</a>` : ""}
       </div>
       <div class="c-text">${richText(c.text, query)}</div>
+      ${repliesUi}
     </div>
   </article>`;
+}
+
+// ---------------- Ответы в ветках ----------------
+// Грузятся по клику через контент-скрипт вкладки с видео (те же запросы, что
+// делает сам YouTube при «Показать ответы»), кэшируются на время сессии.
+const repliesCache = new Map(); // cid -> { items, next }
+
+function commentById(cid) {
+  return state.comments.find((c) => c.id === cid) || null;
+}
+
+async function fetchRepliesPage(token) {
+  const tab = await findActiveVideoTab();
+  if (!tab?.id) throw new Error("не нашёл вкладку с видео");
+  const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:replies", token });
+  if (!r?.ok) throw new Error(r?.error || "YouTube не отдал ответы");
+  return { items: r.replies || [], next: r.next || null };
+}
+
+function repliesHtml(cid) {
+  const entry = repliesCache.get(cid);
+  if (!entry) return "";
+  const list = entry.items.length
+    ? entry.items.map((c) => commentCard(c, { reply: true })).join("")
+    : '<div class="hint">Ответов не нашлось — возможно, их скрыли.</div>';
+  const more = entry.next
+    ? `<button class="more-replies" data-cid="${esc(cid)}">${icon("chevron", { size: 13 })}<span>Ещё ответы</span></button>`
+    : "";
+  return `<div class="replies-list">${list}${more}</div>`;
+}
+
+async function toggleReplies(btn) {
+  const box = btn.closest(".c-replies");
+  const cid = btn.dataset.cid;
+  const label = btn.querySelector("span");
+  const c = commentById(cid);
+  const idle = `Ответы · ${fmtNum(c?.replies || 0)}`;
+  if (box.classList.contains("open")) {
+    box.classList.remove("open");
+    label.textContent = idle;
+    return;
+  }
+  const inner = box.querySelector(".collapse-inner");
+  if (!inner.dataset.filled) {
+    if (!repliesCache.has(cid)) {
+      if (!c?.replyToken) return;
+      btn.classList.add("loading");
+      label.textContent = "Загружаю ответы…";
+      try {
+        repliesCache.set(cid, await fetchRepliesPage(c.replyToken));
+      } catch (e) {
+        label.textContent = idle;
+        showToast("Не удалось загрузить ответы: " + (e.message || e));
+        return;
+      } finally {
+        btn.classList.remove("loading");
+      }
+    }
+    inner.innerHTML = repliesHtml(cid);
+    inner.dataset.filled = "1";
+  }
+  // принудительный пересчёт раскладки: переход стартует от нулевой высоты плавно
+  // (rAF не годится — в фоновой панели он не срабатывает, и ветка не открывалась)
+  void box.offsetHeight;
+  box.classList.add("open");
+  label.textContent = "Скрыть ответы";
+}
+
+async function loadMoreReplies(btn) {
+  const cid = btn.dataset.cid;
+  const entry = repliesCache.get(cid);
+  if (!entry?.next) return;
+  btn.disabled = true;
+  btn.querySelector("span").textContent = "Загружаю…";
+  try {
+    const page = await fetchRepliesPage(entry.next);
+    entry.items.push(...page.items);
+    entry.next = page.next;
+    const inner = btn.closest(".collapse-inner");
+    inner.innerHTML = repliesHtml(cid);
+  } catch (e) {
+    btn.disabled = false;
+    btn.querySelector("span").textContent = "Ещё ответы";
+    showToast("Не удалось загрузить ответы: " + (e.message || e));
+  }
 }
 
 // CSP расширений (MV3) запрещает inline-обработчики вроде onerror="…" в разметке,
@@ -617,6 +713,8 @@ async function saveHistory(videoId, summary, comments, meta) {
         cids: t.ids.map((i) => comments[i]?.id).filter(Boolean),
       })),
       commentCount: summary.commentCount || comments.length,
+      // id собранных комментариев — чтобы в следующий раз показать новые
+      seenIds: comments.slice(0, 1000).map((c) => c.id).filter(Boolean),
       title: meta?.title || "",
       savedAt: Date.now(),
     };
@@ -698,6 +796,10 @@ async function loadFor(videoId) {
   state.meta = obj[`meta:${videoId}`] || state.meta || null;
   state.comments = obj[`comments:${videoId}`] || [];
   state.summary = obj[`summary:${videoId}`] || (await loadHistory(videoId, state.comments));
+  state.newIds = state.summary?.fromHistory
+    ? newSince(state.comments, state.summary.seenIds, state.summary.updatedAt || state.summary.savedAt)
+    : new Set();
+  if (!state.newIds.size && state.commentFilter === "new") state.commentFilter = "all";
   if (switched) {
     state.activeTopic = null;
     state.commentLimit = COMMENTS_PAGE;
@@ -1117,6 +1219,7 @@ async function analyze() {
       updatedAt: Date.now(),
     };
     state.summary.commentCount = state.comments.length;
+    state.newIds = new Set();
     state.summary.analyzed = pool.length;
     await safeSessionSet({ [`summary:${state.videoId}`]: state.summary }, { keepVideoId: state.videoId });
     void saveHistory(state.videoId, state.summary, state.comments, state.meta);
@@ -1141,6 +1244,15 @@ async function analyze() {
   }
 }
 
+// plural(5, "комментарий", "комментария", "комментариев") → «комментариев»
+function plural(n, one, few, many) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
 function fmtDate(ts) {
   try {
     return new Date(ts).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -1161,9 +1273,11 @@ function renderSummary() {
         : s.commentCount
           ? ` · по ${s.commentCount} комментариям`
           : "";
-    hist.textContent = s.fromHistory
-      ? `Сохранённая сводка от ${fmtDate(s.updatedAt)}${n}. «Анализировать» — обновить.`
-      : `Сводка от ${fmtDate(s.updatedAt)}${n}`;
+    const nNew = s.fromHistory ? state.newIds?.size || 0 : 0;
+    hist.innerHTML = s.fromHistory
+      ? `Сохранённая сводка от ${esc(fmtDate(s.updatedAt))}${esc(n)}. «Анализировать» — обновить.` +
+        (nNew ? ` <button class="link-btn new-link" data-goto-filter="new">${nNew} ${plural(nNew, "новый комментарий", "новых комментария", "новых комментариев")} с тех пор →</button>` : "")
+      : `Сводка от ${esc(fmtDate(s.updatedAt))}${esc(n)}`;
     hist.classList.remove("hidden");
   } else {
     hist.classList.add("hidden");
@@ -1484,6 +1598,7 @@ function toggleTopic(item) {
 function filteredComments() {
   let list = state.comments;
   const f = state.commentFilter;
+  if (f === "new") list = list.filter((c) => state.newIds?.has(c.id));
   if (f === "questions") list = list.filter((c) => isQuestion(c.text));
   if (f === "timecodes") list = list.filter((c) => timecodesOf(c.text, maxSec()).length);
   const q = state.commentQuery.trim().toLowerCase();
@@ -1511,7 +1626,11 @@ function setCommentFilter(filter, query = null) {
 function renderComments() {
   const wrap = $("comments-list");
   const list = filteredComments();
-  const labels = { all: "", popular: " · по лайкам", replies: " · по числу ответов", questions: " · вопросы", timecodes: " · с таймкодами" };
+  const labels = { all: "", new: " · новые с прошлой сводки", popular: " · по лайкам", replies: " · по числу ответов", questions: " · вопросы", timecodes: " · с таймкодами" };
+  const newChip = document.querySelector('#comments-chips [data-filter="new"]');
+  const nNew = state.newIds?.size || 0;
+  newChip.classList.toggle("hidden", !nNew);
+  newChip.textContent = `Новые · ${nNew}`;
   $("comments-count").textContent = state.comments.length
     ? `${list.length} из ${state.comments.length}${labels[state.commentFilter] || ""}`
     : "";
@@ -2030,6 +2149,16 @@ function bindEvents() {
   });
   // Делегирование на всю панель: таймкоды (перемотка), переходы из «Обзора».
   $("content").addEventListener("click", (e) => {
+    const rt = e.target.closest(".reply-toggle");
+    if (rt) {
+      void toggleReplies(rt);
+      return;
+    }
+    const mr = e.target.closest(".more-replies");
+    if (mr) {
+      void loadMoreReplies(mr);
+      return;
+    }
     const more = e.target.closest(".more-toggle");
     if (more) {
       const m = more.closest(".moment");
@@ -2078,6 +2207,27 @@ function bindEvents() {
     }
   });
   $("btn-search").addEventListener("click", runSearch);
+  // Горячие клавиши: 1–5 — вкладки, / — поиск, Esc — убрать фокус из поля.
+  // Не мешают вводу: в полях и с модификаторами не срабатывают.
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const typing = e.target.closest?.("input, textarea, select, [contenteditable]");
+    if (typing) {
+      if (e.key === "Escape") e.target.blur();
+      return;
+    }
+    if (!state.videoId) return;
+    const tabs = ["summary", "moments", "topics", "search", "comments"];
+    const n = Number(e.key);
+    if (n >= 1 && n <= tabs.length) {
+      setTab(tabs[n - 1]);
+      e.preventDefault();
+    } else if (e.key === "/" || e.key === ".") {
+      setTab("search");
+      $("search-input").focus();
+      e.preventDefault();
+    }
+  });
   $("search-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") runSearch();
   });

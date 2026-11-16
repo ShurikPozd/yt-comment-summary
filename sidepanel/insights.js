@@ -295,3 +295,39 @@ export function dedupeTexts(list, limit = 6) {
   }
   return kept.map((k) => k.text);
 }
+
+// «3 часа назад» / «2 weeks ago» → примерный возраст в секундах (null, если не понять).
+const AGE_UNITS = [
+  [/^(сек|second)/, 1],
+  [/^(мин|minute)/, 60],
+  [/^(час|hour)/, 3600],
+  [/^(дн|день|day)/, 86400],
+  [/^(нед|week)/, 7 * 86400],
+  [/^(мес|month)/, 30 * 86400],
+  [/^(год|лет|year)/, 365 * 86400],
+];
+
+export function parseAge(label) {
+  const m = String(label || "").toLowerCase().match(/(\d+)\s*([a-zа-яё]+)/);
+  if (!m) return null;
+  const unit = AGE_UNITS.find(([re]) => re.test(m[2]));
+  return unit ? Number(m[1]) * unit[1] : null;
+}
+
+/**
+ * Комментарии, появившиеся после прошлой сводки: их не было в том сборе И
+ * они моложе, чем прошло времени (YouTube сортирует по популярности, и в
+ * новый сбор могут подняться старые комментарии — их новыми не считаем).
+ */
+export function newSince(comments, seenIds, savedAt, now = Date.now()) {
+  if (!Array.isArray(seenIds) || !seenIds.length || !savedAt) return new Set();
+  const seen = new Set(seenIds);
+  const since = (now - savedAt) / 1000;
+  const out = new Set();
+  for (const c of comments || []) {
+    if (!c.id || seen.has(c.id)) continue;
+    const age = parseAge(c.time);
+    if (age !== null && age <= since + 3600) out.add(c.id);
+  }
+  return out;
+}
