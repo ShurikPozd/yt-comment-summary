@@ -3059,11 +3059,14 @@ button.ghost,
   padding-bottom: 0.05em;
 }
 
+/* плашки: середина полосы «верх заглавной — линия букв» = середина плашки
+   (замер по столбцам первой заглавной буквы) */
 #summary-topics .chip,
 .suggest .chip,
 #comments-chips .chip,
-#moments-sort .chip {
-  padding-bottom: calc(0.15em + 2px);
+#moments-sort .chip,
+.chip {
+  padding-bottom: 0.5px;
 }
 
 .word {
@@ -3083,4 +3086,45 @@ button.ghost,
 .more-toggle {
   padding-left: 7px;
   padding-right: 9px;
+}
+
+/* Кнопки и режимы поиска: по замеру середины заглавных подъём на 0,15em был
+   великоват (заглавные на 0,7px выше середины) — хватает 1px. */
+button.primary,
+button.ghost,
+.search-modes label {
+  padding-bottom: 1px;
+}
+
+/* «Ещё N комментариев» / «Свернуть» — кнопка во всю ширину, текст и
+   стрелка по центру; стрелка вниз — раскрыть, вверх — свернуть */
+.moment .more-toggle {
+  display: flex;
+  width: 100%;
+  height: 32px;
+  margin: 8px 0 0;
+  padding: 0 12px 1px;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg-2);
+}
+
+.moment .more-toggle:hover {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.moment .more-toggle .ic {
+  top: 0;
+  transform: rotate(90deg);
+}
+
+.moment.open .more-toggle .ic {
+  transform: rotate(-90deg);
 }

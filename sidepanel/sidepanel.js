@@ -2055,7 +2055,7 @@ function renderMoments() {
         ${
           more > 0
             ? `<div class="collapse"><div class="collapse-inner" data-idx="${m.idxs.slice(1, 12).join(",")}"></div></div>
-               <button class="more-toggle" data-more="${more}">${icon("chevron", { size: 13 })}<span>ещё ${more}</span></button>`
+               <button class="more-toggle" data-more="${more}"><span>${moreLabel(more)}</span>${icon("chevron", { size: 13 })}</button>`
             : ""
         }
       </div>`;
@@ -2385,6 +2385,11 @@ function revealMoment(t, { expand = false } = {}) {
   void el.offsetWidth; // перезапуск анимации при повторном клике
   el.classList.add("flash");
   el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
+}
+
+// «Ещё 2 комментария» — подпись кнопки раскрытия момента
+function moreLabel(n) {
+  return `Ещё ${n} ${plural(n, "комментарий", "комментария", "комментариев")}`;
 }
 
 async function seekTo(t) {
@@ -3140,7 +3145,7 @@ function bindEvents() {
           .join("");
       }
       const open = m.classList.toggle("open");
-      more.querySelector("span").textContent = open ? "свернуть" : `ещё ${more.dataset.more}`;
+      more.querySelector("span").textContent = open ? "Свернуть" : moreLabel(Number(more.dataset.more));
       return;
     }
     const tc = e.target.closest("[data-t]");
@@ -3149,10 +3154,13 @@ function bindEvents() {
       void seekTo(Number(tc.dataset.t));
       // точка на общем таймлайне или строка в обзоре — ещё и к комментариям момента
       const mt = tc.dataset.moment;
-      if (mt != null && !tc.closest(".moment")) {
-        const fromOverview = currentTab !== "moments";
-        if (fromOverview) setTab("moments");
-        revealMoment(mt, { expand: fromOverview });
+      const inMoment = tc.closest(".moment");
+      if (mt != null && !inMoment) {
+        if (currentTab !== "moments") setTab("moments");
+        revealMoment(mt, { expand: true });
+      } else if (inMoment && tc.closest(".moment-head") && !inMoment.classList.contains("open")) {
+        // таймкод момента — сразу показываем все его комментарии
+        inMoment.querySelector(".more-toggle")?.click();
       }
       return;
     }
