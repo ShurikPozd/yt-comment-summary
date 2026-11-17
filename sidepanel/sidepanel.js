@@ -872,9 +872,18 @@ const HIST_MAX = 60;
 
 // Темы в сохранённой сводке ссылаются на комментарии по id, а не по номеру:
 // после пересбора порядок комментариев меняется (и в сессии, и в истории).
+// индексы → id комментариев и обратно (для хранения: набор мог пересобраться)
+const SENT_KINDS = ["positive", "neutral", "negative"];
+
 function packSummary(summary, comments) {
+  const sentimentCids = summary.sentimentCids || {};
+  if (summary.sentimentIds) {
+    for (const k of SENT_KINDS) sentimentCids[k] = (summary.sentimentIds[k] || []).map((i) => comments[i]?.id).filter(Boolean);
+  }
+  const { sentimentIds, ...rest } = summary;
   return {
-    ...summary,
+    ...rest,
+    sentimentCids,
     topics: (summary.topics || []).map((t) => ({
       name: t.name,
       count: t.count,
@@ -886,8 +895,13 @@ function packSummary(summary, comments) {
 function unpackSummary(entry, comments) {
   if (!entry) return null;
   const pos = new Map(comments.map((c, i) => [c.id, i]));
+  const sentimentIds = {};
+  for (const k of SENT_KINDS) {
+    sentimentIds[k] = (entry.sentimentCids?.[k] || []).map((id) => pos.get(id)).filter((i) => i !== undefined);
+  }
   return {
     ...entry,
+    sentimentIds,
     topics: (entry.topics || []).map((t) => ({
       name: t.name,
       count: t.count,
@@ -963,14 +977,20 @@ async function clearHistory() {
   return keys.filter((k) => k !== HIST_INDEX).length;
 }
 
+// Номер вызова loadFor: если пока ждали хранилище, начали грузить другое
+// видео, старый вызов тихо выходит и не пишет своё в панель.
+let loadSeq = 0;
+
 async function loadFor(videoId) {
   if (!videoId) return;
+  const seq = ++loadSeq;
   const obj = await chrome.storage.session.get([
     `meta:${videoId}`,
     `comments:${videoId}`,
     `summary:${videoId}`,
     `collect:${videoId}`,
   ]);
+  if (seq !== loadSeq) return;
   const switched = state.videoId !== videoId;
   // Открыли другое видео посреди анализа — анализ прошлого прерываем
   // (его сводка, если успеет, всё равно сохранится в историю своего видео).
@@ -978,8 +998,10 @@ async function loadFor(videoId) {
   state.videoId = videoId;
   state.meta = obj[`meta:${videoId}`] || (switched ? null : state.meta);
   state.comments = obj[`comments:${videoId}`] || [];
-  state.summary =
-    unpackSummary(obj[`summary:${videoId}`], state.comments) || (await loadHistory(videoId, state.comments));
+  const comments = state.comments;
+  const summary = unpackSummary(obj[`summary:${videoId}`], comments) || (await loadHistory(videoId, comments));
+  if (seq !== loadSeq) return;
+  state.summary = summary;
   state.newIds = state.summary?.fromHistory
     ? newSince(state.comments, state.summary.seenIds, state.summary.updatedAt || state.summary.savedAt)
     : new Set();
@@ -988,6 +1010,7 @@ async function loadFor(videoId) {
     state.activeTopic = null;
     state.commentLimit = COMMENTS_PAGE;
     state.momentsAll = false;
+    sentimentOpen = null;
     expandedTopic = null;
     globalSearchResults = [];
   }
@@ -1204,8 +1227,13 @@ function resetAnalyzeUi() {
 
 // Явная отмена («Отменить анализ», «Собрать заново»): запуск останавливается,
 // результат НЕ сохраняется.
+// Сетевая отмена текущего анализа: запрос к серверу обрывается сразу, а не
+// дорабатывает впустую (и не держит очередь для следующего запуска).
+let analyzeAbort = null;
+
 function cancelAnalysis(reason) {
   if (!state.analyzing) return;
+  analyzeAbort?.abort();
   analyzeRun++;
   resetAnalyzeUi();
   if (reason) showToast(reason);
@@ -1252,6 +1280,9 @@ async function analyze() {
   }
   state.analyzing = true;
   $("btn-cancel-analyze").classList.remove("hidden");
+  // новый запуск останавливает и фоновый (лимит Groq общий)
+  analyzeAbort?.abort();
+  const ac = (analyzeAbort = new AbortController());
   const run = ++analyzeRun;
   const live = () => run === analyzeRun;
   // анализируем именно это видео и этот набор комментариев, что бы ни случилось с панелью
@@ -1290,6 +1321,7 @@ async function analyze() {
     const points = [];
     const notableIds = [];
     const sentiment = { positive: 0, neutral: 0, negative: 0 };
+    const sentimentIds = { positive: [], neutral: [], negative: [] };
     const notableComments = [];
     // локальный № внутри части → индекс в comments; номер за пределами своей
     // части отбрасываем (иначе модель «дотягивалась» до соседней части)
@@ -1343,6 +1375,15 @@ async function analyze() {
       sentiment.positive += Number(s.positive) || 0;
       sentiment.neutral += Number(s.neutral) || 0;
       sentiment.negative += Number(s.negative) || 0;
+      // примеры по тональности — для клика по цветной полосе
+      const ex = data.ex || {};
+      for (const [key, kind] of [["p", "positive"], ["u", "neutral"], ["n", "negative"]]) {
+        if (!Array.isArray(ex[key])) continue;
+        for (const id of ex[key].slice(0, 4)) {
+          const g = toGlobal(localBase, id, len);
+          if (g >= 0 && !sentimentIds[kind].includes(g)) sentimentIds[kind].push(g);
+        }
+      }
     };
 
     // Рекурсивно разбираем порцию комментариев: нормальный размер → 1 запрос;
@@ -1366,13 +1407,15 @@ async function analyze() {
       // после ответа settleOutput() поправит его на факт.
       const estOut = 280;
       const slot = await paceRequest(est, estOut, waitNote(partLabel, uiEl));
+      if (!live()) return false; // отменили, пока ждали окно лимита
       try {
         const raw = await proxy.chat(
           [
             { role: "system", content: CHUNK_ANALYZE_SYSTEM },
             { role: "user", content: userText },
           ],
-          { jsonMode: true, maxTokens: CHUNK_MAX_OUTPUT_TOKENS, timeoutMs: 150000 }
+          // сервер сам ждёт окно Groq (до 3 попыток с паузами) — даём ему время
+          { jsonMode: true, maxTokens: CHUNK_MAX_OUTPUT_TOKENS, timeoutMs: 330000, signal: ac.signal }
         );
         settleOutput(slot, raw);
         const data = extractJson(raw);
@@ -1416,6 +1459,14 @@ async function analyze() {
           await sleep(waitMs);
           return processPortion(portion, localBase, depth, rateTries + 1);
         }
+        // Прочий 429 (лимит запросов в минуту, иная формулировка Groq) — тоже
+        // ждём окно, а не выбрасываем всё уже разобранное.
+        if (isRateLimitError(e) && rateTries < 3) {
+          const waitMs = Math.max(20000, retryAfterMs(e, 30000));
+          uiEl("summary-placeholder").textContent = `Groq: лимит запросов — жду ~${Math.round(waitMs / 1000)} с, затем повтор…`;
+          await sleep(waitMs);
+          return processPortion(portion, localBase, depth, rateTries + 1);
+        }
         throw e;
       }
     };
@@ -1454,19 +1505,21 @@ async function analyze() {
     const finIn = estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang }));
     // Сводка ≤380 символов ≈ 150–200 токенов: резервируем 350, а не max_tokens.
     const finSlot = await paceRequest(finIn, 350, waitNote("Осталась итоговая сводка.", uiEl));
+    if (!live()) return;
     uiEl("summary-placeholder").textContent = "Пишу итоговую сводку…";
     let fin = "";
     // Финал обычно последний и самый «весомый» — именно он чаще всего упирается
     // в OTPM. На OTPM ждём окно и повторяем (дробление тут невозможно), на прочих
     // ошибках — одна попытка, дальше покажем пользователю текст.
     for (let finTry = 0; finTry <= 3; finTry++) {
+      if (!live()) return;
       try {
         fin = await proxy.chatStream(
           [
             { role: "system", content: FINAL_SYSTEM },
             { role: "user", content: finalUser({ topics, points, sentiment, notableComments, lang }) },
           ],
-          { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
+          { jsonMode: false, maxTokens: 700, timeoutMs: 330000, signal: ac.signal },
           (full) => {
             if (!live()) return;
             uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
@@ -1482,14 +1535,24 @@ async function analyze() {
           await sleep(waitMs);
           continue;
         }
+        if (isRateLimitError(fe) && finTry < 3) {
+          const waitMs = Math.max(20000, retryAfterMs(fe, 30000));
+          uiEl("summary-placeholder").textContent = `Groq: лимит запросов — жду ~${Math.round(waitMs / 1000)} с, затем повтор…`;
+          await sleep(waitMs);
+          continue;
+        }
         throw fe;
       }
     }
     settleOutput(finSlot, fin);
     const summary = clean(fin) || "Сводка не получена.";
+    // по каждой тональности — до 12 примеров, сначала самые залайканные
+    const byLikes = (a, b) => (comments[b]?.likes || 0) - (comments[a]?.likes || 0);
+    for (const k of Object.keys(sentimentIds)) sentimentIds[k] = sentimentIds[k].sort(byLikes).slice(0, 12);
     const result = {
       summary,
       topics,
+      sentimentIds,
       points: dedupeTexts(points, 6),
       notable: notableComments,
       sentiment,
@@ -1505,10 +1568,17 @@ async function analyze() {
       const full = meta0?.title || "прошлого видео";
       const t = full.length > 48 ? full.slice(0, 46).replace(/\s+\S*$/, "") + "…" : full;
       showToast(`Сводка «${t}» готова — она в «Недавних сводках»`);
+      // вернулись на то видео, пока сводка дописывалась в фоне, — сразу покажем её
+      if (state.videoId === vid && !state.analyzing) {
+        lastRenderSig = "";
+        void loadFor(vid);
+      }
       return;
     }
     uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
-    state.summary = result;
+    // позиции тем и ярких — по набору, который анализировали; если за это
+    // время комментарии пересобрались, переносим их по id
+    state.summary = state.comments === comments ? result : unpackSummary(packSummary(result, comments), state.comments);
     state.newIds = new Set();
     if (state.commentFilter === "new") state.commentFilter = "all";
     uiEl("summary-placeholder").textContent = "";
@@ -1534,6 +1604,33 @@ async function analyze() {
       uiProgress(null);
     }
   }
+}
+
+// какая доля настроения раскрыта (positive | neutral | negative | null)
+let sentimentOpen = null;
+
+function sentimentExamplesHtml(s, kind) {
+  const list = (s.sentimentIds?.[kind] || []).map((i) => state.comments[i]).filter(Boolean);
+  const label = { positive: "Позитивные", neutral: "Нейтральные", negative: "Негативные" }[kind];
+  if (!list.length) return "";
+  return `<div class="sent-examples"><div class="hint">${label} — примеры, которые отметил ИИ</div>${list
+    .map((c) => commentCard(c, { compact: true }))
+    .join("")}</div>`;
+}
+
+function toggleSentiment(kind) {
+  const s = state.summary;
+  if (!s) return;
+  sentimentOpen = sentimentOpen === kind ? null : kind;
+  const box = $("summary-sentiment");
+  box.querySelectorAll(".sent-seg").forEach((b) => {
+    const on = b.dataset.sent === sentimentOpen;
+    b.classList.toggle("open", on);
+    b.setAttribute("aria-expanded", String(on));
+  });
+  const col = box.querySelector(".sent-collapse");
+  if (sentimentOpen) col.querySelector(".collapse-inner").innerHTML = sentimentExamplesHtml(s, sentimentOpen);
+  col.classList.toggle("open", Boolean(sentimentOpen));
 }
 
 // plural(5, "комментарий", "комментария", "комментариев") → «комментариев»
@@ -1572,7 +1669,7 @@ function renderSummary() {
       s.analyzed && s.analyzed < s.commentCount
         ? ` · по ${s.analyzed} самым залайканным из ${s.commentCount}`
         : s.commentCount
-          ? ` · по ${s.commentCount} комментариям`
+          ? ` · по ${s.commentCount} ${plural(s.commentCount, "комментарию", "комментариям", "комментариям")}`
           : "";
     const nNew = s.fromHistory ? state.newIds?.size || 0 : 0;
     hist.innerHTML = s.fromHistory
@@ -1638,15 +1735,21 @@ function renderSummary() {
     ];
     const pct = (n) => Math.round((n / total) * 100);
     box.classList.remove("hidden");
+    // Каждая доля — кнопка: полоса и подпись под ней; клик раскрывает
+    // примеры комментариев этой тональности (их отмечает ИИ при анализе).
+    const ids = s.sentimentIds || {};
+    const hasEx = SENT_KINDS.some((k) => ids[k]?.length);
     box.innerHTML = `
-      <div class="subhead">Настроение зрителей</div>
-      <div class="sentiment-bar">${parts
+      <div class="subhead">Настроение зрителей${hasEx ? ' <span class="hint">нажмите на полосу — примеры</span>' : ""}</div>
+      <div class="sentiment-row">${parts
         .filter(([, n]) => n)
-        .map(([k, n, label]) => `<i class="sentiment-fill ${k}" style="flex:${n}" title="${label}: ${n} из ${total}"></i>`)
+        .map(([k, n, label]) => {
+          const ex = ids[k]?.length || 0;
+          const open = sentimentOpen === k;
+          return `<button class="sent-seg ${k}${open ? " open" : ""}" style="flex:${n} 1 0" data-sent="${k}"${ex ? "" : " disabled"} aria-expanded="${open}" title="${label}: ${n} из ${total}${ex ? " — показать примеры" : ""}"><i></i><span><b>${pct(n)}%</b> ${label}</span></button>`;
+        })
         .join("")}</div>
-      <div class="sentiment-legend">${parts
-        .map(([k, n, label]) => `<span class="lg lg-${k}" title="${n} из ${total}"><b>${pct(n)}%</b> ${label}</span>`)
-        .join("")}</div>`;
+      <div class="collapse sent-collapse${sentimentOpen ? " open" : ""}"><div class="collapse-inner">${sentimentOpen ? sentimentExamplesHtml(s, sentimentOpen) : ""}</div></div>`;
   } else {
     box.classList.add("hidden");
   }
@@ -1695,9 +1798,9 @@ function renderInsights() {
   box.innerHTML = `
     <div class="section-head"><span>Обзор</span><span class="hint">считается без ИИ</span></div>
     <div class="stats">
-      ${stat(st.total, "комментариев", "all")}
-      ${stat(st.likes, "лайков", "popular")}
-      ${stat(st.questions, "вопросов", st.questions ? "questions" : "")}
+      ${stat(st.total, plural(st.total, "комментарий", "комментария", "комментариев"), "all")}
+      ${stat(st.likes, st.likes >= 1000 ? "лайков" : plural(st.likes, "лайк", "лайка", "лайков"), "popular")}
+      ${stat(st.questions, plural(st.questions, "вопрос", "вопроса", "вопросов"), st.questions ? "questions" : "")}
       ${stat(st.withTime, "с таймкодами", st.withTime ? "timecodes" : "")}
     </div>
     ${
@@ -1705,7 +1808,7 @@ function renderInsights() {
         ? `<div class="subhead">О чём чаще пишут</div><div class="word-cloud">${words
             .map((w, i) => {
               const size = i < 3 ? "l" : i < 7 ? "m" : "s";
-              return `<button class="word ${size}" data-word="${esc(w.word)}" title="${w.count} комментариев — показать">${esc(w.word)}<span>${w.count}</span></button>`;
+              return `<button class="word ${size}" data-word="${esc(w.word)}" title="${w.count} ${plural(w.count, "комментарий", "комментария", "комментариев")} — показать">${esc(w.word)}<span>${w.count}</span></button>`;
             })
             .join("")}</div>`
         : ""
@@ -2612,7 +2715,13 @@ async function findActiveVideoTab() {
     /* игнорируем */
   }
 
-  // Сначала активная вкладка обычного окна — это то, что пользователь видит.
+  // Сначала активная вкладка ТЕКУЩЕГО окна (где открыта панель), потом других.
+  try {
+    const cur = await chrome.windows.getCurrent();
+    wins = [...(wins || [])].sort((a, b) => (b.id === cur?.id) - (a.id === cur?.id));
+  } catch (e) {
+    /* порядок как есть */
+  }
   for (const w of wins || []) {
     const active = (w.tabs || []).find((t) => t.active);
     if (active && YT.test(active.url || "")) return active;
@@ -2656,7 +2765,7 @@ async function refreshFromActiveTab() {
       const reply = await chrome.tabs.sendMessage(tab.id, { type: "yt:meta-query" });
       if (reply?.videoId) {
         await loadFor(reply.videoId);
-        if (reply.meta) {
+        if (reply.meta && state.videoId === reply.videoId) {
           state.meta = reply.meta;
           await safeSessionSet({ [`meta:${reply.videoId}`]: reply.meta }, { keepVideoId: reply.videoId });
           renderHeader();
@@ -2757,7 +2866,11 @@ function bindEvents() {
     if (Number.isFinite(quick)) {
       state.settings.maxComments = Math.min(2000, Math.max(10, quick));
       $("set-max").value = state.settings.maxComments;
-      void saveSettings(false).then(() => analyze());
+      // сохраняем только лимит — недосохранённые правки в настройках не трогаем
+      void chrome.storage.local
+        .set({ settings: { ...state.settings } })
+        .catch(() => {})
+        .then(() => analyze());
     } else {
       analyze();
     }
@@ -2889,6 +3002,11 @@ function bindEvents() {
       const txt = mt.previousElementSibling;
       const open = txt.classList.toggle("clamp") === false;
       mt.textContent = open ? "Свернуть" : "Показать полностью";
+      return;
+    }
+    const seg = e.target.closest(".sent-seg");
+    if (seg) {
+      toggleSentiment(seg.dataset.sent);
       return;
     }
     const rt = e.target.closest(".reply-toggle");

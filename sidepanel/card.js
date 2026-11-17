@@ -1,8 +1,13 @@
 // Сводка картинкой: PNG-карточка для отправки в мессенджер.
 // Рисуется на canvas локально — без сервисов и запросов к ИИ.
 
-const W = 720; // ширина в CSS-пикселях; рисуем в 2× для чёткости
-const PAD = 36;
+// Карточку чаще всего смотрят в мессенджере на телефоне, где она ужимается
+// до ~360 px. Поэтому логическая ширина небольшая (480), а шрифты крупные
+// относительно неё; рисуем с запасом (×3 → 1440 px), чтобы было чётко.
+// На телефоне основной текст выходит ~14 px, подписи — не меньше ~10 px.
+const W = 480;
+const PAD = 24;
+const SCALE = 3;
 const FONT = '"Segoe UI Variable Text", "Segoe UI", Roboto, system-ui, sans-serif';
 const C = {
   bg: "#111113",
@@ -76,7 +81,7 @@ async function loadThumb(urls) {
  * @returns {Promise<Blob>} PNG
  */
 export async function renderSummaryCard(s, meta) {
-  const scale = 2;
+  const scale = SCALE;
   const draft = document.createElement("canvas");
   draft.width = W * scale;
   draft.height = 2400 * scale;
@@ -92,7 +97,7 @@ export async function renderSummaryCard(s, meta) {
   // Превью видео баннером
   const thumb = await loadThumb([meta?.thumbs?.maxres, meta?.thumbs?.sd, meta?.thumbs?.hq].filter(Boolean));
   if (thumb) {
-    const bh = 260;
+    const bh = 180;
     const ratio = Math.max(W / thumb.width, bh / thumb.height);
     const sw = W / ratio;
     const sh = bh / ratio;
@@ -103,14 +108,14 @@ export async function renderSummaryCard(s, meta) {
     g.addColorStop(1, C.bg);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, bh);
-    y = bh - 70;
+    y = bh - 52;
   } else {
     y = PAD;
   }
 
   // Метка
   ctx.fillStyle = C.accent;
-  ctx.font = `700 13px ${FONT}`;
+  ctx.font = `700 14px ${FONT}`;
   ctx.fillText("ЧТО ГОВОРЯТ В КОММЕНТАРИЯХ", PAD, y);
   y += 26;
 
@@ -136,86 +141,117 @@ export async function renderSummaryCard(s, meta) {
   const total = (sp.positive || 0) + (sp.neutral || 0) + (sp.negative || 0);
   if (total) {
     const parts = [
-      [sp.positive || 0, C.pos, "положительные"],
-      [sp.neutral || 0, C.neu, "нейтральные"],
-      [sp.negative || 0, C.neg, "негативные"],
+      [sp.positive || 0, C.pos, "позитив"],
+      [sp.neutral || 0, C.neu, "нейтрально"],
+      [sp.negative || 0, C.neg, "негатив"],
     ];
+    // Сегменты с зазором, как в панели; под каждым — подпись по центру:
+    // «68%» крупно и слово под ним. Узкий сегмент получает минимум ширины,
+    // чтобы подпись поместилась.
+    const shown = parts.filter(([v]) => v > 0);
+    const GAP = 4;
+    const MIN = 70;
+    const free = inner - GAP * (shown.length - 1);
+    let widths = shown.map(([v]) => (v / total) * free);
+    const small = widths.map((w) => w < MIN);
+    const fixed = small.filter(Boolean).length * MIN;
+    const restSum = widths.reduce((a, w, i) => a + (small[i] ? 0 : w), 0);
+    widths = widths.map((w, i) => (small[i] ? MIN : (w / restSum) * (free - fixed)));
     let x = PAD;
-    roundRect(ctx, PAD, y, inner, 10, 5);
-    ctx.save();
-    ctx.clip();
-    for (const [v, color] of parts) {
-      const w = (v / total) * inner;
+    shown.forEach(([v, color, label], i) => {
+      const w = widths[i];
       ctx.fillStyle = color;
-      ctx.fillRect(x, y, w, 10);
-      x += w;
-    }
-    ctx.restore();
-    y += 20;
-    ctx.font = `500 14px ${FONT}`;
-    x = PAD;
-    for (const [v, color, label] of parts) {
-      const txt = `${Math.round((v / total) * 100)}% ${label}`;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x + 4, y + 9, 4, 0, Math.PI * 2);
+      roundRect(ctx, x, y, w, 10, 5);
       ctx.fill();
+      const cx = x + w / 2;
+      ctx.textBaseline = "top";
+      ctx.font = `700 18px ${FONT}`;
+      ctx.fillStyle = C.fg;
+      const pctTxt = `${Math.round((v / total) * 100)}%`;
+      ctx.fillText(pctTxt, cx - ctx.measureText(pctTxt).width / 2, y + 20);
+      ctx.font = `500 14px ${FONT}`;
       ctx.fillStyle = C.fg2;
-      ctx.fillText(txt, x + 14, y + 1);
-      x += 14 + ctx.measureText(txt).width + 22;
-    }
-    y += 40;
+      ctx.fillText(label, cx - ctx.measureText(label).width / 2, y + 43);
+      x += w + GAP;
+    });
+    y += 76;
   }
 
   // Текст сводки на подложке
   ctx.font = `400 19px ${FONT}`;
+  // Каждая строка — по центру своей полосы высотой LH, поля сверху и снизу
+  // одинаковые (раньше снизу оставался лишний межстрочный интервал).
   const sumLines = wrap(ctx, s.summary || "", inner - 40);
-  const boxH = sumLines.length * 29 + 36;
+  const LH = 29;
+  const PADV = 14;
+  const boxH = sumLines.length * LH + PADV * 2;
   ctx.fillStyle = C.card;
   roundRect(ctx, PAD, y, inner, boxH, 16);
   ctx.fill();
   ctx.fillStyle = C.fg;
-  let ty = y + 18;
-  for (const line of sumLines) {
-    ctx.fillText(line, PAD + 20, ty);
-    ty += 29;
-  }
+  ctx.textBaseline = "middle";
+  sumLines.forEach((line, i) => ctx.fillText(line, PAD + 20, y + PADV + LH * i + LH / 2 + 1));
+  ctx.textBaseline = "top";
   y += boxH + 26;
 
   // Темы чипами
   const topics = (s.topics || []).slice(0, 6);
   if (topics.length) {
     ctx.fillStyle = C.muted;
-    ctx.font = `700 12px ${FONT}`;
+    ctx.font = `700 14px ${FONT}`;
     ctx.fillText("ГЛАВНЫЕ ТЕМЫ", PAD, y);
     y += 24;
-    ctx.font = `500 15px ${FONT}`;
-    let x = PAD;
-    for (const t of topics) {
+    // Плашки раскладываем по строкам, затем растягиваем каждую строку на
+    // всю ширину (свободное место делится поровну), текст — по центру.
+    ctx.font = `500 16px ${FONT}`;
+    const H = 36;
+    const GAP = 8;
+    const chips = topics.map((t) => {
       const label = String(t.name || "");
       const count = t.count != null ? String(t.count) : "";
-      const w = ctx.measureText(label).width + ctx.measureText(count).width + 36;
-      if (x + w > W - PAD) {
-        x = PAD;
-        y += 42;
-      }
-      ctx.fillStyle = C.chip;
-      roundRect(ctx, x, y, w, 32, 16);
-      ctx.fill();
-      ctx.fillStyle = C.fg;
-      ctx.fillText(label, x + 14, y + 7);
-      ctx.fillStyle = C.muted;
-      ctx.fillText(count, x + 22 + ctx.measureText(label).width, y + 7);
-      x += w + 8;
+      const lw = ctx.measureText(label).width;
+      const cw = count ? ctx.measureText(count).width : 0;
+      return { label, count, lw, cw, w: lw + (count ? cw + 8 : 0) + 32 };
+    });
+    const rows = [];
+    for (const c of chips) {
+      const row = rows[rows.length - 1];
+      const used = row ? row.reduce((a, r) => a + r.w, 0) + GAP * row.length : 0;
+      if (!row || used + c.w > inner) rows.push([c]);
+      else row.push(c);
     }
-    y += 32 + 28;
+    ctx.textBaseline = "middle";
+    for (const row of rows) {
+      const extra = (inner - row.reduce((a, r) => a + r.w, 0) - GAP * (row.length - 1)) / row.length;
+      let x = PAD;
+      for (const c of row) {
+        const w = c.w + Math.max(0, extra);
+        ctx.fillStyle = C.chip;
+        roundRect(ctx, x, y, w, H, H / 2);
+        ctx.fill();
+        const tw = c.lw + (c.count ? c.cw + 8 : 0);
+        const tx = x + (w - tw) / 2;
+        const cy = y + H / 2 + 1; // кириллица в Segoe сидит чуть выше середины
+        ctx.fillStyle = C.fg;
+        ctx.fillText(c.label, tx, cy);
+        if (c.count) {
+          ctx.fillStyle = C.muted;
+          ctx.fillText(c.count, tx + c.lw + 8, cy);
+        }
+        x += w + GAP;
+      }
+      y += H + GAP;
+    }
+    ctx.textBaseline = "top";
+    y -= GAP;
+    y += 28;
   }
 
   // Ключевые мнения — нумерованным списком, до 4 пунктов
   const points = (s.points || []).filter(Boolean).slice(0, 4);
   if (points.length) {
     ctx.fillStyle = C.muted;
-    ctx.font = `700 12px ${FONT}`;
+    ctx.font = `700 14px ${FONT}`;
     ctx.fillText("КЛЮЧЕВЫЕ МНЕНИЯ", PAD, y);
     y += 26;
     points.forEach((p, i) => {
@@ -228,10 +264,10 @@ export async function renderSummaryCard(s, meta) {
       const num = String(i + 1);
       ctx.fillText(num, PAD + 11 - ctx.measureText(num).width / 2, y + 5);
       ctx.fillStyle = C.fg;
-      ctx.font = `400 17px ${FONT}`;
-      for (const line of wrap(ctx, p, inner - 36, 2)) {
-        ctx.fillText(line, PAD + 34, y + 1);
-        y += 25;
+      ctx.font = `400 18px ${FONT}`;
+      for (const line of wrap(ctx, p, inner - 34, 3)) {
+        ctx.fillText(line, PAD + 34, y);
+        y += 26;
       }
       y += 10;
     });
@@ -240,7 +276,7 @@ export async function renderSummaryCard(s, meta) {
 
   // Подпись
   ctx.fillStyle = C.muted;
-  ctx.font = `500 13px ${FONT}`;
+  ctx.font = `500 14px ${FONT}`;
   const date = new Date(s.updatedAt || Date.now()).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
   ctx.fillText(`Сводка комментариев YouTube · ${date}`, PAD, y);
   y += 18 + PAD;

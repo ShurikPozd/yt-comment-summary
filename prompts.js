@@ -10,7 +10,7 @@ export const LANG_LABELS = {
 export const CHUNK_ANALYZE_SYSTEM = `Ты анализируешь комментарии к YouTube-видео. Тебе дадут список комментариев «№|текст» (№ с 0) и, возможно, темы, уже найденные в других частях обсуждения.
 
 Верни ТОЛЬКО валидный JSON одной строкой, без пробелов и переносов:
-{"topics":{"Тема":{"n":N,"ids":[№,№]}},"points":["..."],"notable":[№],"sentiment":{"positive":N,"neutral":N,"negative":N}}
+{"topics":{"Тема":{"n":N,"ids":[№,№]}},"points":["..."],"notable":[№],"sentiment":{"positive":N,"neutral":N,"negative":N},"ex":{"p":[№],"u":[№],"n":[№]}}
 
 Правила:
 - topics: 2-5 тем, которые РЕАЛЬНО обсуждают. Название 2-4 слова, на языке комментариев. Каждый комментарий — максимум в одной теме.
@@ -21,6 +21,7 @@ export const CHUNK_ANALYZE_SYSTEM = `Ты анализируешь коммен�
 - points: 1-3 ключевых мнения, каждое до 12 слов.
 - notable: 1-2 № самых ярких/смешных/спорных комментариев.
 - sentiment: сколько комментариев позитивных / нейтральных / негативных, сумма = числу комментариев. Спам, ссылки, «👍» — нейтральные.
+- ex: примеры по тональности — до 4 самых показательных № позитивных (p), нейтральных (u) и негативных (n); пустой массив, если таких нет.
 - № — только числа из списка. Без пояснений и markdown.`;
 
 export function chunkUser(comments, knownTopics = []) {
@@ -39,9 +40,16 @@ export const FINAL_SYSTEM = `Ты делаешь итоговую сводку �
 Верни ТОЛЬКО текст сводки — сплошной абзац, БЕЗ JSON-обёртки, без markdown, без списков, без эмодзи, на языке выходного формата (до 380 символов): о чём в основном пишут, радуются/спорят/жалуются, главный вывод.`;
 
 export function finalUser({ topics, points, sentiment, notableComments, lang }) {
-  const topicLines = Object.entries(topics)
-    .map(([name, n]) => `- ${name}: ${n}`)
-    .join("\n") || "- (тем не выделено)";
+  // topics — массив { name, count } (раньше ждали объект «имя → число», и в
+  // запрос уходило «0: [object Object]» — модель не видела тем)
+  const list = Array.isArray(topics)
+    ? topics.map((t) => [t?.name, t?.count ?? t?.n])
+    : Object.entries(topics || {});
+  const topicLines =
+    list
+      .filter(([name]) => name)
+      .map(([name, n]) => `- ${name}: ${Number(n) || 0}`)
+      .join("\n") || "- (тем не выделено)";
   const pointsText = points.map((p) => `- ${p}`).join("\n") || "- (нет)";
   const notableText =
     notableComments.map((c, i) => `${i + 1}. «${(c.text || "").slice(0, 220)}»`).join("\n") ||

@@ -729,7 +729,6 @@
       collector.cancelled = true;
     }
     currentVideoId = id;
-    armAutoplayStop(); // новое видео — снова не даём ему стартовать само
     void touchVideoOrder(id);
 
     // светимся на новом видео
@@ -762,27 +761,8 @@
   // включаются в настройках панели и применяются сразу, без перезагрузки.
   const playerPrefs = { noAutoplay: false, hideProgress: false };
 
-  // Классы плеера проверены на живом YouTube: полоса — .ytp-progress-bar-container,
-  // «/ 1:58:54» — .ytp-time-separator + .ytp-time-duration. Текущее время оставляем.
-  const HIDE_PROGRESS_CSS = `
-    .ytp-progress-bar-container,
-    .ytp-time-separator,
-    .ytp-time-duration,
-    .ytp-bound-time-right { display: none !important; }`;
-
-  function applyHideProgress() {
-    let el = document.getElementById("ytcs-hide-progress");
-    if (playerPrefs.hideProgress) {
-      if (!el) {
-        el = document.createElement("style");
-        el.id = "ytcs-hide-progress";
-        el.textContent = HIDE_PROGRESS_CSS;
-        (document.head || document.documentElement).appendChild(el);
-      }
-    } else {
-      el?.remove();
-    }
-  }
+  // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
+  const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
 
   function readPlayerPrefs(settings, { announce = false } = {}) {
     const before = { ...playerPrefs };
@@ -806,67 +786,15 @@
     .get("settings")
     .then((o) => {
       readPlayerPrefs(o.settings);
-      // настройки читаются асинхронно — первое видео страницы взводим здесь
-      armAutoplayStop();
     })
     .catch(() => {});
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.settings) readPlayerPrefs(changes.settings.newValue, { announce: true });
   });
 
-  // Автозапуск: пока «взведено», любой запуск основного плеера без вашего
-  // действия ставится на паузу. Действием считается клик по самому плееру или
-  // клавиша play/pause — клик по превью в ленте не считается (так и работал
-  // AutoplayStopper). После вашего запуска — снимаем взвод до следующего видео.
-  let autoplayArmed = false;
-  let lastPlayerGestureAt = 0;
+  // Блокировка автозапуска — в early.js: он грузится раньше плеера и успевает
+  // остановить видео до первого кадра.
   const isWatchPage = () => location.pathname === "/watch";
-  const mainVideo = () => document.querySelector("#movie_player video, video.html5-main-video");
-
-  window.addEventListener(
-    "pointerdown",
-    (e) => {
-      // клики по нашей кнопке и меню — не «запуск видео»
-      if (e.isTrusted && e.target.closest?.("#movie_player, ytd-player") && !e.target.closest(".ytcs-btn, .ytcs-menu")) {
-        lastPlayerGestureAt = Date.now();
-      }
-    },
-    true
-  );
-  window.addEventListener(
-    "keydown",
-    (e) => {
-      if (!e.isTrusted) return;
-      const typing = e.target.closest?.("input, textarea, [contenteditable='true'], [contenteditable='']");
-      if (typing) return;
-      if ([" ", "k", "K", "л", "Л", "MediaPlayPause", "MediaPlay"].includes(e.key)) lastPlayerGestureAt = Date.now();
-    },
-    true
-  );
-
-  // play не всплывает, но проходит фазу захвата — ловим на document.
-  document.addEventListener(
-    "play",
-    (e) => {
-      const v = e.target;
-      if (!playerPrefs.noAutoplay || !autoplayArmed || !isWatchPage()) return;
-      if (!(v instanceof HTMLVideoElement) || !v.closest("#movie_player, ytd-player")) return;
-      if (Date.now() - lastPlayerGestureAt < 1500) {
-        autoplayArmed = false; // это вы нажали play — дальше не мешаем
-        return;
-      }
-      v.pause();
-    },
-    true
-  );
-
-  function armAutoplayStop() {
-    if (!playerPrefs.noAutoplay || !isWatchPage()) return;
-    autoplayArmed = true;
-    // Скрипт мог загрузиться, когда видео уже пошло, — останавливаем.
-    const v = mainVideo();
-    if (v && !v.paused && Date.now() - lastPlayerGestureAt > 1500) v.pause();
-  }
 
   // ---------------- Кнопка и меню в плеере YouTube ----------------
   // Своё меню в стиле плеера (системное контекстное меню Chrome не
@@ -1380,8 +1308,7 @@
         video.currentTime = Math.max(0, t);
         // клик по таймкоду в панели — это действие пользователя: блокировщик
         // автозапуска не должен тут же ставить видео на паузу
-        lastPlayerGestureAt = Date.now();
-        autoplayArmed = false;
+        globalThis.__ytcs?.allowPlay?.();
         video.play?.().catch(() => {});
         window.scrollTo({ top: 0, behavior: "smooth" });
         sendResponse({ ok: true });

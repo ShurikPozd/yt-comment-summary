@@ -112,11 +112,15 @@ function isTokenLimitErr(e) {
 // Текст «Сервер недоступен» / «таймаут» sidepanel распознаёт и показывает
 // дружелюбное сообщение — не менять формулировки без правки friendlyError().
 const NETWORK_ERR_MSG =
-  "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Проверь «Проверить связь» и перепробуй.";
-const TIMEOUT_ERR_MSG = "Сервер не ответил вовремя (таймаут). Попробуй ещё раз.";
+  "Сервер недоступен (сеть): возможно Render спит (холодный старт ~50 с) или нет связи. Нажмите «Проверить связь» в настройках и попробуйте ещё раз.";
+const TIMEOUT_ERR_MSG = "Сервер не ответил вовремя (таймаут). Попробуйте ещё раз.";
+const CANCELLED_MSG = "Запрос отменён";
+const CUT_MSG = "Ответ сервера оборвался на середине. Запустите ещё раз.";
 
-// Сколько ждать следующую порцию стрима, прежде чем считать соединение зависшим.
-const STREAM_IDLE_MS = 45000;
+// Сколько ждать следующую порцию стрима, прежде чем считать соединение
+// зависшим. Сервер между своими попытками к Groq молчит до ~90 с — меньший
+// порог обрывал живой запрос.
+const STREAM_IDLE_MS = 120000;
 
 function proxyError(message, retryable) {
   const e = new Error(message);
@@ -125,8 +129,8 @@ function proxyError(message, retryable) {
 }
 
 function friendlyLLMError(data) {
-  let msg = "Модель не ответила (временный сбой на сервере). Попробуй ещё раз.";
-  if (data?.detail) msg = `Модель не ответила: ${data.detail} Попробуй ещё раз.`;
+  let msg = "Модель не ответила (временный сбой на сервере). Попробуйте ещё раз.";
+  if (data?.detail) msg = `Модель не ответила: ${data.detail} Попробуйте ещё раз.`;
   return msg;
 }
 
@@ -146,8 +150,15 @@ async function errorFromResponse(resp) {
 }
 
 /** Приводит сетевые сбои и таймауты к понятным сообщениям; повторять стоит только их и 5xx. */
-function normalizeError(e, timedOut) {
-  if (timedOut || e?.name === "AbortError") return proxyError(TIMEOUT_ERR_MSG, true);
+function normalizeError(e, timedOut, cancelled) {
+  if (cancelled) {
+    const c = proxyError(CANCELLED_MSG, false);
+    c.cancelled = true;
+    return c;
+  }
+  // Таймаут НЕ повторяем сами: сервер мог ещё работать над запросом (он ждёт
+  // окно лимита Groq), и повтор удвоил бы расход токенов и вызвал новые 429.
+  if (timedOut || e?.name === "AbortError") return proxyError(TIMEOUT_ERR_MSG, false);
   if (/Failed to fetch|fetch failed|NetworkError|network error/i.test(String(e?.message || e))) {
     return proxyError(NETWORK_ERR_MSG, true);
   }
@@ -176,8 +187,8 @@ export class GroqProxy {
   }
 
   /** Один вызов прокси. Возвращает строку content; при ошибке бросает. */
-  chat(messages, { jsonMode = false, maxTokens = 800, temperature = 0.1, timeoutMs = 120000 } = {}) {
-    return this._run(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream: false });
+  chat(messages, { jsonMode = false, maxTokens = 800, temperature = 0.1, timeoutMs = 120000, signal } = {}) {
+    return this._run(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream: false, signal });
   }
 
   /** Проверка настроек: тривиальный вызов. */
@@ -194,13 +205,15 @@ export class GroqProxy {
    * onDelta вызывается с накопленным текстом по мере поступления.
    * Возвращает полный текст; при ошибке бросает.
    */
-  chatStream(messages, { jsonMode = false, maxTokens = 800, temperature = 0.1, timeoutMs = 150000 } = {}, onDelta) {
-    return this._run(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream: true, onDelta });
+  chatStream(messages, { jsonMode = false, maxTokens = 800, temperature = 0.1, timeoutMs = 150000, signal } = {}, onDelta) {
+    return this._run(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream: true, onDelta, signal });
   }
 
   async _run(messages, opts) {
     if (!this.configured) throw new Error("Настройки прокси не заполнены (URL/секрет/модель).");
     return this.queue.push(async () => {
+      // запрос отменённого анализа, дождавшийся своей очереди, не отправляем
+      if (opts.signal?.aborted) throw normalizeError(null, false, true);
       let lastErr = null;
       for (let attempt = 0; attempt < 2; attempt++) {
         const progress = { received: false };
@@ -223,13 +236,16 @@ export class GroqProxy {
    * снимался сразу после заголовков, и зависший стрим держал SerialQueue
    * (а с ней — все последующие запросы к модели) бесконечно.
    */
-  async _once(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream, onDelta }, progress) {
+  async _once(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream, onDelta, signal }, progress) {
     const controller = new AbortController();
     let timedOut = false;
     const abort = () => {
       timedOut = true;
       controller.abort();
     };
+    // отмена снаружи (анализ отменили) обрывает и сам запрос
+    const onCancel = () => controller.abort();
+    signal?.addEventListener("abort", onCancel, { once: true });
     const totalTimer = setTimeout(abort, timeoutMs);
     let idleTimer = null;
     const bumpIdle = () => {
@@ -263,6 +279,7 @@ export class GroqProxy {
       const decoder = new TextDecoder();
       let buf = "";
       let full = "";
+      let finished = false;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -274,6 +291,8 @@ export class GroqProxy {
           buf = buf.slice(idx + 1);
           if (!line.startsWith("data:")) continue;
           const payload = line.slice(5).trim();
+          if (payload === "[DONE]") finished = true;
+          if (payload === "[DONE]") finished = true;
           if (!payload || payload === "[DONE]") continue;
           let evt;
           try {
@@ -290,12 +309,15 @@ export class GroqProxy {
         }
       }
       if (!full) throw proxyError("Пустой ответ прокси.", true);
+      // сервер всегда завершает поток меткой [DONE]; без неё ответ обрезан
+      if (!finished) throw proxyError(CUT_MSG, false);
       return full;
     } catch (e) {
-      throw normalizeError(e, timedOut);
+      throw normalizeError(e, timedOut, Boolean(signal?.aborted));
     } finally {
       clearTimeout(totalTimer);
       clearTimeout(idleTimer);
+      signal?.removeEventListener("abort", onCancel);
     }
   }
 }
