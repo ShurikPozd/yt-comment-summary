@@ -2661,9 +2661,11 @@ button.ghost .ic,
   padding-bottom: 11px;
 }
 
+/* клавиши — подписи заглавными (Alt, K): оптическая добавка не нужна,
+   с ней текст был на 0,8px выше центра (замер) */
 kbd {
-  padding-bottom: 1px;
-  line-height: 17px;
+  padding-bottom: 0;
+  line-height: 18px;
 }
 
 .status-note {
@@ -3074,4 +3076,11 @@ button.ghost,
   line-height: 17px;
   height: 18px;
   padding-bottom: 1px;
+}
+
+/* «ещё N»: у стрелки пустое поле слева — по замеру контент уезжал
+   вправо на 1,3px; смещаем на 1px */
+.more-toggle {
+  padding-left: 7px;
+  padding-right: 9px;
 }
