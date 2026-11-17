@@ -1274,9 +1274,37 @@ function cancelAnalysis(reason) {
 // историю, а панель сразу свободна для нового видео. Новый запуск анализа
 // остановит фоновый (лимит Groq общий).
 const detachedRuns = new Set();
+// Анализ, ушедший в фон при смене видео: видно и можно отменить.
+let bgRun = null; // { run, title }
+
+function renderBgRun() {
+  const el = $("bg-run");
+  if (!bgRun) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  const t = bgRun.title.length > 40 ? bgRun.title.slice(0, 38).replace(/\s+\S*$/, "") + "…" : bgRun.title;
+  el.innerHTML = `<span class="dot pulse"></span><span class="bg-run-text" title="Сводка «${esc(bgRun.title)}» пишется в фоне">В фоне пишется сводка «${esc(t)}»</span><button class="link-btn" data-bg-cancel>Отменить</button>`;
+  el.classList.remove("hidden");
+}
+
+function cancelBgRun() {
+  if (!bgRun) return;
+  if (bgRun.run === analyzeRun) {
+    analyzeAbort?.abort();
+    analyzeRun++;
+  }
+  bgRun = null;
+  renderBgRun();
+  showToast("Фоновая сводка отменена");
+}
+
 function detachAnalysis() {
   if (!state.analyzing) return;
   detachedRuns.add(analyzeRun);
+  bgRun = { run: analyzeRun, title: state.meta?.title || "прошлого видео" };
+  renderBgRun();
   resetAnalyzeUi();
   showToast("Сводка прошлого видео допишется в фоне и сохранится в историю");
 }
@@ -1650,6 +1678,10 @@ async function analyze() {
       uiEl("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
     }
   } finally {
+    if (bgRun?.run === run) {
+      bgRun = null;
+      renderBgRun();
+    }
     if (onScreen()) {
       state.analyzing = false;
       $("btn-cancel-analyze").classList.add("hidden");
@@ -3044,6 +3076,9 @@ function bindEvents() {
       state.commentLimit = COMMENTS_PAGE;
       renderComments();
     }, 120);
+  });
+  $("bg-run").addEventListener("click", (e) => {
+    if (e.target.closest("[data-bg-cancel]")) cancelBgRun();
   });
   $("btn-more-comments").addEventListener("click", () => {
     state.commentLimit += COMMENTS_PAGE;

@@ -2967,3 +2967,30 @@ button.ghost,
     display: none;
   }
 }
+
+/* Сводка прошлого видео дописывается в фоне — видно и можно отменить */
+.bg-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 16px 0;
+  padding: 7px 12px 8px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--fg-2);
+}
+
+.bg-run-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bg-run .link-btn {
+  flex: none;
+  color: var(--fg);
+}
