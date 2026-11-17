@@ -378,6 +378,22 @@ const state = {
 const COMMENTS_PAGE = 60;
 
 // Таймкоды дальше конца видео — скорее «10:30 утра», чем момент ролика.
+// Расчёты обзора и моментов — один раз на набор комментариев: массив
+// state.comments всегда заменяется целиком, поэтому ключ — сам массив.
+const calcCache = new WeakMap();
+function cached(name, fn) {
+  let m = calcCache.get(state.comments);
+  if (!m) calcCache.set(state.comments, (m = new Map()));
+  const key = `${name}|${maxSec()}`;
+  if (!m.has(key)) m.set(key, fn());
+  return m.get(key);
+}
+
+// все моменты (до 40, по убыванию значимости); срезы — для обзора и экспорта
+function allMoments() {
+  return cached("moments", () => topMoments(state.comments, { maxSec: maxSec(), limit: 40 }));
+}
+
 function maxSec() {
   const d = Number(state.meta?.duration);
   return Number.isFinite(d) && d > 0 ? d + 2 : Infinity;
@@ -411,10 +427,14 @@ function queryParts(query) {
     });
 }
 
-// все слова запроса встречаются в тексте (в любом порядке и форме)
+// все слова запроса встречаются в тексте (в любом порядке и форме);
+// parts — результат queryParts, регулярки собираются один раз на запрос
+const partsRe = new WeakMap();
 function matchesQuery(text, parts) {
+  let res = partsRe.get(parts);
+  if (!res) partsRe.set(parts, (res = parts.map((p) => new RegExp(p, "i"))));
   const t = String(text || "");
-  return parts.every((p) => new RegExp(p, "i").test(t));
+  return res.every((re) => re.test(t));
 }
 
 function hl(text, query) {
@@ -928,7 +948,7 @@ async function renderHistoryList() {
       (e) => `<a class="history-item${e.id === state.videoId ? " current" : ""}" href="https://www.youtube.com/watch?v=${esc(e.id)}" target="_blank" rel="noreferrer">
         <img src="https://i.ytimg.com/vi/${esc(e.id)}/default.jpg" alt="" loading="lazy" />
         <span class="hi-body">
-          <span class="hi-title">${esc(e.title || e.id)}</span>
+          <span class="hi-title">${esc(e.title || (e.id === state.videoId && state.meta?.title) || `Видео ${e.id}`)}</span>
           <span class="hint">${fmtDate(e.updatedAt || e.savedAt)}${e.commentCount ? ` · ${fmtNum(e.commentCount)} комм.` : ""}</span>
         </span>
       </a>`
@@ -1661,9 +1681,9 @@ function renderInsights() {
     box.innerHTML = "";
     return;
   }
-  const st = commentStats(list, maxSec());
-  const words = topWords(list, 14);
-  const moments = topMoments(list, { maxSec: maxSec(), limit: 3 });
+  const st = cached("stats", () => commentStats(list, maxSec()));
+  const words = cached("words", () => topWords(list, 14));
+  const moments = allMoments().slice(0, 3);
   // ветка с наибольшим числом ответов (не считая комментария автора канала —
   // он обычно закреплён и собирает ответы по другой причине)
   const hot = list.reduce(
@@ -1752,7 +1772,7 @@ function countUp(nodes, ms = 550) {
 
 function renderMoments() {
   const list = state.comments;
-  const moments = list.length ? topMoments(list, { maxSec: maxSec(), limit: 40 }) : [];
+  const moments = list.length ? allMoments() : [];
   const badge = $("moments-badge");
   // в счётчике — моменты, которые видны в списке по умолчанию (от двух комментариев)
   const nMulti = moments.filter((m) => m.count > 1).length;
@@ -1829,10 +1849,7 @@ function renderMoments() {
         ${commentCard(cs[0], { compact: true })}
         ${
           more > 0
-            ? `<div class="collapse"><div class="collapse-inner">${cs
-                .slice(1, 12)
-                .map((c) => commentCard(c, { compact: true }))
-                .join("")}</div></div>
+            ? `<div class="collapse"><div class="collapse-inner" data-idx="${m.idxs.slice(1, 12).join(",")}"></div></div>
                <button class="more-toggle" data-more="${more}">${icon("chevron", { size: 13 })}<span>ещё ${more}</span></button>`
             : ""
         }
@@ -2817,7 +2834,7 @@ function bindEvents() {
     if (s.notable?.length) {
       lines.push("", "## Яркие комментарии", ...s.notable.map((c) => `- ${c.author}: ${c.text}`));
     }
-    const moments = topMoments(state.comments, { maxSec: maxSec(), limit: 5 });
+    const moments = allMoments().slice(0, 5);
     if (moments.length && state.videoId) {
       lines.push(
         "",
@@ -2887,6 +2904,18 @@ function bindEvents() {
     const more = e.target.closest(".more-toggle");
     if (more) {
       const m = more.closest(".moment");
+      // остальные комментарии момента рисуем только при первом раскрытии —
+      // на тысячах комментариев вкладка открывается в разы быстрее
+      const inner = m.querySelector(".collapse-inner[data-idx]");
+      if (inner && !inner.dataset.filled) {
+        inner.dataset.filled = "1";
+        inner.innerHTML = inner.dataset.idx
+          .split(",")
+          .map((i) => state.comments[Number(i)])
+          .filter(Boolean)
+          .map((c) => commentCard(c, { compact: true }))
+          .join("");
+      }
       const open = m.classList.toggle("open");
       more.querySelector("span").textContent = open ? "свернуть" : `ещё ${more.dataset.more}`;
       return;
