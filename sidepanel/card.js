@@ -277,22 +277,30 @@ export async function renderSummaryCard(s, meta) {
     ctx.font = `700 14px ${FONT}`;
     ctx.fillText("КЛЮЧЕВЫЕ МНЕНИЯ", PAD, y);
     y += 26;
+    // Номер — точно по центру кружка (по реальным границам цифры), первая
+    // строка текста — по центру кружка по высоте заглавных букв.
+    const LH = 27;
+    const R = 12;
     points.forEach((p, i) => {
+      const cy = y + LH / 2;
       ctx.fillStyle = C.chip;
       ctx.beginPath();
-      ctx.arc(PAD + 11, y + 12, 11, 0, Math.PI * 2);
+      ctx.arc(PAD + R, cy, R, 0, Math.PI * 2);
       ctx.fill();
+      ctx.textBaseline = "alphabetic";
       ctx.fillStyle = C.fg2;
-      ctx.font = `700 12px ${FONT}`;
+      ctx.font = `700 13px ${FONT}`;
       const num = String(i + 1);
-      ctx.fillText(num, PAD + 11 - ctx.measureText(num).width / 2, y + 5);
+      const nm = ctx.measureText(num);
+      const nx = PAD + R - (nm.actualBoundingBoxLeft + nm.actualBoundingBoxRight) / 2 + nm.actualBoundingBoxLeft;
+      ctx.fillText(num, nx, cy + (nm.actualBoundingBoxAscent - nm.actualBoundingBoxDescent) / 2);
       ctx.fillStyle = C.fg;
       ctx.font = `400 18px ${FONT}`;
-      for (const line of wrap(ctx, p, inner - 34, 3)) {
-        ctx.fillText(line, PAD + 34, y);
-        y += 26;
-      }
-      y += 10;
+      const capH = ctx.measureText("НО").actualBoundingBoxAscent;
+      const lines = wrap(ctx, p, inner - 36, 3);
+      lines.forEach((line, li) => ctx.fillText(line, PAD + 36, cy + capH / 2 + li * LH));
+      ctx.textBaseline = "top";
+      y += lines.length * LH + 10;
     });
     y += 16;
   }

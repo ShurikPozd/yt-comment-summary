@@ -859,7 +859,9 @@ ol.points li::before {
   color: var(--fg-2);
   font-size: 11px;
   font-weight: 700;
-  line-height: 20px;
+  /* цифры Segoe сидят ниже центра строки — приподнимаем на ~1px */
+  line-height: 18px;
+  padding-bottom: 2px;
   text-align: center;
 }
 
@@ -2623,8 +2625,7 @@ button.ghost,
 .search-modes label,
 .more-toggle,
 .reply-toggle,
-.more-replies,
-.max-wrap {
+.more-replies {
   padding-bottom: 0.15em;
 }
 
@@ -2993,4 +2994,84 @@ button.ghost,
 .bg-run .link-btn {
   flex: none;
   color: var(--fg);
+}
+
+/* =====================================================================
+   Лимит: слово слева, число — в своём «окошке» справа, по его центру.
+   Окошко темнее/светлее подложки, радиус вписан во внешний (10 − 4 = 6).
+   ===================================================================== */
+.max-wrap {
+  gap: 8px;
+  padding: 0 4px 0 12px;
+}
+
+.max-wrap span {
+  position: relative;
+  top: -0.075em; /* оптическая середина строки Segoe */
+}
+
+.max-wrap input {
+  width: 54px;
+  height: 26px;
+  padding: 0 0 1px; /* цифры Segoe сидят низко — на 0,5px выше */
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13.5px;
+  font-weight: 650;
+  text-align: center;
+  transition: background-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+
+.max-wrap:hover input {
+  background: var(--bg-2);
+}
+
+.max-wrap input:focus {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* фокус показываем на окошке с числом, а не рамкой всей плашки */
+.max-wrap:focus-within {
+  border-color: transparent;
+}
+
+@media (max-width: 360px) {
+  .max-wrap {
+    padding-left: 4px;
+  }
+
+  .max-wrap input {
+    width: 48px;
+  }
+}
+
+/* Центровка по замерам пикселей (3×):
+   - «таблетка» таймкода: у значка play пусто слева, контент уезжал вправо
+     на ~1,2px; цифры без нижних выносов — оптическая добавка лишняя;
+   - плашки тем и слов — текст был на ~0,8px ниже центра;
+   - бейдж у вкладки — цифра на ~0,7px ниже центра. */
+.tc-big {
+  padding-left: 10px;
+  padding-right: 12px;
+  padding-bottom: 0.05em;
+}
+
+#summary-topics .chip,
+.suggest .chip,
+#comments-chips .chip,
+#moments-sort .chip {
+  padding-bottom: calc(0.15em + 2px);
+}
+
+.word {
+  padding-top: 1.5px;
+  padding-bottom: 4.5px;
+}
+
+.tab-badge {
+  top: 0;
+  line-height: 17px;
+  height: 18px;
+  padding-bottom: 1px;
 }
