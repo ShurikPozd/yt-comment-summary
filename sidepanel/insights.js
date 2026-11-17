@@ -17,6 +17,11 @@ export function splitTimecodes(text, maxSec = Infinity) {
     const min = Number(m[2]);
     const sec = Number(m[3]);
     if (sec > 59 || (m[1] && min > 59)) continue;
+    // «2:30pm», «14:05 мск», «3.10.2023 в 14:05» — это время суток, а не момент видео
+    const after = src.slice(m.index + m[0].length, m.index + m[0].length + 8);
+    const before = src.slice(Math.max(0, m.index - 14), m.index);
+    if (/^\s*(am|pm|мск|утра|вечера|ночи|дня)(?![a-zа-яё])/i.test(after)) continue;
+    if (/\d{1,2}[./]\d{1,2}[./]\d{2,4}\s*(в|at)?\s*$/i.test(before)) continue;
     const t = h * 3600 + min * 60 + sec;
     if (t > maxSec) continue;
     if (m.index > last) out.push(src.slice(last, m.index));
@@ -89,7 +94,7 @@ const STOP = new Set(
 
 // Окончания для грубого стемминга (длинные раньше коротких).
 const RU_ENDINGS = [
-  "иями", "ями", "ами", "ого", "его", "ому", "ему", "ыми", "ими", "ость", "ах", "ях", "ам", "ям",
+  "иями", "ями", "ами", "ого", "его", "ому", "ему", "ыми", "ими", "ах", "ях", "ам", "ям",
   "ой", "ей", "ий", "ый", "ая", "яя", "ое", "ее", "ую", "юю", "ом", "ем", "ов", "ев", "ые", "ие",
   "а", "я", "о", "е", "ы", "и", "у", "ю", "ь",
 ];
@@ -148,7 +153,7 @@ export function topWords(comments, limit = 12) {
       groups.delete(k2);
     }
   }
-  const minCount = comments.length >= 40 ? 3 : 2;
+  const minCount = (comments || []).length >= 40 ? 3 : 2;
   return [...groups.values()]
     .map((g) => ({ count: g.ids.size, forms: g.forms }))
     .filter((g) => g.count >= minCount)

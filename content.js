@@ -121,13 +121,10 @@
         return;
       } catch (e) {
         const em = String(e?.message || e);
-        // не квота — как раньше, fallback на local
+        // не квота — повтором не лечится; в local не пишем: панель читает
+        // только session, а local никто бы не чистил
         if (!/quota|QuotaBytes/i.test(em)) {
-          try {
-            await chrome.storage.local.set(patch);
-          } catch (e2) {
-            /* тоже не влезло */
-          }
+          console.warn("session.set:", em);
           return;
         }
         // квота session: выбиваем самое старое видео
@@ -143,18 +140,15 @@
         try {
           const all = await chrome.storage.session.get(null);
           const stale = Object.keys(all).filter((k) => /^(comments|collect|meta):/i.test(k));
-          if (stale.length) await chrome.storage.session.remove(stale);
+          if (stale.length) {
+            await chrome.storage.session.remove(stale);
+            continue; // место освободили — пробуем записать снова
+          }
         } catch (e2) {
           /* partial */
         }
         break;
       }
-    }
-    // совсем не влезло в session — последняя попытка в local
-    try {
-      await chrome.storage.local.set(patch);
-    } catch (e) {
-      /* некритично: сбор продолжится, просто нет кэша */
     }
   }
 
@@ -386,7 +380,9 @@
     const content = p.content?.content || "";
     if (!content.trim()) return null;
     // Notliked — счётчик без нашего собственного лайка (Liked = +1, если зритель лайкнул сам).
-    const likesLabel = entity.toolbar?.likeCountNotliked || entity.toolbar?.likeCountLiked || "";
+    // ?? а не ||: у комментария без лайков «Notliked» — пустая строка, а
+    // «Liked» = лайки + ваш, то есть «1»
+    const likesLabel = entity.toolbar?.likeCountNotliked ?? entity.toolbar?.likeCountLiked ?? "";
     const state = p.toolbarStateKey && entities ? entities.get("state:" + p.toolbarStateKey) : null;
     return {
       id: p.commentId || null,
@@ -502,7 +498,7 @@
         emptyPages = 0;
       }
       if (!token) break;
-      onBatch?.(out.length);
+      onBatch?.(out);
       await sleep(350);
     }
     return out;
@@ -562,7 +558,7 @@
     const img = root.querySelector("#author-thumbnail img, yt-img-shadow img");
     const avatar = (img?.getAttribute("src") || "").split("=")[0] || null;
     const likesEl = root.querySelector("#vote-count-middle");
-    const likes = parseInt((likesEl?.textContent || "0").replace(/\s+/g, ""), 10) || 0;
+    const likes = parseLikes(likesEl?.textContent || "0");
     const timeEl = root.querySelector("#published-time-text");
     const id = root.querySelector("#comment, yt-comment-view-model")?.getAttribute("comment-id");
     return {
@@ -607,7 +603,7 @@
         );
         cont?.querySelector("tp-yt-paper-button, button")?.click();
       }
-      onBatch?.(out.length);
+      onBatch?.(out);
       if (out.length === before) {
         stagnant++;
         // Ничего нового за несколько проходов — контент-скриптом уже всё собрано
@@ -654,13 +650,37 @@
 
     let comments = [];
     const mine = collector;
-    const onBatch = async (n) => {
+    // Собранное по ходу: при сбое или отмене посреди сбора сохраняем его, а не
+    // теряем (раньше 1500 из 2000 при обрыве превращались в 0). base — то, что
+    // успел собрать InnerTube до перехода на сбор со страницы.
+    let base = [];
+    let partial = [];
+    let savedAt = 0;
+    const merge = (a, b) => {
+      const seen = new Set(a.map((c) => c.id));
+      return a.concat(b.filter((c) => !seen.has(c.id)));
+    };
+    const onBatch = async (list) => {
       if (collector !== mine) return;
+      partial = merge(base, list || []).slice(0, max);
+      // сами комментарии пишем не чаще раза в 2 с — это сотни КБ
+      const patch = { [stateKey]: { status: "loading", fetched: partial.length, max, error: null } };
+      if (Date.now() - savedAt > 2000) {
+        patch[K.comments(videoId)] = partial;
+        savedAt = Date.now();
+      }
+      await sessionSet(patch);
+      send({ type: "yt:progress", videoId, status: "loading", fetched: partial.length, max });
+    };
+    // сбор прерван, но что-то собрано — это «готово, частично»
+    const keepPartial = async (reason) => {
+      const list = partial.slice(0, max);
       await sessionSet({
-        [stateKey]: { status: "loading", fetched: n, max, error: null },
-        [K.comments(videoId)]: comments,
+        [stateKey]: { status: "done", fetched: list.length, max, error: null, stopped: reason },
+        [K.comments(videoId)]: list,
       });
-      send({ type: "yt:progress", videoId, status: "loading", fetched: n, max });
+      send({ type: "yt:progress", videoId, status: "done", fetched: list.length, max, stopped: reason });
+      send({ type: "yt:ready", videoId, count: list.length });
     };
 
     try {
@@ -683,7 +703,10 @@
               em.startsWith("innerTubeNoCommentsSection") ||
               em.startsWith("innerTubeTimeout"));
           if (fallback) {
-            comments = await collectViaDom(videoId, max, onBatch, mine);
+            // начатое InnerTube не выбрасываем — добираем со страницы до лимита
+            base = partial.slice();
+            const rest = max - base.length;
+            comments = rest > 0 ? merge(base, await collectViaDom(videoId, rest, onBatch, mine)) : base;
           } else {
             throw e;
           }
@@ -705,10 +728,12 @@
         // Нас вытеснил новый сбор (перезапуск/другое видео) — он сам ведёт статус.
         // Раньше здесь писалось «idle» поверх его «loading» и рассылалась ложная ошибка.
         if (collector !== mine) return;
+        if (partial.length) return keepPartial("cancelled");
         await sessionSet({ [stateKey]: { status: "idle", fetched: 0, max, error: null } });
         send({ type: "yt:progress", videoId, status: "idle", fetched: 0, max });
         return;
       }
+      if (partial.length && collector === mine) return keepPartial("error");
       await sessionSet({ [stateKey]: { status: "error", fetched: comments.length, max, error: msg } });
       send({ type: "yt:progress", videoId, status: "error", fetched: comments.length, max, error: msg });
     }
@@ -718,6 +743,9 @@
     const id = videoIdFromUrl();
     if (!id) {
       currentVideoId = null;
+      // ушли с видео — сбор (скролл и клики по странице) останавливаем
+      collectGen++;
+      if (collector && !collector.cancelled) collector.cancelled = true;
       send({ type: "yt:away" });
       return;
     }
@@ -736,7 +764,9 @@
     await storeMeta(meta);
     // Сразу после загрузки/перехода YouTube ещё не дорисовал шапку: название и
     // канал бывают пустыми (проверено на живой странице). Дочитываем позже.
-    if (!meta?.title || !meta?.channelName || !meta?.duration) {
+    // Перечитываем всегда: даже «полные» данные сразу после перехода бывают
+    // от прошлого видео (длительность у <video> ещё старая).
+    {
       for (const delay of [1500, 4000]) {
         setTimeout(() => {
           if (currentVideoId !== id) return;

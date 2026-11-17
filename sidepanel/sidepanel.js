@@ -1047,7 +1047,7 @@ async function loadFor(videoId) {
   renderHeader();
   renderBottomMatters();
   const st = obj[`collect:${videoId}`];
-  updateCollectStatus(st?.status, st?.fetched, st?.max, st?.error || null);
+  updateCollectStatus(st?.status, st?.fetched, st?.max, st?.error || null, st?.stopped);
   // loadFor зовётся и на каждый фокус панели: перерисовываем, только если
   // данные реально изменились — иначе анимации проигрывались заново, а
   // раскрытые блоки схлопывались от простого клика по окну.
@@ -1158,8 +1158,8 @@ function setProgress(id, frac) {
   el.firstElementChild.style.width = `${Math.round(Math.min(1, Math.max(0, frac)) * 100)}%`;
 }
 
-function updateCollectStatus(status, fetched, max, error) {
-  state.collect = { status, fetched, max, error };
+function updateCollectStatus(status, fetched, max, error, stopped = null) {
+  state.collect = { status, fetched, max, error, stopped };
   const el = $("collect-status");
   el.classList.toggle("err", status === "error");
   if (status === "loading") {
@@ -1171,11 +1171,15 @@ function updateCollectStatus(status, fetched, max, error) {
     const lim = Number(state.settings?.maxComments) || 0;
     const used = Number(max) || 0;
     const changed = lim && used && lim !== used && (lim < (fetched || 0) || (fetched || 0) >= used);
+    // сбор прервался (сбой страницы или отмена), но собранное сохранено
+    const note = stopped
+      ? `${stopped === "cancelled" ? "сбор остановлен" : "сбор прервался"} — <button class="link-btn" data-restart>собрать заново</button>`
+      : changed
+        ? `лимит изменён — <button class="link-btn" data-restart>соберите заново</button>`
+        : "";
     el.innerHTML =
-      `${icon("check", { size: 13 })} Собрано ${fetched || 0}` +
-      (changed
-        ? ` <span class="status-note"><span class="sep">· </span>лимит изменён — <button class="link-btn" data-restart>соберите заново</button></span>`
-        : "");
+      `${icon("check", { size: 13 })} Собрано ${fetched || 0}${stopped && max ? ` из ${max}` : ""}` +
+      (note ? ` <span class="status-note"><span class="sep">· </span>${note}</span>` : "");
     el.querySelector("[data-restart]")?.addEventListener("click", () => $("btn-restart").click());
     el.title = `Собрано комментариев: ${fetched || 0}`;
     setProgress("collect-progress", null);
@@ -2772,7 +2776,7 @@ function onRuntimeMessage(msg, sender) {
     renderHeader();
   } else if (msg.type === "yt:progress") {
     if (msg.videoId && state.videoId && msg.videoId !== state.videoId) return;
-    updateCollectStatus(msg.status, msg.fetched, msg.max, msg.error || null);
+    updateCollectStatus(msg.status, msg.fetched, msg.max, msg.error || null, msg.stopped);
   } else if (msg.type === "yt:ready") {
     if (msg.videoId && state.videoId && msg.videoId !== state.videoId) return;
     void loadFor(state.videoId || msg.videoId);
@@ -2956,7 +2960,7 @@ function bindEvents() {
     await saveSettings(false);
     showToast(`Лимит сбора: ${v} комментариев. Нажмите «Собрать заново», чтобы применить.`);
     const c = state.collect || {};
-    updateCollectStatus(c.status, c.fetched, c.max, c.error);
+    updateCollectStatus(c.status, c.fetched, c.max, c.error, c.stopped);
   });
   $("btn-analyze").addEventListener("click", () => {
     const quick = parseInt($("quick-max").value, 10);

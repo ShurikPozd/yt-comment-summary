@@ -8,6 +8,9 @@
 const W = 480;
 const PAD = 24;
 const SCALE = 3;
+// черновик с запасом по высоте; итог обрезается по содержимому. Текст сводки
+// ограничен по строкам, так что за край черновика ничего не уходит.
+const DRAFT_H = 3200;
 const FONT = '"Segoe UI Variable Text", "Segoe UI", Roboto, system-ui, sans-serif';
 const C = {
   bg: "#111113",
@@ -22,8 +25,27 @@ const C = {
   chip: "#26262a",
 };
 
+// слово шире строки (ссылка, «ааааааа») режем на куски по ширине
+function splitLong(ctx, word, maxWidth) {
+  if (ctx.measureText(word).width <= maxWidth) return [word];
+  const parts = [];
+  let cur = "";
+  for (const ch of word) {
+    if (cur && ctx.measureText(cur + ch).width > maxWidth) {
+      parts.push(cur);
+      cur = ch;
+    } else cur += ch;
+  }
+  if (cur) parts.push(cur);
+  return parts;
+}
+
 function wrap(ctx, text, maxWidth, maxLines = Infinity) {
-  const words = String(text || "").replace(/\s+/g, " ").trim().split(" ");
+  const words = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .flatMap((w) => splitLong(ctx, w, maxWidth));
   const lines = [];
   let line = "";
   for (const w of words) {
@@ -84,13 +106,13 @@ export async function renderSummaryCard(s, meta) {
   const scale = SCALE;
   const draft = document.createElement("canvas");
   draft.width = W * scale;
-  draft.height = 2400 * scale;
+  draft.height = DRAFT_H * scale;
   const ctx = draft.getContext("2d");
   ctx.scale(scale, scale);
   ctx.textBaseline = "top";
 
   ctx.fillStyle = C.bg;
-  ctx.fillRect(0, 0, W, 2400);
+  ctx.fillRect(0, 0, W, DRAFT_H);
   let y = 0;
   const inner = W - PAD * 2;
 
@@ -181,7 +203,7 @@ export async function renderSummaryCard(s, meta) {
   ctx.font = `400 19px ${FONT}`;
   // Каждая строка — по центру своей полосы высотой LH, поля сверху и снизу
   // одинаковые (раньше снизу оставался лишний межстрочный интервал).
-  const sumLines = wrap(ctx, s.summary || "", inner - 40);
+  const sumLines = wrap(ctx, s.summary || "", inner - 40, 14);
   const LH = 29;
   const PADV = 14;
   const boxH = sumLines.length * LH + PADV * 2;
@@ -207,8 +229,9 @@ export async function renderSummaryCard(s, meta) {
     const H = 36;
     const GAP = 8;
     const chips = topics.map((t) => {
-      const label = String(t.name || "");
       const count = t.count != null ? String(t.count) : "";
+      // слишком длинное название темы — с многоточием, плашка не шире строки
+      const label = wrap(ctx, String(t.name || ""), inner - 80, 1)[0] || "";
       const lw = ctx.measureText(label).width;
       const cw = count ? ctx.measureText(count).width : 0;
       return { label, count, lw, cw, w: lw + (count ? cw + 8 : 0) + 32 };
@@ -284,7 +307,7 @@ export async function renderSummaryCard(s, meta) {
   // Обрезаем черновик до реальной высоты
   const out = document.createElement("canvas");
   out.width = W * scale;
-  out.height = Math.ceil(y * scale);
+  out.height = Math.ceil(Math.min(y, DRAFT_H) * scale);
   out.getContext("2d").drawImage(draft, 0, 0);
   return new Promise((resolve, reject) =>
     out.toBlob((b) => (b ? resolve(b) : reject(new Error("canvas пуст"))), "image/png")

@@ -1,7 +1,20 @@
 // Service worker: открытие боковой панели и контекстное меню.
 import { sanitizeFilename } from "./groq.js";
 
+// Старые версии при переполнении session складывали кэш комментариев в
+// local, где его никто не читал и не удалял. Убираем один раз при запуске.
+async function cleanupLocalCache() {
+  try {
+    const all = await chrome.storage.local.get(null);
+    const junk = Object.keys(all).filter((k) => /^(comments|collect|meta|summary):/.test(k));
+    if (junk.length) await chrome.storage.local.remove(junk);
+  } catch (e) {
+    /* не критично */
+  }
+}
+
 function setup() {
+  void cleanupLocalCache();
   chrome.storage.session
     .setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" })
     .catch((e) => console.error("setAccessLevel:", e));
