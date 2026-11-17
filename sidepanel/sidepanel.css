@@ -2597,13 +2597,9 @@ kbd {
   animation: view-in var(--t) var(--ease);
 }
 
+/* готовые вопросы — обычные нейтральные чипы (красный — только у главного) */
 .suggest .chip {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
-.suggest .chip:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--fg-2);
 }
 
 .server-hint.fade-out {

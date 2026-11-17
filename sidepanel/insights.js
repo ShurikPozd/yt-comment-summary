@@ -52,7 +52,10 @@ const ASK_START =
 export function isQuestion(text) {
   const t = String(text || "").replace(/https?:\/\/\S+/g, "").trim();
   if (!t) return false;
-  if (/\?/.test(t)) return true;
+  // «?» — вопрос, если это не цитата реплики из видео: «— А если бы уронил?»,
+  // «Пригожин: — Тихий океан знаешь?»
+  const asks = t.split(/(?<=[.!?…])\s+|\n+/).filter((p) => p.includes("?"));
+  if (asks.some((p) => !/^\s*[-—–]\s/.test(p) && !/:\s*[-—–]\s/.test(p))) return true;
   // «X же …» в начале — восклицание («Как же он хорош», «Почему же так классно»)
   if (/^\S+\s+же(?=[\s,.!]|$)/i.test(t)) return false;
   // явная просьба — вопрос даже с «!» («Подскажите название песни!»)

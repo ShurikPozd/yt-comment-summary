@@ -392,10 +392,34 @@ function esc(s) {
 // Подсветка ищется по исходному тексту, а экранируется каждый кусок отдельно.
 // Раньше регулярка шла по уже экранированному тексту, и запрос вроде «amp»
 // или «quot» попадал внутрь &amp; / &quot; и ломал разметку.
+// Слова запроса → регулярки. Слово от 4 букв ищется по основе: «лимба» находит
+// и «лимбу», «лимбой», «крутой» — «крутые»; ё и е не различаются.
+function queryParts(query) {
+  const ee = (s) => s.replace(/[её]/g, "[её]");
+  return String(query || "")
+    .trim()
+    .slice(0, 80)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => {
+      if (/^[а-яёa-z]{4,}$/.test(w)) {
+        const stem = w.replace(/[аяоеёыиуюьйъ]{1,2}$/, "");
+        if (stem.length >= 3 && stem !== w) return "(?<![а-яёa-z])" + ee(stem) + "[а-яёa-z]{0,4}";
+      }
+      return ee(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    });
+}
+
+// все слова запроса встречаются в тексте (в любом порядке и форме)
+function matchesQuery(text, parts) {
+  const t = String(text || "");
+  return parts.every((p) => new RegExp(p, "i").test(t));
+}
+
 function hl(text, query) {
-  const q = (query || "").trim().slice(0, 80);
-  if (!q) return esc(text);
-  const words = q.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const words = queryParts(query);
+  if (!words.length) return esc(text);
   const re = new RegExp("(" + words.join("|") + ")", "gi");
   return String(text ?? "")
     .split(re)
@@ -466,7 +490,11 @@ function fitClamps() {
       if (!el.offsetParent) continue; // в скрытой вкладке — посчитаем, когда откроют
       el.dataset.fit = "1";
       const btn = el.nextElementSibling;
-      if (el.scrollHeight > el.clientHeight + 2) {
+      // найденное слово спрятано под обрезкой — раскрываем текст целиком,
+      // иначе непонятно, почему комментарий попал в результаты
+      const mark = el.querySelector("mark");
+      const hiddenHit = mark && mark.getBoundingClientRect().bottom > el.getBoundingClientRect().bottom + 2;
+      if (el.scrollHeight > el.clientHeight + 2 && !hiddenHit) {
         if (btn?.classList.contains("more-text")) btn.hidden = false;
       } else {
         el.classList.remove("clamp");
@@ -2245,9 +2273,8 @@ function filteredComments() {
   if (f === "timecodes") list = list.filter((c) => timecodesOf(c.text, maxSec()).length);
   const q = state.commentQuery.trim().toLowerCase();
   if (q) {
-    list = list.filter(
-      (c) => (c.text || "").toLowerCase().includes(q) || (c.author || "").toLowerCase().includes(q)
-    );
+    const parts = queryParts(q);
+    list = list.filter((c) => matchesQuery(c.text, parts) || (c.author || "").toLowerCase().includes(q));
   }
   if (f === "popular") list = [...list].sort((a, b) => (b.likes || 0) - (a.likes || 0));
   if (f === "replies") list = list.filter((c) => c.replies > 0).sort((a, b) => b.replies - a.replies);
@@ -2336,8 +2363,8 @@ async function runSearch() {
   $("btn-search").disabled = true;
   try {
     if (mode === "text") {
-      const needle = q.toLowerCase();
-      const items = state.comments.filter((c) => (c.text || "").toLowerCase().includes(needle));
+      const parts = queryParts(q);
+      const items = state.comments.filter((c) => matchesQuery(c.text, parts));
       globalSearchResults = {
         mode,
         query: q,
