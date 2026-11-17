@@ -784,7 +784,8 @@ function fillSettingsFields() {
 }
 
 function readSettingsFromFields() {
-  state.settings.baseUrl = $("set-base-url").value.trim() || DEFAULTS.baseUrl;
+  state.settings.baseUrl = normalizeBaseUrl($("set-base-url").value) || DEFAULTS.baseUrl;
+  $("set-base-url").value = state.settings.baseUrl;
   state.settings.token = $("set-token").value.trim();
   state.settings.model = $("set-model").value.trim() || DEFAULTS.model;
   state.settings.maxComments = Math.min(2000, Math.max(10, parseInt($("set-max").value, 10) || DEFAULTS.maxComments));
@@ -796,6 +797,30 @@ function readSettingsFromFields() {
   state.settings.noAutoplay = $("set-no-autoplay").checked;
   state.settings.hideProgress = $("set-hide-progress").checked;
   $("quick-max").value = state.settings.maxComments;
+}
+
+// Адрес сервера: без схемы — https://, без хвоста /api/chat и слэшей.
+function normalizeBaseUrl(raw) {
+  let url = String(raw || "").trim();
+  if (!url) return "";
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  url = url.replace(/\/+(api\/chat\/?)?$/i, "");
+  try {
+    const u = new URL(url);
+    return /^https?:$/.test(u.protocol) ? url : "";
+  } catch (e) {
+    return "";
+  }
+}
+
+// Расширению разрешены только адреса из host_permissions манифеста.
+function serverAllowed(url) {
+  try {
+    const u = new URL(url);
+    return /(^|\.)onrender\.com$/i.test(u.hostname) || (u.hostname === "localhost" && u.port === "8080");
+  } catch (e) {
+    return false;
+  }
 }
 
 async function saveSettings(showFeedback = true) {
@@ -810,6 +835,11 @@ async function saveSettings(showFeedback = true) {
   void wakeServer();
   if (showFeedback) {
     const el = $("settings-status");
+    if (!serverAllowed(state.settings.baseUrl)) {
+      el.textContent = "Сохранено, но этот адрес расширению не разрешён: нужен *.onrender.com или localhost:8080 (иначе — добавить его в host_permissions манифеста).";
+      el.className = "err";
+      return;
+    }
     el.textContent = "Сохранено";
     el.className = "ok";
     setTimeout(() => (el.textContent = ""), 1800);
@@ -1471,16 +1501,30 @@ async function analyze() {
       }
     };
 
+    // Сбой одной части (сервер, лимит, кривой ответ) не перечёркивает остальные:
+    // сводка строится по разобранным частям, и панель честно пишет, сколько их.
+    let partsFailed = 0;
+    let lastPartError = null;
     for (let ci = 0; ci < nodes.length; ci++) {
       if (!live()) return;
       partLabel = nodes.length > 1 ? `Часть ${ci + 1} из ${nodes.length}.` : "";
       uiEl("summary-placeholder").textContent =
         nodes.length > 1 ? `Читаю комментарии: часть ${ci + 1} из ${nodes.length}…` : "Читаю комментарии…";
       uiProgress((ci + 0.3) / (nodes.length + 1));
-      await processPortion(nodes[ci], baseOffset, 0);
+      try {
+        await processPortion(nodes[ci], baseOffset, 0);
+      } catch (pe) {
+        if (pe?.cancelled || !live()) return;
+        // размер не лечится следующими частями — дальше пробовать бессмысленно
+        if (isSizeLimitError(pe) || nodes.length === 1) throw pe;
+        partsFailed++;
+        lastPartError = pe;
+        console.warn("часть анализа не удалась:", pe);
+      }
       baseOffset += nodes[ci].length;
     }
     if (!live()) return;
+    if (partsFailed === nodes.length) throw lastPartError;
     uiProgress(nodes.length / (nodes.length + 1));
 
     const topics = mergeTopics(Object.entries(topicMap).map(([name, t]) => ({ name, ids: [...t.ids], n: t.n })))
@@ -1522,7 +1566,7 @@ async function analyze() {
           { jsonMode: false, maxTokens: 700, timeoutMs: 330000, signal: ac.signal },
           (full) => {
             if (!live()) return;
-            uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
+            uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div>` + esc(tidySummary(full));
           }
         );
         break;
@@ -1545,7 +1589,7 @@ async function analyze() {
       }
     }
     settleOutput(finSlot, fin);
-    const summary = clean(fin) || "Сводка не получена.";
+    const summary = tidySummary(fin) || "Сводка не получена.";
     // по каждой тональности — до 12 примеров, сначала самые залайканные
     const byLikes = (a, b) => (comments[b]?.likes || 0) - (comments[a]?.likes || 0);
     for (const k of Object.keys(sentimentIds)) sentimentIds[k] = sentimentIds[k].sort(byLikes).slice(0, 12);
@@ -1559,6 +1603,7 @@ async function analyze() {
       updatedAt: Date.now(),
       commentCount: comments.length,
       analyzed: pool.length,
+      ...(partsFailed ? { parts: { failed: partsFailed, total: nodes.length } } : {}),
     };
     // Явно отменённый запуск не сохраняем; ушедший в фон — сохраняем для СВОЕГО видео.
     if (!live()) return;
@@ -1592,9 +1637,18 @@ async function analyze() {
   } catch (e) {
     if (!onScreen()) return; // анализ отменён или в фоне — ошибку не показываем
     const msg = friendlyError(e);
-    uiEl("summary-text").innerHTML = "";
-    uiEl("summary-placeholder").classList.remove("hidden");
-    uiEl("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
+    if (state.summary) {
+      // «Обновить сводку» не удалось — прежняя сводка остаётся целиком
+      state.analyzing = false;
+      renderSummary();
+      renderTopics();
+      uiEl("summary-placeholder").classList.remove("hidden");
+      uiEl("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось обновить сводку</b> — ниже прежняя.<br>${esc(msg)}</div>`;
+    } else {
+      uiEl("summary-text").innerHTML = "";
+      uiEl("summary-placeholder").classList.remove("hidden");
+      uiEl("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
+    }
   } finally {
     if (onScreen()) {
       state.analyzing = false;
@@ -1604,6 +1658,14 @@ async function analyze() {
       uiProgress(null);
     }
   }
+}
+
+// Лёгкая чистка итоговой сводки: только markdown и обёртка в кавычки целиком.
+// Один и тот же вид во время стрима и после — текст не «прыгает» в конце.
+function tidySummary(text) {
+  return normalizeSummary(String(text || ""), 2000)
+    .replace(/^\s*["«„](.*)["»“]\s*$/s, "$1")
+    .trim();
 }
 
 // какая доля настроения раскрыта (positive | neutral | negative | null)
@@ -1676,6 +1738,9 @@ function renderSummary() {
       ? `Сохранённая сводка от ${esc(fmtDate(s.updatedAt))}${esc(n)}. «Обновить сводку» — пересчитать.` +
         (nNew ? ` <button class="link-btn new-link" data-goto-filter="new">${nNew} ${plural(nNew, "новый комментарий", "новых комментария", "новых комментариев")} с тех пор →</button>` : "")
       : `Сводка от ${esc(fmtDate(s.updatedAt))}${esc(n)}`;
+    if (s.parts?.failed) {
+      hist.innerHTML += ` <span class="status-note">· ${s.parts.failed} из ${s.parts.total} ${plural(s.parts.total, "части", "частей", "частей")} не ${s.parts.failed === 1 ? "разобралась" : "разобрались"} — сводка по остальным</span>`;
+    }
     hist.classList.remove("hidden");
   } else {
     hist.classList.add("hidden");
