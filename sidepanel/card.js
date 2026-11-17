@@ -41,6 +41,15 @@ function wrap(ctx, text, maxWidth, maxLines = Infinity) {
   return lines;
 }
 
+function plural(n, one, few, many) {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b > 1 && b < 5) return few;
+  if (b === 1) return one;
+  return many;
+}
+
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
@@ -118,7 +127,8 @@ export async function renderSummaryCard(s, meta) {
   const n = s.analyzed && s.analyzed < s.commentCount ? `${s.analyzed} из ${s.commentCount}` : s.commentCount;
   ctx.fillStyle = C.muted;
   ctx.font = `500 15px ${FONT}`;
-  ctx.fillText([meta?.channelName, n ? `${n} комментариев` : ""].filter(Boolean).join("  ·  "), PAD, y);
+  const nWord = plural(Number(s.commentCount) || 0, "комментарий", "комментария", "комментариев");
+  ctx.fillText([meta?.channelName, n ? `${n} ${nWord}` : ""].filter(Boolean).join("  ·  "), PAD, y);
   y += 34;
 
   // Тональность
@@ -182,8 +192,8 @@ export async function renderSummaryCard(s, meta) {
     ctx.font = `500 15px ${FONT}`;
     let x = PAD;
     for (const t of topics) {
-      const label = t.name;
-      const count = String(t.count);
+      const label = String(t.name || "");
+      const count = t.count != null ? String(t.count) : "";
       const w = ctx.measureText(label).width + ctx.measureText(count).width + 36;
       if (x + w > W - PAD) {
         x = PAD;
@@ -199,6 +209,33 @@ export async function renderSummaryCard(s, meta) {
       x += w + 8;
     }
     y += 32 + 28;
+  }
+
+  // Ключевые мнения — нумерованным списком, до 4 пунктов
+  const points = (s.points || []).filter(Boolean).slice(0, 4);
+  if (points.length) {
+    ctx.fillStyle = C.muted;
+    ctx.font = `700 12px ${FONT}`;
+    ctx.fillText("КЛЮЧЕВЫЕ МНЕНИЯ", PAD, y);
+    y += 26;
+    points.forEach((p, i) => {
+      ctx.fillStyle = C.chip;
+      ctx.beginPath();
+      ctx.arc(PAD + 11, y + 12, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = C.fg2;
+      ctx.font = `700 12px ${FONT}`;
+      const num = String(i + 1);
+      ctx.fillText(num, PAD + 11 - ctx.measureText(num).width / 2, y + 5);
+      ctx.fillStyle = C.fg;
+      ctx.font = `400 17px ${FONT}`;
+      for (const line of wrap(ctx, p, inner - 36, 2)) {
+        ctx.fillText(line, PAD + 34, y + 1);
+        y += 25;
+      }
+      y += 10;
+    });
+    y += 16;
   }
 
   // Подпись
