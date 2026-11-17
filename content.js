@@ -1057,13 +1057,13 @@
   };
   let pv = null; // { host, root, wrap, urls, title, name, current, sizes, prevFocus }
 
-  function pvToast(text) {
+  function pvToast(text, ms = 2000) {
     if (!pv) return;
     const m = pv.root.querySelector(".msg");
     m.textContent = text;
     m.classList.add("show");
     clearTimeout(pv.msgTimer);
-    pv.msgTimer = setTimeout(() => m.classList.remove("show"), 2000);
+    pv.msgTimer = setTimeout(() => m.classList.remove("show"), ms);
   }
 
   function pvProbe(url) {
@@ -1104,6 +1104,7 @@
   function pvCopy() {
     if (!pv?.current) return;
     const url = pv.current;
+    pvToast("Копирую…", 15000); // фон качает картинку 1–3 с — сразу показываем, что идёт работа
     const png = (async () => {
       const r = await chrome.runtime.sendMessage({ type: "ui:thumb", op: "data", url });
       if (!r?.ok) throw new Error("no data");
