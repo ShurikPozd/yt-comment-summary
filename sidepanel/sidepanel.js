@@ -709,7 +709,9 @@ function applyTheme() {
   let dark = true;
   if (t === "light") dark = false;
   else if (t === "auto") dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.body.dataset.theme = dark ? "dark" : "light";
+  // тема и на <html>: при изменении ширины панели Chrome заливает новые
+  // полосы фоном корневого элемента — он должен совпадать с фоном панели
+  document.documentElement.dataset.theme = document.body.dataset.theme = dark ? "dark" : "light";
 }
 
 function fillSettingsFields() {
@@ -931,6 +933,7 @@ async function loadFor(videoId) {
   if (switched) {
     state.activeTopic = null;
     state.commentLimit = COMMENTS_PAGE;
+    state.momentsAll = false;
     expandedTopic = null;
     globalSearchResults = [];
   }
@@ -1018,11 +1021,25 @@ function moveTabInk() {
     if (ink) ink.style.opacity = "0";
     return;
   }
+  // вкладки растянуты на всю ширину — полоска по ширине надписи, а не кнопки
+  const range = document.createRange();
+  range.selectNodeContents(active);
+  const box = range.getBoundingClientRect();
+  const bar = active.parentElement;
+  const left = box.left - bar.getBoundingClientRect().left + bar.scrollLeft;
   ink.style.opacity = "1";
-  ink.style.width = `${active.offsetWidth - 16}px`;
-  ink.style.transform = `translateX(${active.offsetLeft + 8}px)`;
+  ink.style.width = `${Math.round(box.width)}px`;
+  ink.style.transform = `translateX(${Math.round(left)}px)`;
 }
-window.addEventListener("resize", () => requestAnimationFrame(moveTabInk));
+// при изменении ширины панели полоска едет вместе с вкладками, без запаздывания
+let inkResizeTimer = 0;
+window.addEventListener("resize", () => {
+  const ink = document.querySelector(".tab-ink");
+  if (ink) ink.style.transition = "none";
+  moveTabInk();
+  clearTimeout(inkResizeTimer);
+  inkResizeTimer = setTimeout(() => ink && (ink.style.transition = ""), 150);
+});
 
 function setProgress(id, frac) {
   const el = $(id);
@@ -1372,7 +1389,7 @@ async function analyze() {
 
     uiEl("summary-placeholder").textContent = "Пишу итоговую сводку…";
     uiEl("summary-text").innerHTML =
-      `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div><div class="skeleton"><i></i><i></i><i></i></div>`;
+      `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div><div class="skeleton"><i></i><i></i><i></i></div>`;
     const liveSummary = uiEl("summary-text");
     // Финальный запрос идёт сразу после чанков — OTPM ещё выбран, поэтому
     // заранее ждём место в окне под его выходные токены.
@@ -1395,7 +1412,7 @@ async function analyze() {
           { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
           (full) => {
             if (!live()) return;
-            uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
+            uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
           }
         );
         break;
@@ -1433,7 +1450,7 @@ async function analyze() {
       showToast(`Сводка «${t}» готова — она в «Недавних сводках»`);
       return;
     }
-    uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
+    uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
     state.summary = result;
     state.newIds = new Set();
     if (state.commentFilter === "new") state.commentFilter = "all";
@@ -1484,7 +1501,7 @@ function renderAnalyzeLabel() {
   const label = state.summary ? "Обновить сводку" : "Анализировать";
   if (b.dataset.label === label) return;
   b.dataset.label = label;
-  b.innerHTML = `${icon("sparkles", { size: 16 })}${label}`;
+  b.textContent = label;
 }
 
 function renderSummary() {
@@ -1578,7 +1595,7 @@ function renderSummary() {
   }
 
   $("summary-text").innerHTML =
-      `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(s.summary || "");
+      `<div class="summary-title">${icon("summary", { size: 14 })}Что говорят в комментариях</div>` + esc(s.summary || "");
 
   $("summary-points").innerHTML = "";
   if (s.points?.length) {
@@ -1639,9 +1656,7 @@ function renderInsights() {
     ${
       moments.length
         ? `<div class="subhead">Популярные моменты <button class="link-btn" data-goto="moments">все →</button></div>
-           <div class="moment-chips">${moments
-             .map((m) => `<button class="tc tc-big" data-t="${m.t}">${esc(m.label)}<span>${m.count}</span></button>`)
-             .join("")}</div>`
+           <div class="moment-rows">${moments.map((m) => momentRow(m, list)).join("")}</div>`
         : ""
     }
     ${
@@ -1658,6 +1673,27 @@ function renderInsights() {
   countUp(box.querySelectorAll(".stat b[data-n]"));
 }
 
+// Строка популярного момента в обзоре: таймкод, сколько зрителей на него
+// ссылаются и начало самого залайканного комментария. Клик — перемотка
+// и переход к этому моменту на вкладке «Моменты».
+function momentRow(m, list) {
+  const top = list[m.idxs[0]];
+  const n = `${m.count} ${plural(m.count, "комментарий", "комментария", "комментариев")}`;
+  const quote = top ? stripTimecodes(top.text) : "";
+  return `<button class="moment-row" data-t="${m.t}" data-moment="${m.t}" title="Перемотать и показать комментарии">
+    <span class="tc tc-big">${icon("play", { size: 11 })}${esc(m.label)}</span>
+    <span class="moment-row-text"><b>${n}</b>${quote ? `<span>${esc(quote)}</span>` : ""}</span>
+  </button>`;
+}
+
+// Текст комментария без самих таймкодов в начале — для коротких цитат.
+function stripTimecodes(text) {
+  return String(text || "")
+    .replace(/^(\s*\d{1,2}(:\d{2}){1,2}[\s.,;:–—-]*)+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Числа в обзоре плавно «досчитываются» от нуля — один раз на новые данные.
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 function countUp(nodes, ms = 550) {
@@ -1667,7 +1703,8 @@ function countUp(nodes, ms = 550) {
   const t0 = performance.now();
   const ease = (t) => 1 - Math.pow(1 - t, 3);
   const tick = (now) => {
-    const k = ease(Math.min(1, (now - t0) / ms));
+    // метка кадра бывает чуть раньше t0 — без нижней границы число на миг уходит в минус
+    const k = ease(Math.min(1, Math.max(0, (now - t0) / ms)));
     for (const { el, n } of items) el.textContent = fmtNum(Math.round(n * k));
     if (k < 1) requestAnimationFrame(tick);
   };
@@ -1680,13 +1717,19 @@ function renderMoments() {
   const list = state.comments;
   const moments = list.length ? topMoments(list, { maxSec: maxSec(), limit: 40 }) : [];
   const badge = $("moments-badge");
-  badge.textContent = moments.length ? String(moments.length) : "";
+  // в счётчике — моменты, которые видны в списке по умолчанию (от двух комментариев)
+  const nMulti = moments.filter((m) => m.count > 1).length;
+  badge.textContent = moments.length ? String(nMulti >= 3 ? nMulti : moments.length) : "";
   badge.classList.toggle("hidden", !moments.length);
   $("moments-empty").classList.toggle("hidden", Boolean(moments.length));
   const line = $("moments-timeline");
   const wrap = $("moments-list");
+  const tools = $("moments-tools");
+  const allBtn = $("btn-moments-all");
   if (!moments.length) {
     line.classList.add("hidden");
+    tools.classList.add("hidden");
+    allBtn.classList.add("hidden");
     wrap.innerHTML = "";
     return;
   }
@@ -1698,22 +1741,47 @@ function renderMoments() {
     moments
       .map((m) => {
         const left = Math.min(100, (m.t / end) * 100);
-        const size = 8 + Math.round((m.count / maxCount) * 10);
-        return `<button class="tl-dot" data-t="${m.t}" style="left:${left}%;width:${size}px;height:${size}px" title="${esc(m.label)} · ${m.count} комм."></button>`;
+        const size = 8 + Math.round((m.count / maxCount) * 8);
+        const n = `${m.count} ${plural(m.count, "комментарий", "комментария", "комментариев")}`;
+        // у краёв подпись прижимаем внутрь, чтобы не обрезалась
+        const edge = left < 15 ? " edge-l" : left > 85 ? " edge-r" : "";
+        return `<button class="tl-dot${edge}" data-t="${m.t}" data-moment="${m.t}" data-tip="${esc(m.label)} · ${n}" aria-label="${esc(m.label)}, ${n}" style="left:${left}%;width:${size}px;height:${size}px;z-index:${m.count}"></button>`;
       })
       .join("") +
     `</div><div class="tl-scale"><span>0:00</span><span>${Number.isFinite(maxSec()) ? fmtTime(end - 2) : ""}</span></div>`;
   line.classList.remove("hidden");
 
-  wrap.innerHTML = moments
+  // Список: по ходу видео или по обсуждаемости. Моменты, на которые сослался
+  // один зритель, — шум: прячем под кнопку, если есть из чего выбирать.
+  const sortBy = state.momentsSort || "time";
+  tools.classList.remove("hidden");
+  document.querySelectorAll("#moments-sort .chip").forEach((b) => {
+    const on = b.dataset.sort === sortBy;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-checked", String(on));
+  });
+  const multi = moments.filter((m) => m.count > 1);
+  const singles = moments.length - multi.length;
+  const hideSingles = !state.momentsAll && multi.length >= 3 && singles > 0;
+  const shown = (hideSingles ? multi : moments.slice()).sort((a, b) =>
+    sortBy === "time" ? a.t - b.t : b.score - a.score || a.t - b.t
+  );
+  allBtn.classList.toggle("hidden", !hideSingles);
+  if (hideSingles)
+    allBtn.textContent = `Ещё ${singles} ${plural(singles, "момент", "момента", "моментов")} с одним комментарием`;
+
+  wrap.classList.toggle("long-video", moments.some((m) => m.label.length > 5));
+  wrap.innerHTML = shown
     .map((m) => {
       const cs = m.idxs.map((i) => list[i]);
       const more = cs.length - 1;
-      return `<div class="moment">
+      const pos = Math.min(100, (m.t / end) * 100).toFixed(2);
+      const n = `${m.count} ${plural(m.count, "комментарий", "комментария", "комментариев")}`;
+      return `<div class="moment" data-moment="${m.t}">
         <div class="moment-head">
           <button class="tc tc-big" data-t="${m.t}" title="Перемотать">${icon("play", { size: 11 })}${esc(m.label)}</button>
-          <span class="moment-bar"><i style="width:${Math.round((m.count / maxCount) * 100)}%"></i></span>
-          <span class="hint">${m.count} комм.${m.likes ? ` · ${fmtNum(m.likes)} лайков` : ""}</span>
+          <button class="moment-line" data-t="${m.t}" style="--pos:${pos}%" title="${esc(m.label)} из ${esc(fmtTime(end))} — перемотать" aria-label="Перемотать на ${esc(m.label)}"><i></i><b></b></button>
+          <span class="hint">${n}</span>
         </div>
         ${commentCard(cs[0], { compact: true })}
         ${
@@ -1728,6 +1796,62 @@ function renderMoments() {
       </div>`;
     })
     .join("");
+}
+
+
+// Прокрутка с ease-out за ~400 мс. Своя, а не behavior:"smooth": та в
+// фоновой/неактивной панели может не сдвинуться вовсе — здесь же по таймеру
+// всё равно докручиваем до места.
+let scrollAnim = 0;
+function smoothScroll(box, target) {
+  target = Math.min(target, box.scrollHeight - box.clientHeight);
+  const from = box.scrollTop;
+  const dist = target - from;
+  const run = ++scrollAnim;
+  const jump = () => {
+    box.style.scrollBehavior = "auto";
+    box.scrollTop = target;
+    box.style.scrollBehavior = "";
+  };
+  if (prefersReducedMotion.matches || Math.abs(dist) < 4) return jump();
+  const ms = Math.min(520, 260 + Math.abs(dist) / 8);
+  const t0 = performance.now();
+  box.style.scrollBehavior = "auto";
+  const tick = (now) => {
+    if (run !== scrollAnim) return;
+    const k = Math.min(1, (now - t0) / ms);
+    box.scrollTop = from + dist * (1 - Math.pow(1 - k, 3));
+    if (k < 1) requestAnimationFrame(tick);
+    else box.style.scrollBehavior = "";
+  };
+  requestAnimationFrame(tick);
+  setTimeout(() => {
+    if (run !== scrollAnim) return;
+    scrollAnim++;
+    jump();
+  }, ms + 150);
+}
+
+// Показать момент в списке: плавно докрутить, подсветить и (по желанию)
+// раскрыть остальные комментарии к нему.
+function revealMoment(t, { expand = false } = {}) {
+  const find = () => document.querySelector(`#moments-list .moment[data-moment="${CSS.escape(String(t))}"]`);
+  let el = find();
+  if (!el && !state.momentsAll) {
+    // момент с одним комментарием спрятан — показываем все
+    state.momentsAll = true;
+    renderMoments();
+    el = find();
+  }
+  if (!el) return;
+  if (expand && !el.classList.contains("open")) el.querySelector(".more-toggle")?.click();
+  const box = $("content");
+  const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+  smoothScroll(box, Math.max(0, top - 72));
+  el.classList.remove("flash");
+  void el.offsetWidth; // перезапуск анимации при повторном клике
+  el.classList.add("flash");
+  el.addEventListener("animationend", () => el.classList.remove("flash"), { once: true });
 }
 
 async function seekTo(t) {
@@ -2409,6 +2533,17 @@ function bindEvents() {
     state.commentLimit += COMMENTS_PAGE;
     renderComments();
   });
+  $("moments-sort").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sort]");
+    if (!b || b.dataset.sort === state.momentsSort) return;
+    state.momentsSort = b.dataset.sort;
+    void chrome.storage.local.set({ "ui:momentsSort": state.momentsSort }).catch(() => {});
+    renderMoments();
+  });
+  $("btn-moments-all").addEventListener("click", () => {
+    state.momentsAll = true;
+    renderMoments();
+  });
   // Делегирование на всю панель: таймкоды (перемотка), переходы из «Обзора».
   $("content").addEventListener("click", (e) => {
     const mt = e.target.closest(".more-text");
@@ -2439,6 +2574,13 @@ function bindEvents() {
     if (tc) {
       e.preventDefault();
       void seekTo(Number(tc.dataset.t));
+      // точка на общем таймлайне или строка в обзоре — ещё и к комментариям момента
+      const mt = tc.dataset.moment;
+      if (mt != null && !tc.closest(".moment")) {
+        const fromOverview = currentTab !== "moments";
+        if (fromOverview) setTab("moments");
+        revealMoment(mt, { expand: fromOverview });
+      }
       return;
     }
     const goto = e.target.closest("[data-goto]");
@@ -2597,6 +2739,8 @@ async function main() {
   await refreshFromActiveTab();
   // Возвращаемся на вкладку, открытую в прошлый раз (кроме настроек).
   try {
+    const ms = (await chrome.storage.local.get("ui:momentsSort"))["ui:momentsSort"];
+    if (ms === "time" || ms === "top") state.momentsSort = ms;
     const saved = (await chrome.storage.local.get("ui:tab"))["ui:tab"];
     if (saved && saved !== "summary" && saved !== "settings" && $("view-" + saved)) setTab(saved);
   } catch (e) {

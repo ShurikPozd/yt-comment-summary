@@ -42,14 +42,20 @@ export function fmtTime(sec) {
 }
 
 // \b в JS-регулярках понимает только латиницу, поэтому границу слова задаём явно.
-const QUESTION_START =
-  /^(как|почему|зачем|что|кто|где|когда|сколько|какой|какая|какие|каким|чем|откуда|куда|можно ли|а есть|подскажите|how|why|what|who|where|when|which|is there|does|can|could|anyone)(?=[\s,.!:;]|$)/i;
+// Без «?» вопросом считаем только явную просьбу или вопрос в начале фразы.
+// «Как», «какой», «когда», «сколько» сюда не входят: в комментариях это чаще
+// восклицание («Как же Влад хорош») или придаточное («Когда Илья волновался, …»).
+const ASK_START =
+  /^(подскажите|подскажи|не подскажете|кто(-нибудь|-то)? знает|где (можно )?(купить|скачать|найти|взять|посмотреть)|можно ли|почему|зачем|что за|а есть|есть ли|how|why|what is|who is|where can|which|is there|does anyone|can anyone|anyone know)(?=[\s,.:;]|$)/i;
 
-/** Вопрос зрителя: есть «?» (не внутри ссылки) или типичное начало вопроса. */
+/** Вопрос зрителя: есть «?» (не в ссылке) или явное начало вопроса без восклицания. */
 export function isQuestion(text) {
   const t = String(text || "").replace(/https?:\/\/\S+/g, "").trim();
   if (!t) return false;
-  return /\?/.test(t) || QUESTION_START.test(t);
+  if (/\?/.test(t)) return true;
+  // «!» или «X же …» в начале — это восклицание, а не вопрос
+  if (/!/.test(t) || /^\S+\s+же(?=[\s,.]|$)/i.test(t)) return false;
+  return ASK_START.test(t);
 }
 
 const STOP = new Set(
@@ -98,34 +104,49 @@ function stem(w) {
  * стемминг, чтобы «игра/игры/игру» сложились вместе; показываем самую частую форму.
  */
 export function topWords(comments, limit = 12) {
-  const groups = new Map(); // key -> { count, forms: Map(form -> n) }
-  for (const c of comments || []) {
+  const groups = new Map(); // key -> { ids: Set(индекс комментария), forms: Map(form -> n) }
+  (comments || []).forEach((c, idx) => {
     const words = String(c.text || "")
       .toLowerCase()
       .replace(/https?:\/\/\S+/g, " ")
       .replace(/ё/g, "е")
       .match(/[a-zа-я][a-zа-я'-]{2,}/g);
-    if (!words) continue;
-    const seen = new Set();
+    if (!words) return;
     for (const raw of words) {
       const w = raw.replace(/^[-']+|[-']+$/g, "");
       if (w.length < 3 || STOP.has(w)) continue;
       const key = stem(w);
-      if (seen.has(key)) continue;
-      seen.add(key);
       let g = groups.get(key);
-      if (!g) groups.set(key, (g = { count: 0, forms: new Map() }));
-      g.count++;
+      if (!g) groups.set(key, (g = { ids: new Set(), forms: new Map() }));
+      if (g.ids.has(idx)) continue;
+      g.ids.add(idx);
       g.forms.set(w, (g.forms.get(w) || 0) + 1);
+    }
+  });
+  // Грубый стемминг режет по-разному: «куертов» → «куерт», «куертову» →
+  // «куертов». Склеиваем основы, где одна — начало другой с разницей до двух букв.
+  const keys = [...groups.keys()].sort((a, b) => a.length - b.length);
+  for (const k of keys) {
+    const g = groups.get(k);
+    if (!g || k.length < 4) continue;
+    for (const k2 of keys) {
+      if (k2 === k || k2.length <= k.length || k2.length - k.length > 2 || !k2.startsWith(k)) continue;
+      const g2 = groups.get(k2);
+      if (!g2) continue;
+      for (const id of g2.ids) g.ids.add(id);
+      for (const [f, n] of g2.forms) g.forms.set(f, (g.forms.get(f) || 0) + n);
+      groups.delete(k2);
     }
   }
   const minCount = comments.length >= 40 ? 3 : 2;
   return [...groups.values()]
+    .map((g) => ({ count: g.ids.size, forms: g.forms }))
     .filter((g) => g.count >= minCount)
     .sort((a, b) => b.count - a.count)
     .slice(0, limit)
     .map((g) => ({
-      word: [...g.forms.entries()].sort((a, b) => b[1] - a[1])[0][0],
+      // показываем самую частую форму; при равенстве — более короткую (обычно начальную)
+      word: [...g.forms.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0],
       count: g.count,
     }));
 }

@@ -36,7 +36,7 @@
       </div>
 
       <section id="collect-bar" class="toolbar hidden">
-        <button id="btn-analyze" class="primary"><span data-icon="sparkles"></span>Анализировать</button>
+        <button id="btn-analyze" class="primary">Анализировать</button>
         <label class="max-wrap" title="Сколько комментариев собирать с видео (10–2000). После изменения нажмите «Собрать заново»">
           <span>лимит</span>
           <input id="quick-max" type="number" min="10" max="2000" step="10" value="120" />
@@ -60,7 +60,7 @@
         <div id="view-summary" class="view active">
           <section class="ai-block">
             <div id="summary-cta" class="cta hidden">
-              <div class="cta-icon" data-icon="sparkles" data-size="20"></div>
+              <div class="cta-icon" data-icon="summary" data-size="18"></div>
               <div class="cta-body">
                 <div class="cta-title">Сводка обсуждения от ИИ</div>
                 <div class="cta-text">Темы, настроение зрителей, главные мнения и яркие комментарии. Бесплатно, обычно около минуты.</div>
@@ -93,15 +93,22 @@
             <div class="empty-text">Когда зрители пишут таймкоды вроде 1:23, здесь собираются самые обсуждаемые места видео — клик перематывает.</div>
           </div>
           <div id="moments-timeline" class="timeline hidden"></div>
+          <div id="moments-tools" class="moments-tools hidden">
+            <div class="chip-row" id="moments-sort" role="radiogroup" aria-label="Порядок моментов">
+              <button class="chip" data-sort="time" role="radio">По ходу видео</button>
+              <button class="chip" data-sort="top" role="radio">Самые обсуждаемые</button>
+            </div>
+          </div>
           <div id="moments-list"></div>
+          <button id="btn-moments-all" class="ghost more-btn hidden"></button>
         </div>
 
         <div id="view-topics" class="view">
           <div id="topics-empty" class="view-empty">
-            <div class="empty-icon small" data-icon="sparkles" data-size="22"></div>
+            <div class="empty-icon small" data-icon="summary" data-size="22"></div>
             <div class="empty-title">Темы появятся после анализа</div>
             <div class="empty-text">ИИ разложит обсуждение по темам и покажет, сколько комментариев в каждой.</div>
-            <button id="btn-topics-analyze" class="primary empty-cta"><span data-icon="sparkles"></span>Анализировать</button>
+            <button id="btn-topics-analyze" class="primary empty-cta">Анализировать</button>
           </div>
           <div id="topics-list"></div>
         </div>
@@ -129,7 +136,7 @@
 
         <div id="view-comments" class="view">
           <div class="comments-tools">
-            <input id="comments-filter" type="search" placeholder="Фильтр по тексту или автору…" autocomplete="off" />
+            <input id="comments-filter" type="search" placeholder="Текст или автор" autocomplete="off" />
             <div class="chip-row" id="comments-chips">
               <button data-filter="all" class="chip active">Все</button>
               <button data-filter="new" class="chip chip-new hidden">Новые</button>

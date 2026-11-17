@@ -38,6 +38,7 @@
   color-scheme: dark;
 }
 
+:root[data-theme="light"],
 body[data-theme="light"] {
   --bg: #ffffff;
   --bg-2: #f6f6f8;
@@ -60,6 +61,31 @@ body[data-theme="light"] {
   color-scheme: light;
 }
 
+/* До загрузки настроек — по системной теме, без вспышки тёмного фона */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #ffffff;
+    --bg-2: #f6f6f8;
+    --bg-3: #ececf0;
+    --bg-hover: #e3e3e8;
+    --fg: #141416;
+    --fg-2: #3c3c43;
+    --muted: #6c6c75;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-strong: rgba(0, 0, 0, 0.13);
+    --accent: #e8002d;
+    --accent-hover: #c80027;
+    --accent-soft: rgba(232, 0, 45, 0.08);
+    --accent-ink: #d1002a;
+    --pos: #12a35f;
+    --neu: #8a8a93;
+    --neg: #e5383e;
+    --mark: rgba(255, 196, 0, 0.42);
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    color-scheme: light;
+  }
+}
+
 /* ---------- Сброс ---------- */
 *,
 *::before,
@@ -72,6 +98,10 @@ body[data-theme="light"] {
 html,
 body {
   height: 100%;
+}
+
+html {
+  background: var(--bg);
 }
 
 body {
@@ -479,9 +509,10 @@ button.primary.busy::after {
 
 .tab {
   position: relative;
-  flex: none;
+  flex: 1 0 auto;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 10px 8px 11px;
   color: var(--muted);
@@ -496,7 +527,7 @@ button.primary.busy::after {
 }
 
 .tab.settings-tab {
-  margin-left: auto;
+  flex: none;
   padding-left: 10px;
   padding-right: 10px;
 }
@@ -1000,10 +1031,57 @@ ol.points li::before {
   color: var(--fg-2);
 }
 
-.moment-chips {
+/* Популярные моменты в обзоре: таймкод + «N комментариев» + цитата */
+.moment-rows {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -8px;
+}
+
+.moment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  text-align: left;
+  transition: background-color var(--t-fast) ease;
+}
+
+.moment-row:hover {
+  background: var(--bg-2);
+}
+
+.moment-row:hover .tc {
+  background: var(--accent);
+  color: #fff;
+}
+
+.moment-row .tc-big {
+  flex: none;
+}
+
+.moment-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.moment-row-text b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.moment-row-text span {
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ---------- Таймкоды ---------- */
@@ -1078,9 +1156,56 @@ ol.points li::before {
   animation: dot-in 0.4s var(--ease) backwards;
 }
 
-.tl-dot:hover {
+.tl-dot:hover,
+.tl-dot:focus-visible {
+  z-index: 1000 !important;
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1.3);
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+/* Подпись над точкой: «49:25 · 2 комментария» — сразу, без ожидания title */
+.tl-dot::before {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  padding: 3px 8px 4px;
+  border-radius: 6px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -2px) scale(0.8);
+  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+}
+
+.tl-dot:hover::before,
+.tl-dot:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(0.8);
+}
+
+.tl-dot.edge-l::before {
+  left: -4px;
+  transform: translate(0, -2px) scale(0.8);
+  transform-origin: left top;
+}
+
+.tl-dot.edge-r::before {
+  left: auto;
+  right: -4px;
+  transform: translate(0, -2px) scale(0.8);
+  transform-origin: right top;
+}
+
+.tl-dot.edge-l:hover::before,
+.tl-dot.edge-r:hover::before,
+.tl-dot.edge-l:focus-visible::before,
+.tl-dot.edge-r:focus-visible::before {
+  transform: translate(0, 0) scale(0.8);
 }
 
 .tl-scale {
@@ -1105,33 +1230,102 @@ ol.points li::before {
   border-bottom: 0;
 }
 
+/* Колонки одинаковой ширины во всех моментах — мини-таймлайны стоят
+   друг под другом, и положение точек можно сравнивать на глаз. */
 .moment-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--tc-col, 72px) minmax(48px, 1fr) auto;
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
 }
 
-.moment-bar {
-  flex: 1;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--bg-3);
-  overflow: hidden;
+#moments-list.long-video {
+  --tc-col: 88px;
 }
 
-.moment-bar i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
+.moment-head .tc-big {
+  justify-self: start;
+}
+
+/* Мини-таймлайн момента: полоса = всё видео, точка — где этот момент */
+.moment-line {
+  position: relative;
+  flex: 1;
+  min-width: 48px;
+  height: 20px;
+}
+
+.moment-line::before,
+.moment-line i {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+}
+
+.moment-line::before {
+  right: 0;
+  background: var(--bg-3);
+}
+
+.moment-line i {
+  width: var(--pos);
   background: var(--accent);
-  opacity: 0.6;
-  transform-origin: left center;
-  animation: grow-x 0.6s var(--ease) both;
+  opacity: 0.35;
+}
+
+.moment-line b {
+  position: absolute;
+  left: var(--pos);
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+  transform: translate(-50%, -50%);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.moment-line:hover b {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.moment-line:hover i {
+  opacity: 0.55;
+}
+
+/* Подсветка момента после перехода к нему */
+.moment {
+  position: relative;
+}
+
+.moment.flash::before {
+  content: "";
+  position: absolute;
+  inset: 4px -8px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  pointer-events: none;
+  animation: moment-flash 1.6s ease-out forwards;
+}
+
+.moment:first-child.flash::before {
+  top: -8px;
+}
+
+@keyframes moment-flash {
+  0%, 35% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .moment-head .hint {
-  flex: none;
+  min-width: 7.6em;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1514,6 +1708,22 @@ ol.points li::before {
   margin-bottom: 4px;
 }
 
+.comments-tools #comments-filter {
+  flex: none;
+  width: 100%;
+}
+
+/* крестик очистки в поиске — свой, в цвет темы */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  cursor: pointer;
+  background: var(--muted);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm2.6 4.4a.6.6 0 0 1 0 .85L8.85 8l1.75 1.75a.6.6 0 1 1-.85.85L8 8.85 6.25 10.6a.6.6 0 1 1-.85-.85L7.15 8 5.4 6.25a.6.6 0 1 1 .85-.85L8 7.15 9.75 5.4a.6.6 0 0 1 .85 0Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
 .more-btn {
   display: flex;
   width: 100%;
@@ -1563,6 +1773,109 @@ ol.points li::before {
   font-size: 13px;
   font-weight: 400;
   transition: border-color var(--t-fast) ease;
+}
+
+/* Список: своя стрелка с нормальным отступом от края */
+.settings-block select {
+  appearance: none;
+  padding-right: 36px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%2394949c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5l3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+/* Chrome 135+: выпадающее меню целиком в стиле панели */
+@supports (appearance: base-select) {
+  .settings-block select,
+  .settings-block select::picker(select) {
+    appearance: base-select;
+  }
+
+  .settings-block select {
+    display: flex;
+    align-items: center;
+    background-image: none;
+    padding-right: 12px;
+  }
+
+  .settings-block select::picker-icon {
+    content: "";
+    width: 12px;
+    height: 12px;
+    margin-left: auto;
+    background: var(--muted);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5l3-3'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: rotate var(--t-fast) var(--ease);
+  }
+
+  .settings-block select:open::picker-icon {
+    rotate: 180deg;
+  }
+
+  .settings-block select::picker(select) {
+    margin-top: 4px;
+    padding: 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--bg-2);
+    color: var(--fg);
+    box-shadow: var(--shadow);
+    opacity: 1;
+    scale: 1;
+    transform-origin: top center;
+    transition: opacity 0.16s ease-out, scale 0.16s var(--ease), overlay 0.16s allow-discrete, display 0.16s allow-discrete;
+  }
+
+  @starting-style {
+    .settings-block select:open::picker(select) {
+      opacity: 0;
+      scale: 0.97;
+    }
+  }
+
+  .settings-block select:not(:open)::picker(select) {
+    opacity: 0;
+    scale: 0.97;
+  }
+
+  .settings-block option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 10px 0.15em;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .settings-block option:hover,
+  .settings-block option:focus-visible {
+    outline: none;
+    background: var(--bg-hover);
+  }
+
+  .settings-block option::checkmark {
+    order: 1;
+    margin-left: auto;
+    content: "";
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2.5 6.2 2.3 2.3 4.7-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+
+  .settings-block option:checked {
+    font-weight: 600;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-block select::picker(select),
+  .settings-block select::picker-icon {
+    transition: none;
+  }
 }
 
 .settings-block input:focus,
@@ -1979,7 +2292,7 @@ kbd {
 .tl-dot::after {
   content: "";
   position: absolute;
-  inset: -9px;
+  inset: -3px;
   border-radius: 50%;
 }
 
@@ -2102,7 +2415,8 @@ kbd {
 }
 
 #comments-chips .chip {
-  flex: none;
+  flex: 1 0 auto;
+  justify-content: center;
 }
 
 @media (max-width: 360px) {
@@ -2296,4 +2610,59 @@ kbd {
 
 .analyze-actions:not(:has(button:not(.hidden))) {
   display: none;
+}
+
+/* =====================================================================
+   Тихий интерфейс (по unslop / Emil Kowalski):
+   - скругление по размеру: кнопки и поля — 10px, «таблетки» только у чипов
+     и таймкодов (фирменный знак панели);
+   - одна точка акцента — главная кнопка и таймкоды; счётчики нейтральные;
+   - ровные поверхности без цветных градиентов;
+   - анимации остаются: въезд вкладок по направлению, «дыхание» точки,
+     пока сервер просыпается, досчёт чисел, раскрытие списков.
+   ===================================================================== */
+button.primary,
+button.ghost,
+.icon-btn,
+.max-wrap,
+#search-input,
+#comments-filter {
+  border-radius: 10px;
+}
+
+.tab-badge {
+  background: var(--bg-3);
+  color: var(--muted);
+}
+
+.tab.active .tab-badge {
+  color: var(--fg-2);
+}
+
+.cta,
+.answer-box {
+  background: var(--bg-2);
+}
+
+.cta-icon {
+  background: var(--bg-3);
+  color: var(--fg-2);
+}
+
+.answer-label {
+  color: var(--muted);
+}
+
+/* Порядок моментов: два чипа над списком */
+.moments-tools {
+  margin: 0 0 14px;
+}
+
+#moments-sort .chip {
+  flex: 1 0 auto;
+  justify-content: center;
+}
+
+#btn-moments-all {
+  margin-top: 4px;
 }
