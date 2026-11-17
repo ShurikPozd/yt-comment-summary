@@ -73,6 +73,11 @@
     true
   );
 
+  // медиаклавиша (через MediaSession, см. early-main.js) — тоже ваше действие
+  document.addEventListener("ytcs-gesture", () => {
+    gestureAt = Date.now();
+  });
+
   // play не всплывает, но проходит фазу захвата — ловим на document.
   document.addEventListener(
     "play",

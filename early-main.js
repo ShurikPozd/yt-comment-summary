@@ -62,6 +62,45 @@
     navigating = false;
   });
 
+  // Медиаклавиши (наушники, клавиатура, кнопки Chrome) приходят не событием
+  // клавиатуры, а через MediaSession: YouTube регистрирует свой обработчик
+  // «play». Оборачиваем его — нажатие медиаклавиши считается вашим действием.
+  const markGesture = () => {
+    gestureAt = Date.now();
+    document.dispatchEvent(new CustomEvent("ytcs-gesture")); // early.js тоже должен знать
+  };
+  try {
+    const ms = navigator.mediaSession;
+    if (ms && typeof ms.setActionHandler === "function") {
+      const origSet = ms.setActionHandler.bind(ms);
+      let pageSetPlay = false;
+      ms.setActionHandler = (action, handler) => {
+        if (action === "play") pageSetPlay = true;
+        if (action === "play" && typeof handler === "function") {
+          return origSet(action, function (...args) {
+            markGesture();
+            return handler.apply(this, args);
+          });
+        }
+        return origSet(action, handler);
+      };
+      // Если YouTube свой «play» не задал, браузер запускает видео сам, в
+      // обход play() — и запасная пауза его тут же остановила бы. Ставим свой:
+      // нажатие засчитываем и запускаем основное видео.
+      window.addEventListener("load", () =>
+        setTimeout(() => {
+          if (pageSetPlay) return;
+          origSet("play", () => {
+            markGesture();
+            document.querySelector("video.html5-main-video, #movie_player video")?.play();
+          });
+        }, 3000)
+      );
+    }
+  } catch (e) {
+    /* без MediaSession — медиаклавиши как раньше */
+  }
+
   const isMainVideo = (el) =>
     el instanceof HTMLVideoElement && (el.classList.contains("html5-main-video") || Boolean(el.closest?.("#movie_player, ytd-player")));
 
