@@ -162,7 +162,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   const id = videoIdFrom(info.linkUrl || "") || videoIdFrom(tab?.url || "");
-  if (!id) return;
+  if (!id) {
+    // правый клик не по видео — подсказываем на странице, а не молчим
+    if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text: "Это не видео — щёлкните по ролику или его превью" }).catch(() => {});
+    return;
+  }
   if (action === "preview") await openPreview(tab, id);
   if (action === "download") await downloadThumb(tab, id);
 });

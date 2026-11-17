@@ -1118,6 +1118,7 @@
   }
 
   function pvShow(url) {
+    if (!pv || !pv.sizes.has(url)) return;
     pv.current = url;
     const { w, h } = pv.sizes.get(url);
     const stage = pv.root.querySelector(".stage");
@@ -1168,18 +1169,37 @@
     const cur = pv;
     pv = null;
     cur.wrap.classList.remove("open");
+    cur.wrap.style.pointerEvents = "none"; // во время исчезновения клики не проходят
     window.removeEventListener("keydown", pvKeys, true);
     setTimeout(() => cur.host.remove(), 220);
-    cur.prevFocus?.focus?.({ preventScroll: true });
+    // фокус — туда, откуда открыли; если это пункт уже закрытого меню — на плеер
+    const back =
+      cur.prevFocus?.isConnected && !cur.prevFocus.closest?.(".ytcs-menu") ? cur.prevFocus : document.querySelector("#movie_player");
+    back?.focus?.({ preventScroll: true });
   }
 
-  // Пока окно открыто, клавиши YouTube (пробел, K, F…) не срабатывают.
+  // Tab не выпускает фокус из окна (иначе буквы D/C срабатывали бы при вводе
+  // в поиске YouTube).
+  function pvTrapTab(e) {
+    const items = [...pv.root.querySelectorAll("button")].filter((b) => b.offsetParent !== null);
+    if (!items.length) return;
+    const i = items.indexOf(pv.root.activeElement);
+    const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i < 0 || i === items.length - 1 ? 0 : i + 1;
+    e.preventDefault();
+    items[next].focus();
+  }
+
+  // Пока окно открыто, клавиши YouTube (пробел, K, F, стрелки…) не срабатывают,
+  // а страница под окном не прокручивается.
+  const PV_BLOCK = new Set([" ", "spacebar", "pageup", "pagedown", "arrowup", "arrowdown", "home", "end", "escape"]);
   function pvKeys(e) {
     if (!pv) return;
-    const k = e.key.toLowerCase();
-    if (k === "tab") return;
+    const k = String(e.key || "").toLowerCase();
     e.stopImmediatePropagation();
+    if (k === "tab") return pvTrapTab(e);
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (PV_BLOCK.has(k)) e.preventDefault();
+    if (e.repeat) return; // зажатая D не качает файл десятки раз
     if (k === "escape") {
       e.preventDefault();
       closePreviewOverlay();
@@ -1216,7 +1236,8 @@
           <div class="msg" role="status"></div>
         </div>
       </div>`;
-    document.documentElement.appendChild(host);
+    // в полноэкранном режиме виден только полноэкранный элемент — окно внутрь него
+    (document.fullscreenElement || document.documentElement).appendChild(host);
     const wrap = root.querySelector(".wrap");
     pv = { host, root, wrap, urls, title: String(title || ""), name: String(name || "thumbnail.jpg"), current: null, sizes: new Map(), prevFocus: document.activeElement };
     const mine = pv;
@@ -1252,6 +1273,13 @@
     else root.querySelector(".stage").innerHTML = `<div class="err">Превью этого видео недоступно.</div>`;
     return true;
   }
+
+  // уход на другое видео или выход из полноэкранного режима — окно закрываем
+  window.addEventListener("yt-navigate-start", closePreviewOverlay);
+  document.addEventListener("fullscreenchange", () => {
+    if (pv && !pv.host.isConnected) pv = null;
+    else if (pv && pv.host.parentElement !== (document.fullscreenElement || document.documentElement)) closePreviewOverlay();
+  });
 
   function ensurePlayerButton() {
     if (!isWatchPage()) return;
@@ -1316,6 +1344,10 @@
       case "yt:preview":
         sendResponse({ ok: true });
         void openPreviewOverlay(msg);
+        return;
+      case "yt:toast":
+        showPageToast(String(msg.text || ""));
+        sendResponse({ ok: true });
         return;
       case "yt:start-collect":
         currentVideoId = videoIdFromUrl();

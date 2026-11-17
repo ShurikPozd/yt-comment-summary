@@ -1757,7 +1757,7 @@ function renderMoments() {
         const left = Math.min(100, (m.t / end) * 100);
         const size = 8 + Math.round((m.count / maxCount) * 8);
         const n = `${m.count} ${plural(m.count, "комментарий", "комментария", "комментариев")}`;
-        return `<button class="tl-dot" data-t="${m.t}" data-moment="${m.t}" aria-label="${esc(m.label)}, ${n}" style="left:${left}%;width:${size}px;height:${size}px;z-index:${m.count}"></button>`;
+        return `<button class="tl-dot" tabindex="-1" data-t="${m.t}" data-moment="${m.t}" aria-label="${esc(m.label)}, ${n}" style="left:${left}%;width:${size}px;height:${size}px;z-index:${m.count}"></button>`;
       })
       .join("") +
     '</div></div><div class="tl-scale"><span class="tl-from"></span><span class="tl-mid"></span><span class="tl-to"></span></div><div class="tl-pop" aria-hidden="true"></div>';
@@ -1908,19 +1908,24 @@ function bindTimeline(line) {
   view.addEventListener(
     "wheel",
     (e) => {
-      const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
-      if (Math.abs(dx) > Math.abs(e.deltaY) || (e.shiftKey && dx)) {
-        if (tl.z <= 1.01) return;
+      // Ctrl+колесо / щипок на тачпаде — масштаб таймлайна, а не всей панели
+      if (e.ctrlKey) e.preventDefault();
+      const unit = e.deltaMode === 1 ? 16 : 1;
+      const dx = (e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX) * unit;
+      if (Math.abs(dx) > Math.abs(e.deltaY * unit) || (e.shiftKey && dx)) {
+        const s = Math.min(Math.max(0, tl.s + dx / (tlWidth(view) * tl.z)), 1 - 1 / tl.z);
+        if (Math.abs(s - tl.s) < 1e-6) return; // сдвигать некуда — прокрутка уходит панели
         e.preventDefault();
-        tl.s += dx / (tlWidth(view) * tl.z);
+        tl.s = s;
         applyZoom(false);
         hideTimelinePop(true);
         return;
       }
-      if (e.deltaY > 0 && tl.z <= 1.01) return;
+      const factor = Math.exp(-e.deltaY * unit * 0.0025);
+      const z = Math.min(Math.max(1, tl.z * factor), tlMaxZoom());
+      if (Math.abs(z - tl.z) < 1e-3) return; // масштаб у предела — не мешаем прокрутке панели
       e.preventDefault();
-      const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
-      zoomAt(Math.exp(-px * 0.0025), e.clientX);
+      zoomAt(factor, e.clientX);
       hideTimelinePop(true);
     },
     { passive: false }
@@ -1979,7 +1984,36 @@ function bindTimeline(line) {
     if (dot && !view.classList.contains("panning")) showTimelinePop(dot);
   };
   view.addEventListener("pointerover", show);
-  view.addEventListener("focusin", show);
+  view.addEventListener("focusin", (e) => {
+    const dot = e.target.closest?.(".tl-dot");
+    if (!dot) return;
+    // точка за краем приближенного окна — подвозим её в центр
+    const f = Number(dot.dataset.t) / tl.end;
+    if (tl.z > 1.01 && (f < tl.s || f > tl.s + 1 / tl.z)) {
+      tl.s = f - 0.5 / tl.z;
+      applyZoom(true);
+      setTimeout(() => showTimelinePop(dot), 240);
+    } else show(e);
+  });
+  // С клавиатуры точки — одна остановка Tab, дальше стрелками по времени
+  view.addEventListener("keydown", (e) => {
+    swallowClick = false;
+    const dot = e.target.closest?.(".tl-dot");
+    if (!dot || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const dots = [...view.querySelectorAll(".tl-dot")].sort((a, b) => a.dataset.t - b.dataset.t);
+    const i = dots.indexOf(dot);
+    const j = e.key === "Home" ? 0 : e.key === "End" ? dots.length - 1 : i + (e.key === "ArrowRight" ? 1 : -1);
+    const next = dots[Math.min(Math.max(0, j), dots.length - 1)];
+    dot.tabIndex = -1;
+    next.tabIndex = 0;
+    next.focus();
+  });
+  // первая по времени точка — точка входа с клавиатуры
+  const first = [...view.querySelectorAll(".tl-dot")].sort((a, b) => a.dataset.t - b.dataset.t)[0];
+  if (first) first.tabIndex = 0;
+  tlResize.disconnect();
+  tlResize.observe(view);
   view.addEventListener("pointerout", (e) => {
     if (e.target.closest?.(".tl-dot") && !e.relatedTarget?.closest?.(".tl-dot")) hideTimelinePop();
   });
@@ -2026,8 +2060,9 @@ function hideTimelinePop(now = false) {
   else popHideTimer = setTimeout(hide, 80);
 }
 
-// при изменении ширины панели сдвиг в пикселях пересчитываем
-window.addEventListener("resize", () => {
+// Сдвиг полосы — в пикселях от ширины окна. Ширина меняется при изменении
+// панели и при показе вкладки (скрытая вкладка имеет ширину 0) — пересчитываем.
+const tlResize = new ResizeObserver(() => {
   if (tl.z > 1.01) applyZoom(false);
 });
 
