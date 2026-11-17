@@ -53,9 +53,11 @@ export function isQuestion(text) {
   const t = String(text || "").replace(/https?:\/\/\S+/g, "").trim();
   if (!t) return false;
   if (/\?/.test(t)) return true;
-  // «!» или «X же …» в начале — это восклицание, а не вопрос
-  if (/!/.test(t) || /^\S+\s+же(?=[\s,.]|$)/i.test(t)) return false;
-  return ASK_START.test(t);
+  // «X же …» в начале — восклицание («Как же он хорош», «Почему же так классно»)
+  if (/^\S+\s+же(?=[\s,.!]|$)/i.test(t)) return false;
+  // явная просьба — вопрос даже с «!» («Подскажите название песни!»)
+  if (ASK_START.test(t)) return true;
+  return false;
 }
 
 const STOP = new Set(
@@ -131,6 +133,11 @@ export function topWords(comments, limit = 12) {
     if (!g || k.length < 4) continue;
     for (const k2 of keys) {
       if (k2 === k || k2.length <= k.length || k2.length - k.length > 2 || !k2.startsWith(k)) continue;
+      // хвост должен быть окончанием (или его началом): «куерт|ов» — да,
+      // «прав|д» (правда), «стар|т», «play|er» — нет
+      const rest = k2.slice(k.length);
+      const ends = /[а-я]/.test(k) ? RU_ENDINGS : EN_ENDINGS;
+      if (!ends.some((e) => e.startsWith(rest))) continue;
       const g2 = groups.get(k2);
       if (!g2) continue;
       for (const id of g2.ids) g.ids.add(id);

@@ -167,11 +167,47 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (action === "download") await downloadThumb(tab, id);
 });
 
+// Превью — поверх страницы YouTube (окно рисует content.js). Если вкладка не
+// отвечает (страницу открыли до установки расширения) — отдельная вкладка.
 async function openPreview(tab, id) {
   const { file, title } = await thumbFileName(tab, id);
-  const qs = new URLSearchParams({ urls: thumbUrls(id).join(","), title: title || id, name: file });
+  const payload = { urls: thumbUrls(id), title: title || id, name: file };
+  try {
+    const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:preview", ...payload });
+    if (r?.ok) return;
+  } catch (e) {
+    /* контент-скрипта нет — ниже вкладка */
+  }
+  const qs = new URLSearchParams({ urls: payload.urls.join(","), title: payload.title, name: file });
   await chrome.tabs.create({ url: chrome.runtime.getURL(`sidepanel/preview.html?${qs}`), index: (tab?.index ?? 0) + 1 });
 }
+
+// Окно превью на странице: скачать выбранное качество / отдать картинку для
+// копирования (у фона есть доступ к i.ytimg.com, у страницы YouTube — нет).
+const THUMB_URL_RE = /^https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/\w+\.jpg$/;
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "ui:thumb" || !sender.tab || !THUMB_URL_RE.test(String(msg.url || ""))) return;
+  if (msg.op === "download") {
+    const name = /\.jpg$/i.test(String(msg.name || "")) ? String(msg.name) : "thumbnail.jpg";
+    chrome.downloads
+      .download({ url: msg.url, filename: name, conflictAction: "uniquify", saveAs: false })
+      .then(() => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
+  if (msg.op === "data") {
+    fetch(msg.url)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("HTTP " + r.status))))
+      .then((buf) => {
+        const bytes = new Uint8Array(buf);
+        let bin = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        sendResponse({ ok: true, dataUrl: "data:image/jpeg;base64," + btoa(bin) });
+      })
+      .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+    return true;
+  }
+});
 
 async function downloadThumb(tab, id) {
   const url = await bestThumb(id);

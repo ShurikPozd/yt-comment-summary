@@ -656,25 +656,25 @@ function friendlyError(e) {
   if (isOutputLimitError(e)) {
     const wait = retryAfterMs(e, 0);
     const tail = wait ? ` Groq велит подождать ~${Math.round(wait / 1000)} с.` : "";
-    return `Groq не принял запрос: превышен лимит ВЫХОДНЫХ токенов (OTPM на free-тарифе — ~1000 ток/мин на всю учётку, бот и расширение делят один ключ).${tail} Расширение подождёт и попробует снова; можно просто нажать «Анализировать» ещё раз.`;
+    return `Groq не принял запрос: превышен лимит ВЫХОДНЫХ токенов (OTPM на free-тарифе — ~1000 ток/мин на всю учётку, бот и расширение делят один ключ).${tail} Расширение подождёт и попробует снова; можно и просто запустить анализ ещё раз.`;
   }
   if (isSizeLimitError(e)) {
-    return "Запрос не влезает в контекст модели — это НЕ лимит токенов в минуту, ждать нечего. Уменьши «Максимум комментариев» в настройках или запусти анализ на меньшем объёме.";
+    return "Запрос не влезает в контекст модели — это НЕ лимит токенов в минуту, ждать нечего. Уменьшите «Максимум комментариев» в настройках или запустите анализ на меньшем объёме.";
   }
   if (isInputLimitError(e)) {
-    return "Groq не принял запрос: превышен лимит ВХОДНЫХ токенов (ITPM на free-тарифе, ~7000 ток/мин на всю учётку — бот и расширение делят один ключ). Расширение ждёт окно и режет комментарии на части автоматически; просто нажми «Анализировать» ещё раз.";
+    return "Groq не принял запрос: превышен лимит ВХОДНЫХ токенов (ITPM на free-тарифе, ~7000 ток/мин на всю учётку — бот и расширение делят один ключ). Расширение ждёт окно и режет комментарии на части автоматически — просто запустите анализ ещё раз.";
   }
   if (/Модель не ответила/.test(s)) {
-    return "Модель Groq не ответила (временный сбой или лимит). Попробуй нажать «Анализировать» ещё раз — часто после ретрая всё проходит.";
+    return "Модель Groq не ответила (временный сбой или лимит). Запустите анализ ещё раз — обычно со второй попытки проходит.";
   }
   if (/таймаут|timeout|Сервер недоступен|Failed to fetch|fetch failed/i.test(s)) {
-    return "Не удалось связаться с сервером: возможно, Render спит (холодный старт ~50 сек) или нет связи с интернетом. Проверь «Проверить связь» и попробуй ещё раз.";
+    return "Не удалось связаться с сервером: возможно, Render спит (холодный старт ~50 сек) или нет связи с интернетом. Нажмите «Проверить связь» в настройках и попробуйте ещё раз.";
   }
   if (/403|Отказано прокси|forbidden/i.test(s)) {
-    return "Прокси-сервер отклонил запрос: проверь правильность URL, секрета и то, что сервер обновлён (Render деплоит из GitHub автоматически).";
+    return "Прокси-сервер отклонил запрос: проверьте правильность URL, секрета и то, что сервер обновлён (Render деплоит из GitHub автоматически).";
   }
   if (/400|413/.test(s)) {
-    return "Запрос слишком большой или отклонён прокси: попробуй уменьшить «Максимум комментариев» в настройках.";
+    return "Запрос слишком большой или отклонён прокси: попробуйте уменьшить «Максимум комментариев» в настройках.";
   }
   return s || "Неизвестная ошибка";
 }
@@ -712,6 +712,12 @@ function applyTheme() {
   // тема и на <html>: при изменении ширины панели Chrome заливает новые
   // полосы фоном корневого элемента — он должен совпадать с фоном панели
   document.documentElement.dataset.theme = document.body.dataset.theme = dark ? "dark" : "light";
+  // для theme-boot.js: следующее открытие панели сразу в нужной теме
+  try {
+    localStorage.setItem("ytcs:theme", dark ? "dark" : "light");
+  } catch (e) {
+    /* не критично */
+  }
 }
 
 function fillSettingsFields() {
@@ -1066,7 +1072,10 @@ function updateCollectStatus(status, fetched, max, error) {
     const changed = lim && used && lim !== used && (lim < (fetched || 0) || (fetched || 0) >= used);
     el.innerHTML =
       `${icon("check", { size: 13 })} Собрано ${fetched || 0}` +
-      (changed ? ` <span class="status-note">· лимит изменён — соберите заново</span>` : "");
+      (changed
+        ? ` <span class="status-note"><span class="sep">· </span>лимит изменён — <button class="link-btn" data-restart>соберите заново</button></span>`
+        : "");
+    el.querySelector("[data-restart]")?.addEventListener("click", () => $("btn-restart").click());
     el.title = `Собрано комментариев: ${fetched || 0}`;
     setProgress("collect-progress", null);
   } else if (status === "error") {
@@ -1082,10 +1091,10 @@ function updateCollectStatus(status, fetched, max, error) {
 // Технические коды ошибок сбора из content.js → понятный текст.
 function humanCollectError(error) {
   const e = String(error || "");
-  if (/innerTubeBlocked/.test(e)) return "YouTube временно не отдаёт комментарии — попробуй «Собрать заново» чуть позже";
+  if (/innerTubeBlocked/.test(e)) return "YouTube временно не отдаёт комментарии — попробуйте «Собрать заново» чуть позже";
   if (/innerTubeNoCommentsSection/.test(e)) return "Комментарии к видео отключены или не найдены";
-  if (/innerTubeTimeout|innerTubeNetwork/.test(e)) return "Нет ответа от YouTube — проверь сеть и нажми «Собрать заново»";
-  return "Не удалось собрать комментарии — нажми «Собрать заново»";
+  if (/innerTubeTimeout|innerTubeNetwork/.test(e)) return "Нет ответа от YouTube — проверьте сеть и нажмите «Собрать заново»";
+  return "Не удалось собрать комментарии — нажмите «Собрать заново»";
 }
 
 // ---------------- Вкладки ----------------
@@ -1189,7 +1198,7 @@ async function analyze() {
     } else if (st?.status === "error") {
       showToast(`Сбор комментариев упал: ${st.error || "ошибка"}. Нажми «Собрать заново», чтобы повторить.`);
     } else {
-      showToast("Сначала собери комментарии — нажми «Собрать заново» или открой видео ещё раз.");
+      showToast("Сначала соберите комментарии — нажмите «Собрать заново» или откройте видео ещё раз.");
     }
     return;
   }
@@ -1298,7 +1307,7 @@ async function analyze() {
       if (!portion.length) return true;
       if (!live()) return false;
       if (depth > 6) throw new Error("Слишком много дроблений (комментарии слишком большие или лимит исчерпан)");
-      if (rateTries > 3) throw new Error("Groq держит лимит выходных токенов дольше 3 минут — сделай перерыв и нажми «Анализировать» ещё раз.");
+      if (rateTries > 3) throw new Error("Groq держит лимит выходных токенов дольше 3 минут — сделайте перерыв и запустите анализ ещё раз.");
 
       // оцениваем токены порции; если она уже мала для лимита, но всё равно
       // получили 429 — значит уперлись в общий бюджет бота+расширения: ждём окно.
@@ -1519,7 +1528,7 @@ function renderSummary() {
           : "";
     const nNew = s.fromHistory ? state.newIds?.size || 0 : 0;
     hist.innerHTML = s.fromHistory
-      ? `Сохранённая сводка от ${esc(fmtDate(s.updatedAt))}${esc(n)}. «Анализировать» — обновить.` +
+      ? `Сохранённая сводка от ${esc(fmtDate(s.updatedAt))}${esc(n)}. «Обновить сводку» — пересчитать.` +
         (nNew ? ` <button class="link-btn new-link" data-goto-filter="new">${nNew} ${plural(nNew, "новый комментарий", "новых комментария", "новых комментариев")} с тех пор →</button>` : "")
       : `Сводка от ${esc(fmtDate(s.updatedAt))}${esc(n)}`;
     hist.classList.remove("hidden");
@@ -1733,22 +1742,27 @@ function renderMoments() {
     wrap.innerHTML = "";
     return;
   }
-  // Полоса-таймлайн: где в видео сгущаются отсылки зрителей.
-  const end = Number.isFinite(maxSec()) ? maxSec() : Math.max(...moments.map((m) => m.t)) * 1.05 + 1;
+  // Полоса-таймлайн: где в видео сгущаются отсылки зрителей. Размер точки —
+  // сколько зрителей сослались на момент. Колесо мыши приближает.
+  const known = Number.isFinite(maxSec());
+  const end = known ? maxSec() : Math.max(...moments.map((m) => m.t)) * 1.05 + 1;
   const maxCount = Math.max(...moments.map((m) => m.count));
+  if (tl.vid !== state.videoId) Object.assign(tl, { vid: state.videoId, z: 1, s: 0 });
+  Object.assign(tl, { end, dur: known ? end - 2 : null, step: 0 });
+  tl.moments = new Map(moments.map((m) => [String(m.t), m]));
   line.innerHTML =
-    '<div class="tl-track">' +
+    '<div class="tl-view"><div class="tl-track">' +
     moments
       .map((m) => {
         const left = Math.min(100, (m.t / end) * 100);
         const size = 8 + Math.round((m.count / maxCount) * 8);
         const n = `${m.count} ${plural(m.count, "комментарий", "комментария", "комментариев")}`;
-        // у краёв подпись прижимаем внутрь, чтобы не обрезалась
-        const edge = left < 15 ? " edge-l" : left > 85 ? " edge-r" : "";
-        return `<button class="tl-dot${edge}" data-t="${m.t}" data-moment="${m.t}" data-tip="${esc(m.label)} · ${n}" aria-label="${esc(m.label)}, ${n}" style="left:${left}%;width:${size}px;height:${size}px;z-index:${m.count}"></button>`;
+        return `<button class="tl-dot" data-t="${m.t}" data-moment="${m.t}" aria-label="${esc(m.label)}, ${n}" style="left:${left}%;width:${size}px;height:${size}px;z-index:${m.count}"></button>`;
       })
       .join("") +
-    `</div><div class="tl-scale"><span>0:00</span><span>${Number.isFinite(maxSec()) ? fmtTime(end - 2) : ""}</span></div>`;
+    '</div></div><div class="tl-scale"><span class="tl-from"></span><span class="tl-mid"></span><span class="tl-to"></span></div><div class="tl-pop" aria-hidden="true"></div>';
+  bindTimeline(line);
+  applyZoom(false);
   line.classList.remove("hidden");
 
   // Список: по ходу видео или по обсуждаемости. Моменты, на которые сослался
@@ -1758,7 +1772,7 @@ function renderMoments() {
   document.querySelectorAll("#moments-sort .chip").forEach((b) => {
     const on = b.dataset.sort === sortBy;
     b.classList.toggle("active", on);
-    b.setAttribute("aria-checked", String(on));
+    b.setAttribute("aria-pressed", String(on));
   });
   const multi = moments.filter((m) => m.count > 1);
   const singles = moments.length - multi.length;
@@ -1767,6 +1781,7 @@ function renderMoments() {
     sortBy === "time" ? a.t - b.t : b.score - a.score || a.t - b.t
   );
   allBtn.classList.toggle("hidden", !hideSingles);
+  badge.textContent = String(shown.length); // счётчик = сколько моментов в списке
   if (hideSingles)
     allBtn.textContent = `Ещё ${singles} ${plural(singles, "момент", "момента", "моментов")} с одним комментарием`;
 
@@ -1780,7 +1795,7 @@ function renderMoments() {
       return `<div class="moment" data-moment="${m.t}">
         <div class="moment-head">
           <button class="tc tc-big" data-t="${m.t}" title="Перемотать">${icon("play", { size: 11 })}${esc(m.label)}</button>
-          <button class="moment-line" data-t="${m.t}" style="--pos:${pos}%" title="${esc(m.label)} из ${esc(fmtTime(end))} — перемотать" aria-label="Перемотать на ${esc(m.label)}"><i></i><b></b></button>
+          <button class="moment-line" data-t="${m.t}" style="--at:${pos}%" title="${esc(m.label)}${known ? ` из ${esc(fmtTime(end - 2))}` : ""} — перемотать" aria-label="Перемотать на ${esc(m.label)}"><i></i><b></b></button>
           <span class="hint">${n}</span>
         </div>
         ${commentCard(cs[0], { compact: true })}
@@ -1799,35 +1814,268 @@ function renderMoments() {
 }
 
 
+// ---------------- Масштабируемый таймлайн ----------------
+// z — масштаб (1 = всё видео), s — начало видимого окна (доля длины видео).
+// Ширина полосы и её сдвиг анимируются CSS одной кривой, поэтому точка под
+// курсором стоит на месте, пока полоса растягивается.
+const tl = { vid: null, z: 1, s: 0, end: 1, dur: null, step: 0, moments: new Map() };
+const TL_STEPS = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+
+function tlParts() {
+  const line = $("moments-timeline");
+  const view = line.querySelector(".tl-view");
+  return { line, view, track: view?.querySelector(".tl-track") };
+}
+
+function tlWidth(view) {
+  return Math.max(1, view.clientWidth - 16); // поля .tl-view по 8px
+}
+
+function tlMaxZoom() {
+  // самое близкое — окно секунд в 20, но не больше ×60
+  return Math.max(1, Math.min(60, tl.end / 20));
+}
+
+function fmtZoom(z) {
+  return z < 10 ? z.toFixed(1).replace(".", ",") : String(Math.round(z));
+}
+
+function applyZoom(animate = true) {
+  const { line, view, track } = tlParts();
+  if (!view || !track) return;
+  tl.z = Math.min(Math.max(1, tl.z), tlMaxZoom());
+  tl.s = Math.min(Math.max(0, tl.s), 1 - 1 / tl.z);
+  const instant = !animate || prefersReducedMotion.matches;
+  if (instant) track.style.transition = "none";
+  track.style.width = `${tl.z * 100}%`;
+  track.style.transform = `translateX(${-tl.s * tl.z * tlWidth(view)}px)`;
+  if (instant) {
+    void track.offsetWidth;
+    track.style.transition = "";
+  }
+  const zoomed = tl.z > 1.01;
+  view.classList.toggle("zoomed", zoomed);
+  // засечки времени: шаг такой, чтобы в окне было до 6 делений
+  const step = zoomed ? TL_STEPS.find((st) => tl.end / tl.z / st <= 6) || 3600 : 0;
+  if (step !== tl.step) {
+    tl.step = step;
+    track.querySelectorAll(".tl-tick").forEach((t) => t.remove());
+    if (step) {
+      let html = "";
+      for (let t = step; t < tl.end - 1; t += step) html += `<i class="tl-tick" data-l="${fmtTime(t)}" style="left:${(t / tl.end) * 100}%"></i>`;
+      track.insertAdjacentHTML("afterbegin", html);
+    }
+  }
+  // подписи: границы видимого окна и масштаб
+  const from = tl.s * tl.end;
+  const to = (tl.s + 1 / tl.z) * tl.end;
+  line.querySelector(".tl-from").textContent = fmtTime(Math.round(from));
+  line.querySelector(".tl-to").textContent =
+    zoomed || tl.dur != null ? fmtTime(Math.round(tl.dur != null ? Math.min(tl.dur, to) : to)) : "";
+  let mid = line.querySelector(".tl-mid");
+  const tag = zoomed ? "BUTTON" : "SPAN";
+  if (mid.tagName !== tag) {
+    const el = document.createElement(tag.toLowerCase());
+    el.className = "tl-mid";
+    if (zoomed) el.title = "Показать всё видео (или двойной клик по полосе)";
+    mid.replaceWith(el);
+    mid = el;
+  }
+  mid.textContent = zoomed ? `×${fmtZoom(tl.z)} · показать всё` : "колесо мыши — приблизить";
+}
+
+function resetZoom() {
+  tl.z = 1;
+  tl.s = 0;
+  applyZoom(true);
+}
+
+function zoomAt(factor, clientX) {
+  const { view } = tlParts();
+  if (!view) return;
+  const r = view.getBoundingClientRect();
+  const c = Math.min(1, Math.max(0, (clientX - r.left - 8) / tlWidth(view)));
+  const f = tl.s + c / tl.z; // доля видео под курсором — она останется под курсором
+  tl.z = Math.min(Math.max(1, tl.z * factor), tlMaxZoom());
+  tl.s = f - c / tl.z;
+  applyZoom(true);
+}
+
+function bindTimeline(line) {
+  const view = line.querySelector(".tl-view");
+  // Колесо: вверх — приблизить, вниз — отдалить. Горизонтальная прокрутка
+  // (тачпад, Shift+колесо) — сдвиг. На полном масштабе «вниз» отдаём странице.
+  view.addEventListener(
+    "wheel",
+    (e) => {
+      const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
+      if (Math.abs(dx) > Math.abs(e.deltaY) || (e.shiftKey && dx)) {
+        if (tl.z <= 1.01) return;
+        e.preventDefault();
+        tl.s += dx / (tlWidth(view) * tl.z);
+        applyZoom(false);
+        hideTimelinePop(true);
+        return;
+      }
+      if (e.deltaY > 0 && tl.z <= 1.01) return;
+      e.preventDefault();
+      const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      zoomAt(Math.exp(-px * 0.0025), e.clientX);
+      hideTimelinePop(true);
+    },
+    { passive: false }
+  );
+  // перетаскивание приближенной полосы
+  let drag = null;
+  let swallowClick = false;
+  view.addEventListener("pointerdown", (e) => {
+    swallowClick = false;
+    if (e.button !== 0 || tl.z <= 1.01) return;
+    drag = { x: e.clientX, s: tl.s, moved: false, id: e.pointerId };
+  });
+  view.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < 4) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      view.setPointerCapture(e.pointerId);
+      view.classList.add("panning");
+      hideTimelinePop(true);
+    }
+    tl.s = drag.s - dx / (tlWidth(view) * tl.z);
+    applyZoom(false);
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (drag.moved) {
+      view.classList.remove("panning");
+      swallowClick = true; // клик после перетаскивания не перематывает видео
+    }
+    drag = null;
+  };
+  view.addEventListener("pointerup", endDrag);
+  view.addEventListener("pointercancel", endDrag);
+  view.addEventListener(
+    "click",
+    (e) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    true
+  );
+  view.addEventListener("click", () => hideTimelinePop(true));
+  view.addEventListener("dblclick", (e) => {
+    if (!e.target.closest(".tl-dot")) resetZoom();
+  });
+  line.querySelector(".tl-scale").addEventListener("click", (e) => {
+    if (e.target.closest("button.tl-mid")) resetZoom();
+  });
+  // карточка комментария при наведении / фокусе на точке
+  const show = (e) => {
+    const dot = e.target.closest?.(".tl-dot");
+    if (dot && !view.classList.contains("panning")) showTimelinePop(dot);
+  };
+  view.addEventListener("pointerover", show);
+  view.addEventListener("focusin", show);
+  view.addEventListener("pointerout", (e) => {
+    if (e.target.closest?.(".tl-dot") && !e.relatedTarget?.closest?.(".tl-dot")) hideTimelinePop();
+  });
+  view.addEventListener("focusout", () => hideTimelinePop());
+}
+
+let popHideTimer = 0;
+function showTimelinePop(dot) {
+  clearTimeout(popHideTimer);
+  const { line } = tlParts();
+  const pop = line.querySelector(".tl-pop");
+  const m = tl.moments.get(dot.dataset.t);
+  if (!pop || !m) return;
+  line.querySelectorAll(".tl-dot.hot").forEach((d) => d.classList.remove("hot"));
+  dot.classList.add("hot");
+  const c = state.comments[m.idxs[0]];
+  const n = `${m.count} ${plural(m.count, "комментарий", "комментария", "комментариев")}`;
+  const likes = c?.likes ? ` · ${fmtNum(c.likes)} ${plural(c.likes, "лайк", "лайка", "лайков")}` : "";
+  const text = c ? stripTimecodes(c.text) || String(c.text || "") : "";
+  pop.innerHTML =
+    `<div class="tl-pop-head"><span class="tc">${esc(m.label)}</span><span>${n}${likes}</span></div>` +
+    (c ? `<div class="tl-pop-author">${esc(c.author || "")}</div><div class="tl-pop-text">${esc(text)}</div>` : "") +
+    `<div class="tl-pop-foot">Клик — перемотать${m.count > 1 ? " и открыть все" : " и открыть"}</div>`;
+  // по центру под точкой, но в пределах карточки таймлайна
+  const box = line.getBoundingClientRect();
+  const d = dot.getBoundingClientRect();
+  const w = pop.offsetWidth;
+  const cx = d.left + d.width / 2 - box.left;
+  const left = Math.min(Math.max(4, cx - w / 2), box.width - w - 4);
+  pop.style.left = `${left}px`;
+  pop.style.top = `${Math.round(d.bottom - box.top + 8)}px`;
+  pop.style.setProperty("--ox", `${Math.round(cx - left)}px`);
+  pop.classList.add("show");
+}
+
+function hideTimelinePop(now = false) {
+  clearTimeout(popHideTimer);
+  const hide = () => {
+    const { line } = tlParts();
+    line.querySelector(".tl-pop")?.classList.remove("show");
+    line.querySelectorAll(".tl-dot.hot").forEach((d) => d.classList.remove("hot"));
+  };
+  if (now) hide();
+  else popHideTimer = setTimeout(hide, 80);
+}
+
+// при изменении ширины панели сдвиг в пикселях пересчитываем
+window.addEventListener("resize", () => {
+  if (tl.z > 1.01) applyZoom(false);
+});
+
 // Прокрутка с ease-out за ~400 мс. Своя, а не behavior:"smooth": та в
 // фоновой/неактивной панели может не сдвинуться вовсе — здесь же по таймеру
 // всё равно докручиваем до места.
 let scrollAnim = 0;
 function smoothScroll(box, target) {
-  target = Math.min(target, box.scrollHeight - box.clientHeight);
+  // Предел прокрутки считаем на каждом кадре: список под целью может как раз
+  // раскрываться (анимация высоты) — заранее посчитанный предел был бы мал.
+  const cap = () => Math.min(target, box.scrollHeight - box.clientHeight);
   const from = box.scrollTop;
   const dist = target - from;
   const run = ++scrollAnim;
+  let done = false;
+  const finish = () => {
+    done = true;
+    box.style.scrollBehavior = "";
+    box.removeEventListener("wheel", cancel);
+    box.removeEventListener("touchstart", cancel);
+  };
+  // пользователь сам крутит — не тянем его обратно
+  const cancel = () => {
+    if (run === scrollAnim) scrollAnim++;
+    finish();
+  };
   const jump = () => {
     box.style.scrollBehavior = "auto";
-    box.scrollTop = target;
-    box.style.scrollBehavior = "";
+    box.scrollTop = cap();
+    finish();
   };
   if (prefersReducedMotion.matches || Math.abs(dist) < 4) return jump();
+  box.addEventListener("wheel", cancel, { passive: true });
+  box.addEventListener("touchstart", cancel, { passive: true });
   const ms = Math.min(520, 260 + Math.abs(dist) / 8);
   const t0 = performance.now();
   box.style.scrollBehavior = "auto";
   const tick = (now) => {
-    if (run !== scrollAnim) return;
-    const k = Math.min(1, (now - t0) / ms);
-    box.scrollTop = from + dist * (1 - Math.pow(1 - k, 3));
+    if (run !== scrollAnim || done) return;
+    const k = Math.min(1, Math.max(0, (now - t0) / ms));
+    box.scrollTop = Math.min(cap(), from + dist * (1 - Math.pow(1 - k, 3)));
     if (k < 1) requestAnimationFrame(tick);
-    else box.style.scrollBehavior = "";
+    else finish();
   };
   requestAnimationFrame(tick);
+  // запасной ход: если кадры не идут (панель в фоне), всё равно докрутить
   setTimeout(() => {
-    if (run !== scrollAnim) return;
-    scrollAnim++;
+    if (run !== scrollAnim || done) return;
     jump();
   }, ms + 150);
 }
@@ -1865,7 +2113,7 @@ async function seekTo(t) {
     if (!r?.ok) throw new Error("no video");
     showToast(`Перемотано на ${fmtTime(t)}`);
   } catch (e) {
-    showToast("Не получилось перемотать — открой вкладку с этим видео.");
+    showToast("Не получилось перемотать — откройте вкладку с этим видео.");
   }
 }
 
@@ -2059,7 +2307,7 @@ async function runSearch() {
         mode,
         query: q,
         items: items.slice(0, 100),
-        info: items.length ? `Нашлось: ${items.length}${items.length > 100 ? " (показаны первые 100)" : ""}` : "Ничего не нашлось. Попробуй поиск по смыслу.",
+        info: items.length ? `Нашлось: ${items.length}${items.length > 100 ? " (показаны первые 100)" : ""}` : "Ничего не нашлось. Попробуйте поиск по смыслу.",
       };
     } else {
       if (!proxy.configured) {
@@ -2097,7 +2345,7 @@ async function runSearch() {
         ? {
             mode,
             query: q,
-            answer: normalizeSummary(data?.answer || "", 700) || "Модель не дала ответа — попробуй переформулировать вопрос.",
+            answer: normalizeSummary(data?.answer || "", 700) || "Модель не дала ответа — попробуйте переформулировать вопрос.",
             items,
             info: items.length ? `На чём основан ответ: ${items.length} комм.${scope}` : scope.trim(),
           }
@@ -2135,10 +2383,21 @@ function thumbUrls(m) {
   return [m?.thumbs?.maxres, m?.thumbs?.sd, m?.thumbs?.hq].filter(Boolean);
 }
 
-function openThumbTab() {
+// Превью открывается поверх страницы видео; если вкладка не отвечает —
+// отдельной вкладкой, как раньше.
+async function openThumbTab() {
   const m = state.meta;
   const urls = thumbUrls(m);
   if (!urls.length) return;
+  try {
+    const tab = await findActiveVideoTab();
+    if (tab?.id) {
+      const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:preview", urls, title: m.title || "", name: thumbFilename(m) });
+      if (r?.ok) return;
+    }
+  } catch (e) {
+    /* ниже — вкладка */
+  }
   const page = chrome.runtime.getURL("sidepanel/preview.html");
   const qs = new URLSearchParams({ urls: urls.join(","), title: m.title || "", name: thumbFilename(m) });
   chrome.tabs.create({ url: `${page}?${qs}` });
@@ -2463,7 +2722,7 @@ function bindEvents() {
     try {
       png = await renderSummaryCard(s, state.meta);
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-      showToast("Картинка со сводкой в буфере — вставь в чат через Ctrl+V");
+      showToast("Картинка со сводкой в буфере — вставьте в чат через Ctrl+V");
     } catch (e) {
       try {
         if (!png) throw e;
@@ -2602,7 +2861,7 @@ function bindEvents() {
   });
   document.querySelectorAll('input[name="mode"]').forEach((r) =>
     r.addEventListener("change", () => {
-      const ph = { text: "Слово или фраза…", ai: "Тема, о которой ищешь…", ask: "Свой вопрос — или выберите готовый ниже" };
+      const ph = { text: "Слово или фраза…", ai: "Тема или мнение…", ask: "Свой вопрос — или выберите готовый ниже" };
       $("search-input").placeholder = ph[r.value] || "";
       $("btn-search").textContent = r.value === "ask" ? "Спросить" : "Найти";
       $("ask-suggest").classList.toggle("hidden", r.value !== "ask");

@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="sidepanel.css" />
+    <script src="theme-boot.js"></script>
   </head>
   <body>
     <div id="app">
@@ -94,9 +95,9 @@
           </div>
           <div id="moments-timeline" class="timeline hidden"></div>
           <div id="moments-tools" class="moments-tools hidden">
-            <div class="chip-row" id="moments-sort" role="radiogroup" aria-label="Порядок моментов">
-              <button class="chip" data-sort="time" role="radio">По ходу видео</button>
-              <button class="chip" data-sort="top" role="radio">Самые обсуждаемые</button>
+            <div class="chip-row" id="moments-sort" role="group" aria-label="Порядок моментов">
+              <button class="chip active" data-sort="time" aria-pressed="true">По ходу видео</button>
+              <button class="chip" data-sort="top" aria-pressed="false">Самые обсуждаемые</button>
             </div>
           </div>
           <div id="moments-list"></div>
