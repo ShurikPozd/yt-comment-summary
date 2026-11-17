@@ -127,6 +127,8 @@
     } catch (e) {
       /* без кеша просто чуть позже */
     }
+    // early-main.js (мир страницы) отклоняет play() — сообщаем ему настройки
+    document.dispatchEvent(new CustomEvent("ytcs-prefs", { detail: JSON.stringify(prefs) }));
     applyHideProgress();
   }
   chrome.storage.local
@@ -145,6 +147,7 @@
     allowPlay() {
       gestureAt = Date.now();
       allowedId = videoId();
+      document.dispatchEvent(new CustomEvent("ytcs-allow"));
     },
     applyHideProgress,
   };

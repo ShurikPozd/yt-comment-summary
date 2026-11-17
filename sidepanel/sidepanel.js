@@ -1710,7 +1710,10 @@ let sentimentOpen = null;
 function sentimentExamplesHtml(s, kind) {
   const list = (s.sentimentIds?.[kind] || []).map((i) => state.comments[i]).filter(Boolean);
   const label = { positive: "Позитивные", neutral: "Нейтральные", negative: "Негативные" }[kind];
-  if (!list.length) return "";
+  if (!list.length) {
+    // сводка сделана до того, как ИИ начал отмечать примеры по тональности
+    return `<div class="sent-examples"><div class="hint">Примеры появятся после «Обновить сводку»: эта сводка сделана до того, как расширение научилось их отмечать.</div></div>`;
+  }
   return `<div class="sent-examples"><div class="hint">${label} — примеры, которые отметил ИИ</div>${list
     .map((c) => commentCard(c, { compact: true }))
     .join("")}</div>`;
@@ -1839,15 +1842,13 @@ function renderSummary() {
     // Каждая доля — кнопка: полоса и подпись под ней; клик раскрывает
     // примеры комментариев этой тональности (их отмечает ИИ при анализе).
     const ids = s.sentimentIds || {};
-    const hasEx = SENT_KINDS.some((k) => ids[k]?.length);
     box.innerHTML = `
-      <div class="subhead">Настроение зрителей${hasEx ? ' <span class="hint">нажмите на полосу — примеры</span>' : ""}</div>
+      <div class="subhead">Настроение зрителей <span class="hint">нажмите на полосу — примеры</span></div>
       <div class="sentiment-row">${parts
         .filter(([, n]) => n)
         .map(([k, n, label]) => {
-          const ex = ids[k]?.length || 0;
           const open = sentimentOpen === k;
-          return `<button class="sent-seg ${k}${open ? " open" : ""}" style="flex:${n} 1 0" data-sent="${k}"${ex ? "" : " disabled"} aria-expanded="${open}" title="${label}: ${n} из ${total}${ex ? " — показать примеры" : ""}"><i></i><span><b>${pct(n)}%</b> ${label}</span></button>`;
+          return `<button class="sent-seg ${k}${open ? " open" : ""}" style="flex:${n} 1 0" data-sent="${k}" aria-expanded="${open}" title="${label}: ${n} из ${total} — показать примеры"><i></i><span><b>${pct(n)}%</b> ${label}</span></button>`;
         })
         .join("")}</div>
       <div class="collapse sent-collapse${sentimentOpen ? " open" : ""}"><div class="collapse-inner">${sentimentOpen ? sentimentExamplesHtml(s, sentimentOpen) : ""}</div></div>`;

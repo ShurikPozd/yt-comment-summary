@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео в отдельной вкладке и инфо о канале.",
   "permissions": [
     "storage",
@@ -31,6 +31,17 @@
         "early.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "early-main.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     },
     {
       "matches": [
