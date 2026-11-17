@@ -2915,10 +2915,16 @@ button.ghost,
 }
 
 /* выбранная доля — мягкая подложка под полосой и подписью */
-.sent-seg.open {
-  --seg: var(--neu);
-  background: color-mix(in srgb, var(--seg) 14%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--seg) 14%, transparent);
+/* выбранная доля: полоса толще, подпись — на мягкой подложке её цвета;
+   подложка не выходит за свою долю и не касается соседней */
+.sent-seg span {
+  padding: 3px 4px 4px;
+  border-radius: 8px;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.sent-seg.open span {
+  background: color-mix(in srgb, var(--seg) 16%, transparent);
 }
 
 .sent-seg.positive {
