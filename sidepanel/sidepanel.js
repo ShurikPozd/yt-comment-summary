@@ -280,9 +280,9 @@ async function paceRequest(estIn, estOut = CHUNK_MAX_OUTPUT_TOKENS, onWait = nul
   }
 }
 
-function waitNote(prefix) {
+function waitNote(prefix, el = $) {
   return (sec) => {
-    $("summary-placeholder").textContent = `${prefix} Жду окно бесплатного лимита Groq: ~${sec} с…`;
+    el("summary-placeholder").textContent = `${prefix} Жду окно бесплатного лимита Groq: ~${sec} с…`;
   };
 }
 
@@ -918,7 +918,7 @@ async function loadFor(videoId) {
   const switched = state.videoId !== videoId;
   // Открыли другое видео посреди анализа — анализ прошлого прерываем
   // (его сводка, если успеет, всё равно сохранится в историю своего видео).
-  if (switched && state.analyzing) cancelAnalysis("Анализ прерван: открыто другое видео.");
+  if (switched && state.analyzing) detachAnalysis();
   state.videoId = videoId;
   state.meta = obj[`meta:${videoId}`] || (switched ? null : state.meta);
   state.comments = obj[`comments:${videoId}`] || [];
@@ -1085,7 +1085,7 @@ function setTab(name) {
   document.querySelectorAll(".tab[data-tab]").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === name);
     b.setAttribute("aria-selected", String(b.dataset.tab === name));
-    b.tabIndex = b.dataset.tab === name ? 0 : -1;
+    b.tabIndex = b.dataset.tab === name || (name === "settings" && b.dataset.tab === "summary") ? 0 : -1;
   });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   $("view-" + name).classList.add("active");
@@ -1118,9 +1118,7 @@ function setTab(name) {
 // результат (если успел) уходит в историю своего видео, а не текущего.
 let analyzeRun = 0;
 
-function cancelAnalysis(reason) {
-  if (!state.analyzing) return;
-  analyzeRun++;
+function resetAnalyzeUi() {
   state.analyzing = false;
   $("btn-cancel-analyze").classList.add("hidden");
   $("btn-analyze").disabled = false;
@@ -1128,7 +1126,27 @@ function cancelAnalysis(reason) {
   setProgress("analyze-progress", null);
   $("summary-placeholder").textContent = "";
   $("summary-text").innerHTML = "";
+}
+
+// Явная отмена («Отменить анализ», «Собрать заново»): запуск останавливается,
+// результат НЕ сохраняется.
+function cancelAnalysis(reason) {
+  if (!state.analyzing) return;
+  analyzeRun++;
+  resetAnalyzeUi();
   if (reason) showToast(reason);
+}
+
+// Ушли на другое видео посреди анализа: анализ продолжает работать в фоне для
+// своего видео (видео и комментарии в нём зафиксированы) и сохраняет сводку в
+// историю, а панель сразу свободна для нового видео. Новый запуск анализа
+// остановит фоновый (лимит Groq общий).
+const detachedRuns = new Set();
+function detachAnalysis() {
+  if (!state.analyzing) return;
+  detachedRuns.add(analyzeRun);
+  resetAnalyzeUi();
+  showToast("Сводка прошлого видео допишется в фоне и сохранится в историю");
 }
 
 async function analyze() {
@@ -1165,15 +1183,24 @@ async function analyze() {
   // анализируем именно это видео и этот набор комментариев, что бы ни случилось с панелью
   const vid = state.videoId;
   const comments = state.comments;
+  const meta0 = state.meta;
   const lang = state.settings.lang;
+  // На экране ли этот анализ (не отменён, не ушёл в фон, то же видео)? Если нет —
+  // записи в интерфейс уходят в отсоединённый элемент и никому не мешают.
+  const onScreen = () => live() && !detachedRuns.has(run) && state.videoId === vid;
+  const sink = document.createElement("div");
+  const uiEl = (id) => (onScreen() ? $(id) : sink);
+  const uiProgress = (f) => {
+    if (onScreen()) setProgress("analyze-progress", f);
+  };
   $("btn-analyze").disabled = true;
   $("btn-analyze").classList.add("busy");
   setTab("summary");
   $("summary-history").classList.add("hidden");
   $("summary-cta").classList.add("hidden");
-  $("summary-placeholder").classList.remove("hidden");
-  $("summary-placeholder").textContent = "Готовлю комментарии…";
-  setProgress("analyze-progress", 0.03);
+  uiEl("summary-placeholder").classList.remove("hidden");
+  uiEl("summary-placeholder").textContent = "Готовлю комментарии…";
+  uiProgress(0.03);
   try {
     // Пул для ИИ: при большом сборе берём самые залайканные (в исходном
     // порядке) — иначе 2000 комментариев на бесплатном лимите это ~20 минут.
@@ -1264,7 +1291,7 @@ async function analyze() {
       // Компактный формат ответа — ~200 токенов на часть; резерв с запасом,
       // после ответа settleOutput() поправит его на факт.
       const estOut = 280;
-      const slot = await paceRequest(est, estOut, waitNote(partLabel));
+      const slot = await paceRequest(est, estOut, waitNote(partLabel, uiEl));
       try {
         const raw = await proxy.chat(
           [
@@ -1284,7 +1311,7 @@ async function analyze() {
         // Лечится паузой на минутное окно (Groq сам пишет, сколько ждать).
         if (isOutputLimitError(e)) {
           const waitMs = Math.max(30000, retryAfterMs(e, 30000));
-          $("summary-placeholder").textContent =
+          uiEl("summary-placeholder").textContent =
             `Groq: лимит выходных токенов (OTPM) — жду окно ~${Math.round(waitMs / 1000)} с, затем повтор…`;
           // Сдвигаем и локальный бюджет, иначе paceRequest сразу повторит запрос.
           pushBudgetAfterOutputError(waitMs);
@@ -1294,7 +1321,7 @@ async function analyze() {
         }
         // Настоящий лимит ВХОДНЫХ токенов (413/ITPM) — тут помогает дробление.
         if (isInputLimitError(e) && portion.length > 1) {
-          $("summary-placeholder").textContent = `Лимит входных токенов Groq — дроблю и жду окно…`;
+          uiEl("summary-placeholder").textContent = `Лимит входных токенов Groq — дроблю и жду окно…`;
           await sleep(2000);
           const half = Math.ceil(portion.length / 2);
           const okFirst = await processPortion(portion.slice(0, half), localBase, depth + 1);
@@ -1310,7 +1337,7 @@ async function analyze() {
         // ITPM-бюджет (бот + расширение). Ждём окно и пробуем ту же порцию.
         if (isInputLimitError(e)) {
           const waitMs = Math.max(60000, retryAfterMs(e, 60000));
-          $("summary-placeholder").textContent =
+          uiEl("summary-placeholder").textContent =
             `Groq: лимит входных токенов (ITPM) — жду ~${Math.round(waitMs / 1000)} с, затем повтор…`;
           await sleep(waitMs);
           return processPortion(portion, localBase, depth, rateTries + 1);
@@ -1322,13 +1349,14 @@ async function analyze() {
     for (let ci = 0; ci < nodes.length; ci++) {
       if (!live()) return;
       partLabel = nodes.length > 1 ? `Часть ${ci + 1} из ${nodes.length}.` : "";
-      $("summary-placeholder").textContent =
+      uiEl("summary-placeholder").textContent =
         nodes.length > 1 ? `Читаю комментарии: часть ${ci + 1} из ${nodes.length}…` : "Читаю комментарии…";
-      setProgress("analyze-progress", (ci + 0.3) / (nodes.length + 1));
+      uiProgress((ci + 0.3) / (nodes.length + 1));
       await processPortion(nodes[ci], baseOffset, 0);
       baseOffset += nodes[ci].length;
     }
-    setProgress("analyze-progress", nodes.length / (nodes.length + 1));
+    if (!live()) return;
+    uiProgress(nodes.length / (nodes.length + 1));
 
     const topics = mergeTopics(Object.entries(topicMap).map(([name, t]) => ({ name, ids: [...t.ids], n: t.n })))
       .map((t) => ({ name: t.name, count: t.n, ids: t.ids }))
@@ -1342,17 +1370,17 @@ async function analyze() {
       notableComments.push(comments[g]);
     }
 
-    $("summary-placeholder").textContent = "Пишу итоговую сводку…";
-    $("summary-text").innerHTML =
+    uiEl("summary-placeholder").textContent = "Пишу итоговую сводку…";
+    uiEl("summary-text").innerHTML =
       `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div><div class="skeleton"><i></i><i></i><i></i></div>`;
-    const liveSummary = $("summary-text");
+    const liveSummary = uiEl("summary-text");
     // Финальный запрос идёт сразу после чанков — OTPM ещё выбран, поэтому
     // заранее ждём место в окне под его выходные токены.
     if (!live()) return;
     const finIn = estimateRequestTokens(FINAL_SYSTEM, finalUser({ topics, points, sentiment, notableComments, lang }));
     // Сводка ≤380 символов ≈ 150–200 токенов: резервируем 350, а не max_tokens.
-    const finSlot = await paceRequest(finIn, 350, waitNote("Осталась итоговая сводка."));
-    $("summary-placeholder").textContent = "Пишу итоговую сводку…";
+    const finSlot = await paceRequest(finIn, 350, waitNote("Осталась итоговая сводка.", uiEl));
+    uiEl("summary-placeholder").textContent = "Пишу итоговую сводку…";
     let fin = "";
     // Финал обычно последний и самый «весомый» — именно он чаще всего упирается
     // в OTPM. На OTPM ждём окно и повторяем (дробление тут невозможно), на прочих
@@ -1367,14 +1395,14 @@ async function analyze() {
           { jsonMode: false, maxTokens: 700, timeoutMs: 150000 },
           (full) => {
             if (!live()) return;
-            liveSummary.innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
+            uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(full);
           }
         );
         break;
       } catch (fe) {
         if (isOutputLimitError(fe) && finTry < 3) {
           const waitMs = Math.max(30000, retryAfterMs(fe, 30000));
-          $("summary-placeholder").textContent =
+          uiEl("summary-placeholder").textContent =
             `Groq: лимит выходных токенов на финальной сводке — жду ~${Math.round(waitMs / 1000)} с, затем повтор…`;
           pushBudgetAfterOutputError(waitMs);
           await sleep(waitMs);
@@ -1395,16 +1423,21 @@ async function analyze() {
       commentCount: comments.length,
       analyzed: pool.length,
     };
-    // Сохраняем для СВОЕГО видео — даже если пользователь уже смотрит другое.
-    const meta = state.videoId === vid ? state.meta : null;
+    // Явно отменённый запуск не сохраняем; ушедший в фон — сохраняем для СВОЕГО видео.
+    if (!live()) return;
     await safeSessionSet({ [`summary:${vid}`]: packSummary(result, comments) }, { keepVideoId: vid });
-    void saveHistory(vid, result, comments, meta);
-    if (!live() || state.videoId !== vid) return;
-    liveSummary.innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
+    void saveHistory(vid, result, comments, meta0);
+    if (!onScreen()) {
+      const full = meta0?.title || "прошлого видео";
+      const t = full.length > 48 ? full.slice(0, 46).replace(/\s+\S*$/, "") + "…" : full;
+      showToast(`Сводка «${t}» готова — она в «Недавних сводках»`);
+      return;
+    }
+    uiEl("summary-text").innerHTML = `<div class="summary-title">${icon("sparkles", { size: 14 })}Что говорят в комментариях</div>` + esc(summary);
     state.summary = result;
     state.newIds = new Set();
     if (state.commentFilter === "new") state.commentFilter = "all";
-    $("summary-placeholder").textContent = "";
+    uiEl("summary-placeholder").textContent = "";
     // Снимаем флаг до отрисовки: renderSummary() во время анализа ничего не
     // рисует (бережёт живой прогресс), и без этого темы/тональность/мнения
     // не появлялись до следующего переключения вкладки.
@@ -1413,18 +1446,18 @@ async function analyze() {
     renderTopics();
     setTab("summary");
   } catch (e) {
-    if (!live()) return; // анализ отменён — ошибку прошлого видео не показываем
+    if (!onScreen()) return; // анализ отменён или в фоне — ошибку не показываем
     const msg = friendlyError(e);
-    $("summary-text").innerHTML = "";
-    $("summary-placeholder").classList.remove("hidden");
-    $("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
+    uiEl("summary-text").innerHTML = "";
+    uiEl("summary-placeholder").classList.remove("hidden");
+    uiEl("summary-placeholder").innerHTML = `<div class="error-box"><b>Не получилось проанализировать.</b><br>${esc(msg)}</div>`;
   } finally {
-    if (live()) {
+    if (onScreen()) {
       state.analyzing = false;
       $("btn-cancel-analyze").classList.add("hidden");
       $("btn-analyze").disabled = false;
       $("btn-analyze").classList.remove("busy");
-      setProgress("analyze-progress", null);
+      uiProgress(null);
     }
   }
 }
@@ -1955,9 +1988,9 @@ async function runSearch() {
     if (seq !== searchSeq || vid !== state.videoId) return;
     globalSearchResults = { mode, query: q, items: [], error: true, info: friendlyError(e) };
   } finally {
-    if (seq === searchSeq && vid === state.videoId) {
+    if (seq === searchSeq) {
       $("btn-search").disabled = false;
-      renderSearchResults();
+      if (vid === state.videoId) renderSearchResults();
     }
   }
 }
@@ -2062,9 +2095,9 @@ function onRuntimeMessage(msg, sender) {
       return;
     }
     if (!state.videoId) {
-      state.videoId = msg.meta.videoId;
-      state.meta = msg.meta;
-      renderBottomMatters();
+      // после ухода на главную открыли видео — полноценная загрузка, а не только шапка
+      if (msg.meta?.videoId) void loadFor(msg.meta.videoId);
+      return;
     } else if (msg.meta.videoId === state.videoId) {
       const durChanged = msg.meta.duration && msg.meta.duration !== state.meta?.duration;
       state.meta = msg.meta;
@@ -2083,6 +2116,7 @@ function onRuntimeMessage(msg, sender) {
     void loadFor(state.videoId || msg.videoId);
   } else if (msg.type === "yt:away") {
     if (!state.videoId) return;
+    detachAnalysis();
     state.videoId = null;
     state.meta = null;
     state.summary = null;

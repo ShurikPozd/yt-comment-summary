@@ -884,9 +884,11 @@
       border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
       color: #f1f1f1; font: 500 14px/1.3 "YouTube Noto", Roboto, Arial, sans-serif;
       opacity: 0; transform: translateY(6px) scale(.97); transform-origin: 100% 100%;
-      pointer-events: none; transition: opacity .16s ease, transform .22s cubic-bezier(.22, 1, .36, 1);
+      pointer-events: none; visibility: hidden;
+      transition: opacity .16s ease, transform .22s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .22s;
     }
-    .ytcs-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+    /* закрытое меню невидимо и для клавиатуры (visibility) — после анимации исчезновения */
+    .ytcs-menu.open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition-delay: 0s; }
     .ytcs-head { display: flex; align-items: center; gap: 8px; padding: 6px 16px 10px; font-size: 12px; font-weight: 600;
       letter-spacing: .02em; color: rgba(255, 255, 255, .6); }
     .ytcs-head svg { width: 16px; height: 16px; color: #ff4e6a; }
@@ -975,6 +977,11 @@
     if (!uiMenu) return;
     syncMenuToggles();
     setNote("");
+    // закрываем, а фокус был внутри меню — возвращаем его на нашу кнопку,
+    // иначе следующий Enter сработал бы на невидимом пункте
+    if (!open && uiMenu.contains(document.activeElement)) {
+      document.querySelector("#movie_player .ytcs-btn")?.focus({ preventScroll: true });
+    }
     uiMenu.classList.toggle("open", open);
     document.querySelector(".ytcs-btn")?.setAttribute("aria-expanded", String(open));
     if (open) uiMenu.querySelector(".ytcs-item")?.focus({ preventScroll: true });
