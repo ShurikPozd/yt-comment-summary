@@ -2552,6 +2552,15 @@ function renderComments() {
 
 let globalSearchResults = [];
 
+// Пояснение к режимам — три строки во всю ширину; по строке можно нажать
+const MODE_HELP = `<div class="mode-help">${[
+  ["text", "Текст", "Мгновенно найдёт слово или фразу"],
+  ["ai", "Смысл (ИИ)", "Найдёт комментарии на ту же тему, даже другими словами"],
+  ["ask", "Вопрос (ИИ)", "Ответит, что думают зрители"],
+]
+  .map(([v, t, d]) => `<button class="mode-help-row" data-mode="${v}"><b>${t}</b><span>${d}</span></button>`)
+  .join("")}</div>`;
+
 function renderSearchResults() {
   const wrap = $("search-results");
   const info = $("search-info");
@@ -2569,11 +2578,9 @@ function renderSearchResults() {
   if (!items.length) {
     wrap.innerHTML = r.info
       ? ""
-      : `<div class="placeholder">${
-          state.comments.length
-            ? "По тексту — мгновенный поиск слова. По смыслу — ИИ найдёт близкие по смыслу комментарии. Вопрос — ИИ ответит, что думают зрители."
-            : "Поиск заработает, когда соберутся комментарии."
-        }</div>`;
+      : state.comments.length
+        ? MODE_HELP
+        : `<div class="placeholder">Поиск заработает, когда соберутся комментарии.</div>`;
     return;
   }
   wrap.innerHTML = items.map((c) => commentCard(c, { query: r.mode === "text" ? r.query : "" })).join("");
@@ -3180,6 +3187,14 @@ function bindEvents() {
       setCommentFilter("popular", word.dataset.word);
       setTab("comments");
     }
+  });
+  $("search-results").addEventListener("click", (e) => {
+    const row = e.target.closest(".mode-help-row");
+    if (!row) return;
+    const r = document.querySelector(`input[name="mode"][value="${row.dataset.mode}"]`);
+    r.checked = true;
+    r.dispatchEvent(new Event("change"));
+    $("search-input").focus();
   });
   document.querySelectorAll('input[name="mode"]').forEach((r) =>
     r.addEventListener("change", () => {

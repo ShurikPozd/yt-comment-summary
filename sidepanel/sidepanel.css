@@ -3142,3 +3142,64 @@ button.ghost,
 .moment.open .more-toggle .ic {
   transform: rotate(-90deg);
 }
+
+/* Пояснение к режимам поиска: строка на режим, во всю ширину */
+.mode-help {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.mode-help-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.mode-help-row + .mode-help-row {
+  border-top: 1px solid var(--border);
+}
+
+.mode-help-row:hover {
+  background: var(--bg-3);
+}
+
+.mode-help-row b {
+  font-weight: 600;
+}
+
+.mode-help-row span {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* Ссылка «открыть на YouTube» — всегда в правом верхнем углу первой строки.
+   Раньше на узкой панели она уезжала вниз вместе с перенесённым счётчиком. */
+.c-meta {
+  position: relative;
+  padding-right: 22px;
+}
+
+/* середина значка — на середине первой строки (её высота 18px) */
+.c-meta .c-link {
+  position: absolute;
+  top: 9px;
+  right: -5px;
+  margin: 0;
+  transform: translateY(-50%);
+}
