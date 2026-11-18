@@ -664,12 +664,16 @@ button.primary.busy::after {
   margin-top: 16px;
 }
 
+/* кнопки равной ширины во всю панель: рядом, если влезают, иначе столбиком */
 .empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 8px;
-  padding: 8px 24px 24px;
+  padding: 8px 16px 24px;
+}
+
+.empty-actions button {
+  justify-content: center;
 }
 
 /* ---------- Сводка (ИИ) ---------- */
@@ -2298,11 +2302,14 @@ kbd {
 }
 
 /* ---------- Переключатели ---------- */
+/* Заголовок и переключатель — в одной строке, описание под ними во всю
+   ширину (раньше оно обрывалось перед колонкой переключателя). */
 .settings-block .switch-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 4px;
   margin: 0;
   padding: 12px 0;
   border-top: 1px solid var(--border);
@@ -2319,10 +2326,22 @@ kbd {
 }
 
 .sw-text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+  display: contents;
+}
+
+.sw-text .sw-title {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.switch-row input.switch {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.sw-text .hint {
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
 
 .sw-title {
@@ -2521,31 +2540,12 @@ kbd {
   color: var(--fg);
 }
 
-/* Фильтры комментариев — одна строка с прокруткой и мягким краем,
-   без «сиротливого» чипа на второй строке. */
-#comments-chips {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -16px;
-  padding: 0 16px;
-  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 24px), transparent 100%);
-}
-
-#comments-chips::-webkit-scrollbar {
-  display: none;
-}
-
+/* Фильтры комментариев — ряды во всю ширину: все видны сразу, без
+   прокрутки вбок (раньше на узкой панели «Вопросы» и «С таймкодами»
+   уходили за край). Свободное место ряда делится между плашками. */
 #comments-chips .chip {
   flex: 1 0 auto;
   justify-content: center;
-}
-
-@media (max-width: 360px) {
-  #comments-chips {
-    margin: 0 -12px;
-    padding: 0 12px;
-  }
 }
 
 /* ---------- Статус сервера и первый запуск ---------- */
@@ -2701,24 +2701,38 @@ kbd {
 }
 
 /* Горячие клавиши в блоке «Плеер YouTube» */
+/* Горячие клавиши — строки «действие … клавиши» во всю ширину */
 .shortcuts {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  margin-top: 14px;
-  padding-top: 12px;
+  flex-direction: column;
+  margin-top: 12px;
+  padding-top: 6px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 13px;
+  color: var(--fg-2);
+}
+
+.shortcuts .sc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.shortcuts .sc-keys {
+  flex: none;
   color: var(--muted);
+  font-size: 12px;
 }
 
 .shortcuts kbd {
   margin: 0 1px;
 }
 
-.shortcuts .link-btn {
-  margin-left: auto;
+.shortcuts #btn-shortcuts {
+  width: 100%;
+  margin-top: 8px;
 }
 
 .analyze-actions {
