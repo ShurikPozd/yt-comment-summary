@@ -3203,3 +3203,12 @@ button.ghost,
   margin: 0;
   transform: translateY(-50%);
 }
+
+/* пустая вкладка внутри заглушки — без двойного отступа, заголовок яркий */
+.placeholder:has(> .view-empty) {
+  padding: 0;
+}
+
+.view-empty .empty-title {
+  color: var(--fg);
+}

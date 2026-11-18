@@ -1332,9 +1332,9 @@ async function analyze() {
       }
     }
     if (st?.status === "loading") {
-      showToast(`Сбор ещё идёт: ${st.fetched || 0}/${st.max || "…"}. Подожди, пока он закончится.`);
+      showToast(`Сбор ещё идёт: ${st.fetched || 0}/${st.max || "…"}. Анализ можно будет запустить, когда он закончится.`);
     } else if (st?.status === "error") {
-      showToast(`Сбор комментариев упал: ${st.error || "ошибка"}. Нажми «Собрать заново», чтобы повторить.`);
+      showToast(`${humanCollectError(st.error)}.`);
     } else {
       showToast("Сначала соберите комментарии — нажмите «Собрать заново» или откройте видео ещё раз.");
     }
@@ -1795,7 +1795,10 @@ function renderSummary() {
   renderServerHint();
   if (!s) {
     // Есть комментарии — показываем карточку-приглашение; идёт сбор — короткую строку.
-    ph.textContent = state.comments.length ? "" : "Комментарии ещё собираются — сводку можно будет сделать, когда сбор закончится.";
+    // идёт сбор — такой же пустой экран, как на других вкладках (иконка, заголовок, пояснение)
+    ph.innerHTML = state.comments.length
+      ? ""
+      : viewEmpty("clock", "Собираю комментарии", "Сводку можно будет сделать, когда сбор закончится — прогресс виден над вкладками.");
     ph.classList.toggle("hidden", Boolean(state.comments.length));
     $("btn-copy-summary").classList.add("hidden");
     $("btn-image-summary").classList.add("hidden");
@@ -2535,9 +2538,9 @@ function renderComments() {
   });
   const more = $("btn-more-comments");
   if (!list.length) {
-    wrap.innerHTML = `<div class="placeholder">${
-      state.comments.length ? "Ничего не нашлось — смени фильтр." : "Комментариев пока нет."
-    }</div>`;
+    wrap.innerHTML = state.comments.length
+      ? `<div class="placeholder">Ничего не нашлось — смените фильтр или текст поиска.</div>`
+      : viewEmpty("clock", "Комментариев пока нет", "Они появятся здесь, когда закончится сбор.");
     more.classList.add("hidden");
     return;
   }
@@ -2580,7 +2583,7 @@ function renderSearchResults() {
       ? ""
       : state.comments.length
         ? MODE_HELP
-        : `<div class="placeholder">Поиск заработает, когда соберутся комментарии.</div>`;
+        : viewEmpty("search", "Поиск заработает после сбора", "Когда комментарии соберутся, по ним можно будет искать и задавать вопросы.");
     return;
   }
   wrap.innerHTML = items.map((c) => commentCard(c, { query: r.mode === "text" ? r.query : "" })).join("");
@@ -2851,6 +2854,12 @@ async function findActiveVideoTab() {
   return pool.find((t) => t.active) || pool[0] || null;
 }
 
+// Пустая вкладка: иконка в круге, заголовок, пояснение — как «Темы» и «Моменты».
+function viewEmpty(iconName, title, text) {
+  return `<div class="view-empty"><div class="empty-icon small">${icon(iconName, { size: 22 })}</div>
+    <div class="empty-title">${esc(title)}</div><div class="empty-text">${esc(text)}</div></div>`;
+}
+
 // Пустой экран: иконка в круге, заголовок, пояснение и, при нужде, кнопка.
 function setEmptyState(iconName, title, text, extra = "") {
   $("empty-state").innerHTML = `
@@ -2957,7 +2966,7 @@ function bindEvents() {
       try {
         await chrome.tabs.sendMessage(tab.id, { type: "yt:start-collect" });
       } catch (e) {
-        showToast("Перезагрузи страницу видео.");
+        showToast("Не получилось связаться со страницей — обновите вкладку с видео (F5).");
       }
     }
   });
