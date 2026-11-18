@@ -45,21 +45,47 @@
   // клик по самому плееру, клавиша play/pause или клик по таймкоду в панели.
   // Видео, которое вы запустили сами, дальше играет свободно; переход к
   // другому видео (клик по превью, автопереход в конце) снова его запрещает.
-  const isWatch = () => location.pathname === "/watch";
+  let navTo = null; // куда ведёт текущий переход (сообщает early-main.js)
+  // во время перехода адрес ещё старый — решаем по странице, куда идём
+  const isWatch = () => {
+    if (navigating && navTo) {
+      try {
+        return new URL(navTo, location.origin).pathname === "/watch";
+      } catch (e) {
+        /* как по текущему адресу */
+      }
+    }
+    return location.pathname === "/watch";
+  };
   const videoId = () => new URLSearchParams(location.search).get("v");
+  // видео, к которому относится play(): при известной цели перехода — её, при
+  // неизвестной во время перехода — никакое (блокируем)
+  const targetVideo = () => {
+    if (!navigating) return videoId();
+    try {
+      return navTo ? new URL(navTo, location.origin).searchParams.get("v") : null;
+    } catch (e) {
+      return null;
+    }
+  };
   const mainVideo = () => document.querySelector("#movie_player video, video.html5-main-video");
   let gestureAt = 0;
   let allowedId = null;
   let navigating = false;
   const recentGesture = () => Date.now() - gestureAt < 1500;
 
+  // клик по таймкоду в описании или комментариях YouTube — тоже просьба играть
+  const isTimecodeLink = (el) => {
+    const a = el.closest?.("a[href]");
+    return Boolean(a && /[?&#]t=\d/.test(a.getAttribute("href") || ""));
+  };
   window.addEventListener(
     "pointerdown",
     (e) => {
+      if (!e.isTrusted || !e.target.closest) return;
       // клики по нашей кнопке и меню в плеере — не «запуск видео»
-      if (e.isTrusted && e.target.closest?.("#movie_player, ytd-player") && !e.target.closest(".ytcs-btn, .ytcs-menu")) {
-        gestureAt = Date.now();
-      }
+      if (e.target.closest(".ytcs-btn, .ytcs-menu")) return;
+      if (e.target.closest("#movie_player, ytd-player") || isTimecodeLink(e.target)) gestureAt = Date.now();
     },
     true
   );
@@ -69,6 +95,8 @@
       if (!e.isTrusted) return;
       if (e.target.closest?.("input, textarea, [contenteditable='true'], [contenteditable='']")) return;
       if ([" ", "k", "K", "л", "Л", "MediaPlayPause", "MediaPlay"].includes(e.key)) gestureAt = Date.now();
+      // Enter по кнопке play в плеере (навигация с клавиатуры)
+      else if (e.key === "Enter" && e.target.closest?.("#movie_player, ytd-player")) gestureAt = Date.now();
     },
     true
   );
@@ -86,10 +114,10 @@
       if (!prefs.noAutoplay || !isWatch()) return;
       if (!(v instanceof HTMLVideoElement) || !v.closest("#movie_player, ytd-player")) return;
       if (recentGesture()) {
-        allowedId = videoId(); // это вы нажали play
+        allowedId = location.pathname === "/watch" ? videoId() : allowedId; // это вы нажали play
         return;
       }
-      if (!navigating && allowedId && allowedId === videoId()) return;
+      if (allowedId && allowedId === targetVideo()) return;
       v.pause();
     },
     true
@@ -99,12 +127,25 @@
   // видео снимаем разрешение, иначе оно стартует, пока адрес ещё старый.
   window.addEventListener("yt-navigate-start", () => {
     navigating = true;
-    // нажатие play относилось к прошлому видео — новому его не передаём
-    allowedId = null;
     gestureAt = 0;
+  });
+  // Цель перехода присылает early-main.js (детали события видны только в мире
+  // страницы). Разрешение снимаем лишь при переходе к другому видео: уход на
+  // главную с мини-плеером и разворачивание обратно — то же видео.
+  document.addEventListener("ytcs-nav", (e) => {
+    navigating = true;
+    navTo = typeof e.detail === "string" && e.detail ? e.detail : null;
+    let toVideo = null;
+    try {
+      toVideo = navTo ? new URL(navTo, location.origin).searchParams.get("v") : null;
+    } catch (err) {
+      /* без цели — как раньше */
+    }
+    if (!navTo || (toVideo && toVideo !== allowedId)) allowedId = null;
   });
   window.addEventListener("yt-navigate-finish", () => {
     navigating = false;
+    navTo = null;
     checkPlaying();
   });
 
@@ -125,7 +166,13 @@
 
   // ---------- Настройки ----------
   function readPrefs(settings) {
+    const was = prefs.noAutoplay;
     prefs.noAutoplay = Boolean(settings?.noAutoplay);
+    // включили посреди просмотра — играющее видео запустили вы, его не трогаем
+    if (prefs.noAutoplay && !was) {
+      const v = mainVideo();
+      if (v && !v.paused) allowedId = videoId();
+    }
     prefs.hideProgress = Boolean(settings?.hideProgress);
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(prefs));

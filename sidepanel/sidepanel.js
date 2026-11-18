@@ -932,6 +932,8 @@ function unpackSummary(entry, comments) {
   return {
     ...entry,
     sentimentIds,
+    // сводка из версии, которая ещё не отмечала примеры по тональности
+    sentimentLegacy: !entry.sentimentCids,
     topics: (entry.topics || []).map((t) => ({
       name: t.name,
       count: t.count,
@@ -1192,6 +1194,12 @@ function updateCollectStatus(status, fetched, max, error, stopped = null) {
     setProgress("collect-progress", null);
   }
   renderAnalyzeLabel();
+  // пустые вкладки зависят от статуса сбора (идёт / ошибка / комментариев нет)
+  if (!state.comments.length && state.videoId) {
+    renderSummary();
+    renderComments();
+    renderSearchResults();
+  }
 }
 
 // Технические коды ошибок сбора из content.js → понятный текст.
@@ -1712,8 +1720,10 @@ function sentimentExamplesHtml(s, kind) {
   const list = (s.sentimentIds?.[kind] || []).map((i) => state.comments[i]).filter(Boolean);
   const label = { positive: "Позитивные", neutral: "Нейтральные", negative: "Негативные" }[kind];
   if (!list.length) {
-    // сводка сделана до того, как ИИ начал отмечать примеры по тональности
-    return `<div class="sent-examples"><div class="hint">Примеры появятся после «Обновить сводку»: эта сводка сделана до того, как расширение научилось их отмечать.</div></div>`;
+    const why = s.sentimentLegacy
+      ? "Примеры появятся после «Обновить сводку»: эта сводка сделана до того, как расширение научилось их отмечать."
+      : "Примеров нет: ИИ не отметил их для этой доли или они не попали в текущий сбор.";
+    return `<div class="sent-examples"><div class="hint">${why}</div></div>`;
   }
   return `<div class="sent-examples"><div class="hint">${label} — примеры, которые отметил ИИ</div>${list
     .map((c) => commentCard(c, { compact: true }))
@@ -1807,7 +1817,7 @@ function renderSummary() {
     // идёт сбор — такой же пустой экран, как на других вкладках (иконка, заголовок, пояснение)
     ph.innerHTML = state.comments.length
       ? ""
-      : viewEmpty("clock", "Собираю комментарии", "Сводку можно будет сделать, когда сбор закончится — прогресс виден над вкладками.");
+      : noCommentsEmpty("Собираю комментарии", "Сводку можно будет сделать, когда сбор закончится — прогресс виден над вкладками.");
     ph.classList.toggle("hidden", Boolean(state.comments.length));
     $("btn-copy-summary").classList.add("hidden");
     $("btn-image-summary").classList.add("hidden");
@@ -2066,7 +2076,7 @@ function renderMoments() {
         ${commentCard(cs[0], { compact: true })}
         ${
           more > 0
-            ? `<div class="collapse"><div class="collapse-inner" data-idx="${m.idxs.slice(1, 12).join(",")}"></div></div>
+            ? `<div class="collapse"><div class="collapse-inner" data-idx="${m.idxs.slice(1).join(",")}"></div></div>
                <button class="more-toggle" data-more="${more}"><span>${moreLabel(more)}</span>${icon("chevron", { size: 13 })}</button>`
             : ""
         }
@@ -2549,7 +2559,7 @@ function renderComments() {
   if (!list.length) {
     wrap.innerHTML = state.comments.length
       ? `<div class="placeholder">Ничего не нашлось — смените фильтр или текст поиска.</div>`
-      : viewEmpty("clock", "Комментариев пока нет", "Они появятся здесь, когда закончится сбор.");
+      : noCommentsEmpty("Комментариев пока нет", "Они появятся здесь, когда закончится сбор.");
     more.classList.add("hidden");
     return;
   }
@@ -2592,7 +2602,7 @@ function renderSearchResults() {
       ? ""
       : state.comments.length
         ? MODE_HELP
-        : viewEmpty("search", "Поиск заработает после сбора", "Когда комментарии соберутся, по ним можно будет искать и задавать вопросы.");
+        : noCommentsEmpty("Поиск заработает после сбора", "Когда комментарии соберутся, по ним можно будет искать и задавать вопросы.");
     return;
   }
   wrap.innerHTML = items.map((c) => commentCard(c, { query: r.mode === "text" ? r.query : "" })).join("");
@@ -2863,11 +2873,31 @@ async function findActiveVideoTab() {
   return pool.find((t) => t.active) || pool[0] || null;
 }
 
-// Пустая вкладка: иконка в круге, заголовок, пояснение — как «Темы» и «Моменты».
-function viewEmpty(iconName, title, text) {
-  return `<div class="view-empty"><div class="empty-icon small">${icon(iconName, { size: 22 })}</div>
-    <div class="empty-title">${esc(title)}</div><div class="empty-text">${esc(text)}</div></div>`;
+// Нет комментариев: идёт сбор, сбор не удался или их у видео нет.
+// loading — заголовок и текст для вкладки, пока сбор идёт.
+function noCommentsEmpty(loadingTitle, loadingText) {
+  const st = state.collect?.status;
+  if (st === "error")
+    return viewEmpty(
+      "close",
+      "Комментарии не собрались",
+      "Причина написана над вкладками. Попробуйте собрать ещё раз.",
+      `<button class="primary empty-cta wide" data-restart-collect>Собрать заново</button>`
+    );
+  if (st === "done" && !state.collect.fetched) return viewEmpty("chat", "Комментариев нет", "У этого видео нет комментариев или они отключены.");
+  return viewEmpty("clock", loadingTitle, loadingText);
 }
+
+// Пустая вкладка: иконка в круге, заголовок, пояснение — как «Темы» и «Моменты».
+function viewEmpty(iconName, title, text, extra = "") {
+  return `<div class="view-empty"><div class="empty-icon small">${icon(iconName, { size: 22 })}</div>
+    <div class="empty-title">${esc(title)}</div><div class="empty-text">${esc(text)}</div>${extra}</div>`;
+}
+
+// «Собрать заново» из пустой вкладки — та же кнопка, что ⟳ рядом с лимитом
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-restart-collect]")) $("btn-restart").click();
+});
 
 // Пустой экран: иконка в круге, заголовок, пояснение и, при нужде, кнопка.
 function setEmptyState(iconName, title, text, extra = "") {

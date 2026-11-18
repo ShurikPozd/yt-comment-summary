@@ -462,8 +462,12 @@ button.primary.busy::after {
   color: var(--pos);
 }
 
+/* ошибку читаем целиком — переносится, а не обрезается многоточием */
 .status.err {
+  display: block;
   color: var(--neg);
+  white-space: normal;
+  line-height: 1.45;
 }
 
 /* Полоса прогресса */
@@ -3255,4 +3259,9 @@ button.primary.collecting:disabled {
   background: var(--bg-3);
   color: var(--fg-2);
   opacity: 1;
+}
+
+/* кнопка в пустой вкладке — во всю ширину, как остальные главные действия */
+.empty-cta.wide {
+  width: 100%;
 }
