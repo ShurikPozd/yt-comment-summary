@@ -1086,7 +1086,7 @@ function renderBottomMatters() {
   $("app").classList.toggle("no-video", !state.videoId);
   requestAnimationFrame(moveTabInk);
   if (!state.videoId) return;
-  $("btn-analyze").disabled = state.analyzing;
+  $("btn-analyze").disabled = state.analyzing || state.collect?.status === "loading";
 }
 
 function renderHeader() {
@@ -1191,6 +1191,7 @@ function updateCollectStatus(status, fetched, max, error, stopped = null) {
     el.textContent = "";
     setProgress("collect-progress", null);
   }
+  renderAnalyzeLabel();
 }
 
 // Технические коды ошибок сбора из content.js → понятный текст.
@@ -1252,7 +1253,7 @@ let analyzeRun = 0;
 function resetAnalyzeUi() {
   state.analyzing = false;
   $("btn-cancel-analyze").classList.add("hidden");
-  $("btn-analyze").disabled = false;
+  $("btn-analyze").disabled = state.collect?.status === "loading";
   $("btn-analyze").classList.remove("busy");
   setProgress("analyze-progress", null);
   $("summary-placeholder").textContent = "";
@@ -1689,7 +1690,7 @@ async function analyze() {
     if (onScreen()) {
       state.analyzing = false;
       $("btn-cancel-analyze").classList.add("hidden");
-      $("btn-analyze").disabled = false;
+      $("btn-analyze").disabled = state.collect?.status === "loading";
       $("btn-analyze").classList.remove("busy");
       uiProgress(null);
     }
@@ -1753,7 +1754,15 @@ function fmtDate(ts) {
 
 function renderAnalyzeLabel() {
   const b = $("btn-analyze");
-  const label = state.summary ? "Обновить сводку" : "Анализировать";
+  // Идёт сбор — анализировать ещё нечего: кнопка сама говорит, что происходит,
+  // вместо подсказки по нажатию.
+  const collecting = state.collect?.status === "loading" && !state.analyzing;
+  const label = collecting ? "Собираю комментарии…" : state.summary ? "Обновить сводку" : "Анализировать";
+  const was = b.classList.contains("collecting");
+  b.classList.toggle("collecting", collecting);
+  if (collecting) b.disabled = true;
+  else if (was) b.disabled = state.analyzing; // сбор закончился — снова можно
+  $("btn-topics-analyze")?.classList.toggle("hidden", collecting);
   if (b.dataset.label === label) return;
   b.dataset.label = label;
   b.textContent = label;

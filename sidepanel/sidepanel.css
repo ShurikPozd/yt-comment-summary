@@ -3212,3 +3212,47 @@ button.ghost,
 .view-empty .empty-title {
   color: var(--fg);
 }
+
+/* Фильтры на узкой панели — ровная сетка без растянутой одиночки:
+   5 плашек — 3 короткие сверху и 2 длинные снизу; 6 (с «Новые») — 3 + 3,
+   а на самой узкой — по 2 в ряд. На широкой — одна строка (flex выше). */
+.comments-tools {
+  container-type: inline-size;
+}
+
+@container (max-width: 499px) {
+  #comments-chips {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  #comments-chips .chip {
+    grid-column: span 2;
+    min-width: 0;
+    padding-left: 6px;
+    padding-right: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #comments-chips .chip:nth-child(n + 4 of :not(.hidden)) {
+    grid-column: span 3;
+  }
+
+  #comments-chips:has(.chip-new:not(.hidden)) .chip {
+    grid-column: span 2;
+  }
+}
+
+@container (max-width: 329px) {
+  #comments-chips:has(.chip-new:not(.hidden)) .chip {
+    grid-column: span 3;
+  }
+}
+
+/* «Собираю комментарии…» — спокойная серая кнопка, а не бледно-красная */
+button.primary.collecting:disabled {
+  background: var(--bg-3);
+  color: var(--fg-2);
+  opacity: 1;
+}
