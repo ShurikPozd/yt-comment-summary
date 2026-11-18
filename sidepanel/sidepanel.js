@@ -1234,6 +1234,7 @@ function setTab(name) {
   $("btn-settings").classList.toggle("active", name === "settings");
   moveTabInk();
   $("content").scrollTop = 0;
+  document.scrollingElement.scrollTop = 0; // в низком окне прокручивается вся панель
   if (name === "topics") renderTopics();
   if (name === "summary") {
     renderSummary();
@@ -2400,8 +2401,11 @@ function revealMoment(t, { expand = false } = {}) {
   }
   if (!el) return;
   if (expand && !el.classList.contains("open")) el.querySelector(".more-toggle")?.click();
-  const box = $("content");
-  const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+  // обычно прокручивается список; в совсем низком окне — вся панель (CSS)
+  const list = $("content");
+  const box = getComputedStyle(list).overflowY === "visible" ? document.scrollingElement : list;
+  const boxTop = box === list ? list.getBoundingClientRect().top : 0;
+  const top = el.getBoundingClientRect().top - boxTop + box.scrollTop;
   smoothScroll(box, Math.max(0, top - 72));
   el.classList.remove("flash");
   void el.offsetWidth; // перезапуск анимации при повторном клике

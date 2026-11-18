@@ -27,6 +27,7 @@
   --pos: #3ccf8e;
   --neu: #8b8b95;
   --neg: #ff5f66;
+  --neg-ink: #ff5f66;
   --mark: rgba(255, 200, 0, 0.3);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   --r-s: 8px;
@@ -46,7 +47,7 @@ body[data-theme="light"] {
   --bg-hover: #e3e3e8;
   --fg: #141416;
   --fg-2: #3c3c43;
-  --muted: #6c6c75;
+  --muted: #66666e;
   --border: rgba(0, 0, 0, 0.07);
   --border-strong: rgba(0, 0, 0, 0.13);
   --accent: #e8002d;
@@ -56,6 +57,7 @@ body[data-theme="light"] {
   --pos: #12a35f;
   --neu: #8a8a93;
   --neg: #e5383e;
+  --neg-ink: #c8262c; /* текст: 4,5+ на белом и на розовой подложке */
   --mark: rgba(255, 196, 0, 0.42);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
   color-scheme: light;
@@ -70,7 +72,7 @@ body[data-theme="light"] {
     --bg-hover: #e3e3e8;
     --fg: #141416;
     --fg-2: #3c3c43;
-    --muted: #6c6c75;
+    --muted: #66666e;
     --border: rgba(0, 0, 0, 0.07);
     --border-strong: rgba(0, 0, 0, 0.13);
     --accent: #e8002d;
@@ -80,6 +82,7 @@ body[data-theme="light"] {
     --pos: #12a35f;
     --neu: #8a8a93;
     --neg: #e5383e;
+    --neg-ink: #c8262c;
     --mark: rgba(255, 196, 0, 0.42);
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
     color-scheme: light;
@@ -162,6 +165,16 @@ a {
   display: flex;
   flex-direction: column;
   height: 100vh;
+}
+
+/* В низком окне сжимается только прокручиваемое содержимое: шапка, статус
+   и вкладки сохраняют высоту (иначе «лимит изменён…» наезжал на вкладки). */
+#app > :not(#content) {
+  flex-shrink: 0;
+}
+
+#content {
+  min-height: 0;
 }
 
 /* ---------- Кнопки ---------- */
@@ -465,7 +478,7 @@ button.primary.busy::after {
 /* ошибку читаем целиком — переносится, а не обрезается многоточием */
 .status.err {
   display: block;
-  color: var(--neg);
+  color: var(--neg-ink);
   white-space: normal;
   line-height: 1.45;
 }
@@ -901,7 +914,7 @@ ol.points li::before {
 }
 
 .error-box b {
-  color: var(--neg);
+  color: var(--neg-ink);
 }
 
 /* ---------- Чипы ---------- */
@@ -1258,7 +1271,6 @@ ol.points li::before {
 .tl-mid {
   font-size: 11px;
   color: var(--muted);
-  opacity: 0.8;
   white-space: nowrap;
 }
 
@@ -1810,7 +1822,7 @@ button.tl-mid:hover {
 }
 
 #search-info.err {
-  color: var(--neg);
+  color: var(--neg-ink);
 }
 
 .answer-box {
@@ -2046,7 +2058,7 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .err {
-  color: var(--neg);
+  color: var(--neg-ink);
 }
 
 .diag-block {
@@ -2568,7 +2580,7 @@ kbd {
 }
 
 .server-hint.err {
-  color: var(--neg);
+  color: var(--neg-ink);
 }
 
 .dot {
@@ -3264,4 +3276,24 @@ button.primary.collecting:disabled {
 /* кнопка в пустой вкладке — во всю ширину, как остальные главные действия */
 .empty-cta.wide {
   width: 100%;
+}
+
+/* фокус с клавиатуры на переключателях — видимое кольцо, как у кнопок */
+.settings-block input.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Совсем низкое окно: шапке и списку вместе не хватает места — прокручивается
+   вся панель целиком, а не только список под шапкой. */
+@media (max-height: 360px) {
+  #app {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  #content {
+    flex: none;
+    overflow: visible;
+  }
 }
