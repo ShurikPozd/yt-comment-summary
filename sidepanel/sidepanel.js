@@ -1962,9 +1962,14 @@ function renderInsights() {
 // ссылаются и начало самого залайканного комментария. Клик — перемотка
 // и переход к этому моменту на вкладке «Моменты».
 function momentRow(m, list) {
-  const top = list[m.idxs[0]];
   const n = `${m.count} ${plural(m.count, "комментарий", "комментария", "комментариев")}`;
-  const quote = top ? stripTimecodes(top.text) : "";
+  // цитата — из первого комментария, где кроме таймкода есть текст
+  // (бывает комментарий из одного «0:42»)
+  let quote = "";
+  for (const i of m.idxs) {
+    quote = list[i] ? stripTimecodes(list[i].text) : "";
+    if (quote) break;
+  }
   return `<button class="moment-row" data-t="${m.t}" data-moment="${m.t}" title="Перемотать и показать комментарии">
     <span class="tc tc-big">${icon("play", { size: 11 })}${esc(m.label)}</span>
     <span class="moment-row-text"><b>${n}</b>${quote ? `<span>${esc(quote)}</span>` : ""}</span>
