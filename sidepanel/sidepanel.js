@@ -2078,6 +2078,7 @@ function renderMoments() {
           <button class="tc tc-big" data-t="${m.t}" title="Перемотать">${icon("play", { size: 11 })}${esc(m.label)}</button>
           <button class="moment-line" data-t="${m.t}" style="--at:${pos}%" title="${esc(m.label)}${known ? ` из ${esc(fmtTime(end - 2))}` : ""} — перемотать" aria-label="Перемотать на ${esc(m.label)}"><i></i><b></b></button>
           <span class="hint">${n}</span>
+          <button class="mclip icon-btn" data-clip="${m.t}" title="Вырезать клип вокруг ${esc(m.label)} (−5 с … +20 с)" aria-label="Вырезать клип вокруг ${esc(m.label)}">${icon("clip", { size: 15 })}</button>
         </div>
         ${commentCard(cs[0], { compact: true })}
         ${
@@ -2421,6 +2422,26 @@ function revealMoment(t, { expand = false } = {}) {
 // «Ещё 2 комментария» — подпись кнопки раскрытия момента
 function moreLabel(n) {
   return `Ещё ${n} ${plural(n, "комментарий", "комментария", "комментариев")}`;
+}
+
+// Клип вокруг момента: окно «Вырезать клип» открывается на странице видео
+// с отрезком от 5 с до момента до 20 с после — там можно подвинуть края.
+async function openClip(t) {
+  const tab = await findActiveVideoTab();
+  if (!tab?.id) {
+    showToast("Не нашёл вкладку с видео.");
+    return;
+  }
+  const dur = Number(state.meta?.duration) || Infinity;
+  const start = Math.max(0, t - 5);
+  const end = Math.min(dur, t + 20);
+  try {
+    const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:clip", start, end, videoId: state.videoId });
+    if (!r?.ok) throw new Error("no clip");
+    showToast(`Окно клипа открыто на странице видео · ${fmtTime(start)}–${fmtTime(end)}`);
+  } catch (e) {
+    showToast("Не получилось открыть клип — откройте вкладку с этим видео и обновите её (F5).");
+  }
 }
 
 async function seekTo(t) {
@@ -3210,6 +3231,11 @@ function bindEvents() {
       }
       const open = m.classList.toggle("open");
       more.querySelector("span").textContent = open ? "Свернуть" : moreLabel(Number(more.dataset.more));
+      return;
+    }
+    const clipBtn = e.target.closest("[data-clip]");
+    if (clipBtn) {
+      void openClip(Number(clipBtn.dataset.clip));
       return;
     }
     const tc = e.target.closest("[data-t]");

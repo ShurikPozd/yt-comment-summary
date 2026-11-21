@@ -1374,7 +1374,7 @@ button.tl-mid:hover {
    друг под другом, и положение точек можно сравнивать на глаз. */
 .moment-head {
   display: grid;
-  grid-template-columns: var(--tc-col, 72px) minmax(48px, 1fr) auto;
+  grid-template-columns: var(--tc-col, 72px) minmax(48px, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
@@ -3295,5 +3295,26 @@ button.primary.collecting:disabled {
   #content {
     flex: none;
     overflow: visible;
+  }
+}
+
+/* «Клип» у момента — компактная кнопка с ножницами в конце строки */
+.moment-head .mclip {
+  width: 30px;
+  height: 30px;
+  margin: -4px 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.moment-head .mclip:hover {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+}
+
+@media (max-width: 340px) {
+  .moment-head .hint {
+    min-width: 0;
   }
 }

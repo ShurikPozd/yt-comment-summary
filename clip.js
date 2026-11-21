@@ -31,6 +31,7 @@
     close: SVG('<path d="M6 6l12 12"/><path d="M18 6L6 18"/>'),
     download: SVG('<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'),
     now: SVG('<path d="M12 3v3"/><circle cx="12" cy="14" r="7"/><path d="M12 11v3l2 1.5"/>'),
+    link: SVG('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/>'),
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l10.5-6.5z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect fill="currentColor" x="6" y="5" width="4.2" height="14" rx="1.2"/><rect fill="currentColor" x="13.8" y="5" width="4.2" height="14" rx="1.2"/></svg>',
   };
@@ -269,7 +270,9 @@
     .dlg.busy .prog { display: flex; }
     .dlg.busy .info { display: none; }
 
-    .go { width: 100%; height: 44px; font-size: 15px; background: #ff3b5c; color: #fff; }
+    .acts { display: flex; gap: 10px; }
+    .go { flex: 1; min-width: 0; height: 44px; font-size: 15px; background: #ff3b5c; color: #fff; }
+    .link { flex: none; height: 44px; padding: 0 16px 1px 14px; }
     .go:hover { background: #ff2149; }
     .dlg.busy .go { background: rgba(255, 255, 255, .12); }
     .dlg.busy .go:hover { background: rgba(255, 255, 255, .2); }
@@ -797,6 +800,14 @@
       }
       return;
     }
+    // I / O — начало и конец по кадру в предпросмотре (как в видеоредакторах)
+    const low = String(k).toLowerCase();
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && !ui.busy && ["i", "ш", "o", "щ"].includes(low)) {
+      e.preventDefault();
+      const v = video();
+      if (v) (low === "i" || low === "ш" ? setStart : setEnd)(v.currentTime, { push: true });
+      return;
+    }
     // страница под окном не прокручивается; пробел и Enter на кнопке нажимают её
     if (["PageUp", "PageDown", "ArrowUp", "ArrowDown", "Home", "End"].includes(k)) e.preventDefault();
     if (k === " " && ae?.tagName !== "BUTTON") {
@@ -805,7 +816,36 @@
     }
   }
 
-  async function open() {
+  // Запомненное качество (720p / 1080p / звук) — общее для всех видео
+  function saveMode(mode) {
+    try {
+      chrome.storage.local.set({ clipMode: mode }).catch(() => {});
+    } catch (e) {
+      /* расширение обновили — не запомним, не страшно */
+    }
+  }
+  async function loadMode() {
+    try {
+      return (await chrome.storage.local.get("clipMode")).clipMode || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Ссылка на YouTube с начала клипа
+  function copyLink() {
+    if (!ui) return;
+    const id = ui.videoId || new URLSearchParams(location.search).get("v");
+    if (!id) return;
+    const url = `https://youtu.be/${id}?t=${Math.floor(ui.start)}`;
+    navigator.clipboard
+      .writeText(url)
+      .then(() => toast(`Ссылка с ${fmt(ui.start)} скопирована`))
+      .catch(() => toast("Не получилось скопировать ссылку"));
+  }
+
+  // range — отрезок снаружи (кнопка «Клип» у момента в боковой панели)
+  async function open(range = null) {
     if (!isWatch()) return false;
     close();
     const v = video();
@@ -840,13 +880,16 @@
             <div class="rail off" title="Всё видео: перетащите рамку, чтобы сдвинуть шкалу"><div class="mark"></div><div class="win"></div></div>
           </div>
           <div class="fields">
-            <div class="field"><span>Начало</span><div class="row"><input inputmode="decimal" spellcheck="false" aria-label="Начало, например 1:30" /><button class="now" title="Поставить момент из предпросмотра">${ICON.now}Сейчас</button></div></div>
-            <div class="field"><span>Конец</span><div class="row"><input inputmode="decimal" spellcheck="false" aria-label="Конец, например 2:00" /><button class="now" title="Поставить момент из предпросмотра">${ICON.now}Сейчас</button></div></div>
+            <div class="field"><span>Начало</span><div class="row"><input inputmode="decimal" spellcheck="false" aria-label="Начало, например 1:30" /><button class="now" title="Поставить момент из предпросмотра (клавиша I)">${ICON.now}Сейчас</button></div></div>
+            <div class="field"><span>Конец</span><div class="row"><input inputmode="decimal" spellcheck="false" aria-label="Конец, например 2:00" /><button class="now" title="Поставить момент из предпросмотра (клавиша O)">${ICON.now}Сейчас</button></div></div>
           </div>
           <div class="modes" role="group" aria-label="Что сохранить">${MODES.map((m) => `<button data-mode="${m.id}" aria-pressed="false">${m.label}</button>`).join("")}</div>
           <div class="info" aria-live="polite"></div>
           <div class="prog" aria-live="polite"><div class="txt"></div><div class="bar"><div class="fill"></div></div></div>
-          <button class="go">${ICON.download}Скачать клип</button>
+          <div class="acts">
+            <button class="link" title="Скопировать ссылку на YouTube с начала клипа — если друзьям удобнее открыть само видео">${ICON.link}Ссылка</button>
+            <button class="go">${ICON.download}Скачать клип</button>
+          </div>
           <div class="msg" role="status"></div>
         </div>
       </div>`;
@@ -864,6 +907,7 @@
       end: Math.min(duration, startAt + DEFAULT_LEN),
       mode: "hd720",
       title: document.title.replace(/^\(\d+\)\s*/, "").replace(/\s*-\s*YouTube$/, ""),
+      videoId: new URLSearchParams(location.search).get("v"),
       busy: null,
       prevFocus: document.activeElement,
       openTime: v.currentTime, // при закрытии возвращаем видео сюда
@@ -872,6 +916,12 @@
       blocked: null, // причина, по которой клип сейчас нельзя вырезать (не про отрезок)
     };
     if (ui.end - ui.start < 1) ui.start = Math.max(0, ui.end - DEFAULT_LEN);
+    if (range && Number.isFinite(range.start) && Number.isFinite(range.end) && duration) {
+      ui.start = Math.max(0, Math.min(range.start, duration - 1));
+      ui.end = Math.max(ui.start + 1, Math.min(range.end, duration));
+      ui.openTime = v.currentTime;
+      v.currentTime = ui.start; // предпросмотр — сразу с начала отрезка
+    }
     const mine = ui;
     root.querySelector(".sub").textContent = ui.title;
     ui.view = initialView();
@@ -879,11 +929,13 @@
     root.querySelector(".bg").addEventListener("click", close);
     root.querySelector(".x").addEventListener("click", close);
     root.querySelector(".go").addEventListener("click", () => (ui?.busy ? cancel() : start()));
+    root.querySelector(".link").addEventListener("click", copyLink);
     root.querySelector(".modes").addEventListener("click", (e) => {
       const b = e.target.closest("[data-mode]");
       if (b && !b.disabled && !ui.busy) {
         ui.mode = b.dataset.mode;
         render();
+        saveMode(ui.mode);
       }
     });
     // клики в окне не должны доходить до плеера под ним
@@ -920,6 +972,7 @@
       render();
       return true;
     }
+    if (inf.videoId) ui.videoId = inf.videoId;
     if (inf.title) {
       ui.title = inf.title;
       root.querySelector(".sub").textContent = inf.title;
@@ -936,6 +989,10 @@
       b1080.title = "У этого видео нет 1080p";
     }
     if (inf.live) ui.blocked = ERRORS.live;
+    // качество, выбранное в прошлый раз (если у этого видео оно есть)
+    const saved = await loadMode();
+    if (ui !== mine) return true;
+    if (saved && MODES.some((m) => m.id === saved) && !root.querySelector(`[data-mode="${saved}"]`)?.disabled) ui.mode = saved;
     render();
     return true;
   }

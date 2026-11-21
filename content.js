@@ -1334,11 +1334,14 @@
         sendResponse({ ok: true });
         void openPreviewOverlay(msg);
         return;
-      case "yt:clip":
-        sendResponse({ ok: Boolean(globalThis.__ytcsClip) });
+      case "yt:clip": {
+        // из панели приходит отрезок вокруг момента — только для того же видео
+        const other = msg.videoId && msg.videoId !== videoIdFromUrl();
+        sendResponse({ ok: Boolean(globalThis.__ytcsClip) && isWatchPage() && !other });
         if (!isWatchPage()) showPageToast("Откройте видео, чтобы вырезать из него клип", UI_ICONS.clip);
-        else void globalThis.__ytcsClip?.open();
+        else if (!other) void globalThis.__ytcsClip?.open(Number.isFinite(msg.start) ? { start: msg.start, end: msg.end } : null);
         return;
+      }
       case "yt:toast":
         showPageToast(String(msg.text || ""));
         sendResponse({ ok: true });
