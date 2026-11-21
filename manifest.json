@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "ИИ-сводка обсуждения, темы и поиск по комментариям YouTube. Клипы из видео, превью и удобные режимы плеера.",
   "permissions": [
     "storage",

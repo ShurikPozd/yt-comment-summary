@@ -191,7 +191,11 @@
     button svg { width: 18px; height: 18px; flex: none; }
     .x { flex: none; width: 36px; padding: 0; border-radius: 50%; }
 
-    .dlg { max-height: calc(100vh - 32px); overflow: auto; scrollbar-width: none; }
+    .dlg { --z: 1; zoom: var(--z); width: min(560px, calc((100vw - 32px) / var(--z)));
+      max-height: calc((100vh - 32px) / var(--z)); overflow: auto; scrollbar-width: none; }
+    /* на больших экранах окно крупнее — пропорционально, со всеми надписями */
+    @media (min-width: 1600px) and (min-height: 860px) { .dlg { --z: 1.2; } }
+    @media (min-width: 2200px) and (min-height: 1150px) { .dlg { --z: 1.45; } }
     /* в низком окне блоки не сплющиваются — окно прокручивается */
     .dlg > * { flex-shrink: 0; }
 
@@ -208,10 +212,26 @@
     .pv-time { margin-left: auto; padding: 3px 8px 4px; border-radius: 6px; background: rgba(0, 0, 0, .55);
       font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-    /* шкала видео с выделенным отрезком */
-    .scale { display: flex; flex-direction: column; gap: 6px; }
-    .track { position: relative; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, .08);
-      cursor: pointer; touch-action: none; }
+    /* шкала видео с выделенным отрезком: колесо — приблизить, Shift+колесо — сдвинуть */
+    .scale { position: relative; display: flex; flex-direction: column; gap: 6px; }
+    .track { position: relative; height: 44px; border-radius: 10px; background: rgba(255, 255, 255, .08);
+      cursor: pointer; touch-action: none; overflow: hidden; }
+    .ticks { position: absolute; inset: 0; pointer-events: none; }
+    .tick { position: absolute; bottom: 0; width: 1px; height: 7px; background: rgba(255, 255, 255, .2); }
+    .tick.major { height: 13px; background: rgba(255, 255, 255, .38); }
+    .labels { position: relative; height: 15px; color: #8e8e95; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .labels span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+    .hover { position: absolute; top: -28px; padding: 3px 8px 4px; border-radius: 7px; background: #f1f1f1; color: #111;
+      font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; transform: translateX(-50%);
+      pointer-events: none; opacity: 0; transition: opacity .12s ease; white-space: nowrap; z-index: 2; }
+    .hover.show { opacity: 1; }
+    /* мини-полоса всего видео: рамка — видимая часть шкалы, красное — отрезок */
+    .rail { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .07); cursor: pointer;
+      touch-action: none; transition: opacity .2s ease; }
+    .rail.off { opacity: 0; pointer-events: none; }
+    .rail .win { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: rgba(255, 255, 255, .22);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); cursor: grab; }
+    .rail .mark { position: absolute; top: 2px; bottom: 2px; min-width: 2px; border-radius: 2px; background: #ff3b5c; pointer-events: none; }
     .sel { position: absolute; top: 0; bottom: 0; border-radius: 8px; background: rgba(255, 59, 92, .26);
       box-shadow: inset 0 0 0 2px #ff3b5c; }
     .head { position: absolute; top: 6px; bottom: 6px; width: 2px; margin-left: -1px; border-radius: 1px;
@@ -221,7 +241,7 @@
     .h::after { content: ""; position: absolute; left: 50%; top: 9px; bottom: 9px; width: 2px; margin-left: -1px;
       border-radius: 1px; background: rgba(0, 0, 0, .25); }
     .h:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
-    .ends { display: flex; justify-content: space-between; color: #8e8e95; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .h.out { display: none; }
 
     .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -295,15 +315,109 @@
     return null;
   }
 
+  // ---------- шкала: видимое окно времени ----------
+  const MIN_GAP = 1; // ручки не сходятся ближе секунды
+  const TICK_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200];
+  // мелкие деления — «круглые» доли крупного шага
+  const MINOR = { 2: [1], 5: [1], 10: [2, 5], 15: [5], 30: [5, 10], 60: [10, 15, 30], 120: [30, 60], 300: [60], 600: [60, 120], 900: [300], 1800: [300, 600], 3600: [600, 900], 7200: [1800] };
+  const minView = () => Math.min(ui.duration, 8);
+  const frac = (t) => (t - ui.view.a) / (ui.view.z - ui.view.a || 1);
+  const pcv = (t) => `${Math.max(0, Math.min(1, frac(t))) * 100}%`;
+  const prefersReduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // окно [a, z] в пределах видео и не уже minView
+  function clampView(a, z) {
+    const d = ui.duration || 1;
+    const w = Math.max(minView(), Math.min(d, z - a));
+    a = Math.max(0, Math.min(a, d - w));
+    return { a, z: a + w };
+  }
+  // плавно к окну (колесо, двойной клик, мини-полоса)
+  function setView(a, z, animate = true) {
+    ui.viewTarget = clampView(a, z);
+    if (!animate || prefersReduced()) {
+      cancelAnimationFrame(ui.viewRaf);
+      ui.viewRaf = 0;
+      ui.view = { ...ui.viewTarget };
+      return render();
+    }
+    if (ui.viewRaf) return;
+    let last = performance.now();
+    const step = (now) => {
+      if (!ui) return;
+      const t = ui.viewTarget;
+      // мягкое замедление, ~0,3 с при любой частоте кадров
+      const k = 1 - Math.pow(0.72, Math.max(1, (now - last) / 16.7));
+      last = now;
+      ui.view = { a: ui.view.a + (t.a - ui.view.a) * k, z: ui.view.z + (t.z - ui.view.z) * k };
+      const done = Math.abs(t.a - ui.view.a) + Math.abs(t.z - ui.view.z) < (t.z - t.a) * 0.002;
+      if (done) ui.view = { ...t };
+      render();
+      ui.viewRaf = done ? 0 : requestAnimationFrame(step);
+    };
+    ui.viewRaf = requestAnimationFrame(step);
+  }
+  // начальное окно: на длинном видео сразу приближаем к отрезку
+  function initialView() {
+    const d = ui.duration || 1;
+    const len = ui.end - ui.start;
+    if (d <= 180) return { a: 0, z: d };
+    const w = Math.max(60, Math.min(d, len * 6));
+    const c = (ui.start + ui.end) / 2;
+    return clampView(c - w / 2, c + w / 2);
+  }
+  // отрезок ушёл за край шкалы (ввели время, «Сейчас») — показываем его
+  function revealRange() {
+    const { a, z } = ui.viewTarget || ui.view;
+    if (ui.start >= a && ui.end <= z) return;
+    const w = Math.max(z - a, (ui.end - ui.start) * 1.4);
+    const c = (ui.start + ui.end) / 2;
+    setView(c - w / 2, c + w / 2);
+  }
+
+  // деления и подписи: шаг такой, чтобы подписи стояли не теснее ~70 px
+  function renderTicks() {
+    const px = ui.$(".track").clientWidth || 400;
+    const { a, z } = ui.view;
+    const key = `${a.toFixed(3)}|${z.toFixed(3)}|${px}`;
+    if (ui.ticksKey === key) return;
+    ui.ticksKey = key;
+    const w = z - a || 1;
+    const major = TICK_STEPS.find((st) => (w / st) * 70 <= px) || TICK_STEPS[TICK_STEPS.length - 1];
+    const minor = (MINOR[major] || []).find((m) => (m / w) * px >= 9) || major;
+    let ticks = "";
+    let labels = "";
+    for (let t = Math.ceil(a / minor - 1e-9) * minor; t <= z + 1e-6; t += minor) {
+      const x = ((t - a) / w) * 100;
+      const isMajor = Math.abs(t / major - Math.round(t / major)) < 1e-6;
+      ticks += `<i class="tick${isMajor ? " major" : ""}" style="left:${x}%"></i>`;
+      if (isMajor) {
+        // подпись у края не обрезается — прижимаем к краю
+        const xp = (x / 100) * px;
+        const style = xp < 18 ? "left:0;transform:none" : xp > px - 18 ? "left:auto;right:0;transform:none" : `left:${x}%`;
+        labels += `<span style="${style}">${fmt(t)}</span>`;
+      }
+    }
+    ui.$(".ticks").innerHTML = ticks;
+    ui.$(".labels").innerHTML = labels;
+  }
+
   function render() {
     if (!ui) return;
     const d = ui.duration || 1;
-    const pc = (t) => `${(Math.max(0, Math.min(t, d)) / d) * 100}%`;
-    ui.$(".sel").style.left = pc(ui.start);
-    ui.$(".sel").style.width = `${((ui.end - ui.start) / d) * 100}%`;
+    renderTicks();
+    ui.$(".sel").style.left = pcv(ui.start);
+    ui.$(".sel").style.width = `${Math.max(0, Math.min(1, frac(ui.end)) - Math.max(0, frac(ui.start))) * 100}%`;
     const [h1, h2] = ui.root.querySelectorAll(".h");
-    h1.style.left = pc(ui.start);
-    h2.style.left = pc(ui.end);
+    h1.style.left = pcv(ui.start);
+    h2.style.left = pcv(ui.end);
+    h1.classList.toggle("out", ui.start < ui.view.a - 0.01 || ui.start > ui.view.z + 0.01);
+    h2.classList.toggle("out", ui.end < ui.view.a - 0.01 || ui.end > ui.view.z + 0.01);
+    // мини-полоса — только когда шкала приближена
+    const rail = ui.$(".rail");
+    rail.classList.toggle("off", ui.view.z - ui.view.a >= d - 0.5);
+    rail.querySelector(".win").style.cssText = `left:${(ui.view.a / d) * 100}%;width:${((ui.view.z - ui.view.a) / d) * 100}%`;
+    rail.querySelector(".mark").style.cssText = `left:${(ui.start / d) * 100}%;width:${((ui.end - ui.start) / d) * 100}%`;
     for (const [h, t, name] of [
       [h1, ui.start, "Начало"],
       [h2, ui.end, "Конец"],
@@ -332,18 +446,22 @@
     }
   }
 
-  // поставить начало/конец, не ломая порядок
-  function setStart(t) {
-    ui.start = Math.max(0, Math.min(t, ui.duration));
-    if (ui.end <= ui.start + 0.5) ui.end = Math.min(ui.duration, ui.start + DEFAULT_LEN);
-    if (ui.end <= ui.start) ui.start = Math.max(0, ui.end - 1);
+  // Поставить начало/конец. Ручки (мышь, стрелки) упираются в соседнюю и не
+  // сдвигают её. push — для полей и «Сейчас»: начало позже конца переносит
+  // конец, сохраняя длину клипа (ввели время — значит, хотят именно его).
+  function setStart(t, { push = false } = {}) {
+    t = Math.max(0, Math.min(t, ui.duration));
+    if (push && t > ui.end - MIN_GAP) ui.end = Math.min(ui.duration, t + Math.max(MIN_GAP, ui.end - ui.start));
+    ui.start = Math.max(0, Math.min(t, ui.end - MIN_GAP));
+    if (push) revealRange();
     render();
     seekPreview(ui.start);
   }
-  function setEnd(t) {
-    ui.end = Math.max(0, Math.min(t, ui.duration));
-    if (ui.end <= ui.start + 0.5) ui.start = Math.max(0, ui.end - DEFAULT_LEN);
-    if (ui.end <= ui.start) ui.end = Math.min(ui.duration, ui.start + 1);
+  function setEnd(t, { push = false } = {}) {
+    t = Math.max(0, Math.min(t, ui.duration));
+    if (push && t < ui.start + MIN_GAP) ui.start = Math.max(0, t - Math.max(MIN_GAP, ui.end - ui.start));
+    ui.end = Math.min(ui.duration, Math.max(t, ui.start + MIN_GAP));
+    if (push) revealRange();
     render();
     seekPreview(ui.end);
   }
@@ -392,7 +510,11 @@
     if (!v) return;
     const t = v.currentTime;
     if (ui.previewing && t >= ui.end) stopPreview();
-    if (ui.duration) ui.$(".head").style.left = `${(Math.min(t, ui.duration) / ui.duration) * 100}%`;
+    if (ui.duration) {
+      const head = ui.$(".head");
+      head.style.left = pcv(t);
+      head.style.display = t < ui.view.a || t > ui.view.z ? "none" : "";
+    }
     const label = fmt(t);
     if (ui.label !== label) ui.$(".pv-time").textContent = ui.label = label;
     // рисуем, когда кадр сменился; «нарисован» — только если кадр уже был готов
@@ -411,14 +533,28 @@
 
   function timeAt(clientX) {
     const r = ui.$(".track").getBoundingClientRect();
-    return (Math.max(0, Math.min(clientX - r.left, r.width)) / (r.width || 1)) * ui.duration;
+    const f = Math.max(0, Math.min(clientX - r.left, r.width)) / (r.width || 1);
+    return ui.view.a + f * (ui.view.z - ui.view.a);
+  }
+
+  // время под курсором над шкалой
+  function showHover(clientX) {
+    const scale = ui.$(".scale");
+    const r = ui.$(".track").getBoundingClientRect();
+    const sr = scale.getBoundingClientRect();
+    const hv = ui.$(".hover");
+    const x = Math.max(r.left, Math.min(clientX, r.right));
+    hv.textContent = fmt(timeAt(x));
+    const k = sr.width / (scale.offsetWidth || sr.width); // у окна может быть zoom
+    hv.style.left = `${Math.max(24, Math.min((x - sr.left) / k, scale.offsetWidth - 24))}px`;
+    hv.classList.add("show");
   }
 
   function bindTrack() {
     const track = ui.$(".track");
     let drag = null; // "start" | "end"
     track.addEventListener("pointerdown", (e) => {
-      if (ui.busy) return;
+      if (ui.busy || e.button !== 0) return;
       const t = timeAt(e.clientX);
       const h = e.target.closest(".h");
       drag = h ? h.dataset.h : Math.abs(t - ui.start) <= Math.abs(t - ui.end) ? "start" : "end";
@@ -428,11 +564,66 @@
       e.preventDefault();
     });
     track.addEventListener("pointermove", (e) => {
+      showHover(e.clientX);
       if (drag) (drag === "start" ? setStart : setEnd)(timeAt(e.clientX));
     });
-    const stop = () => (drag = null);
+    track.addEventListener("pointerleave", () => {
+      if (!drag) ui.$(".hover").classList.remove("show");
+    });
+    const stop = () => {
+      drag = null;
+    };
     track.addEventListener("pointerup", stop);
     track.addEventListener("pointercancel", stop);
+    // колесо — приблизить/отдалить вокруг курсора; Shift+колесо или тачпад вбок — сдвинуть
+    track.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const cur = ui.viewTarget || ui.view;
+        const w = cur.z - cur.a;
+        const r = track.getBoundingClientRect();
+        const horiz = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+        const unit = e.deltaMode === 1 ? 33 : 1; // строки → пиксели
+        if (horiz) {
+          const dx = ((e.shiftKey ? e.deltaY || e.deltaX : e.deltaX) || 0) * unit;
+          const dt = (dx / (r.width || 1)) * w;
+          setView(cur.a + dt, cur.z + dt);
+        } else {
+          const f = Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1)));
+          const tc = cur.a + f * w;
+          const nw = Math.max(minView(), Math.min(ui.duration, w * Math.pow(1.0018, e.deltaY * unit)));
+          setView(tc - f * nw, tc - f * nw + nw);
+        }
+        showHover(e.clientX);
+      },
+      { passive: false }
+    );
+    track.addEventListener("dblclick", (e) => {
+      if (!e.target.closest(".h")) setView(0, ui.duration);
+    });
+    // мини-полоса: перетащить рамку или щёлкнуть, чтобы перейти
+    const rail = ui.$(".rail");
+    let pan = null;
+    const railTime = (x) => {
+      const rr = rail.getBoundingClientRect();
+      return (Math.max(0, Math.min(x - rr.left, rr.width)) / (rr.width || 1)) * ui.duration;
+    };
+    rail.addEventListener("pointerdown", (e) => {
+      const cur = ui.viewTarget || ui.view;
+      const w = cur.z - cur.a;
+      const t = railTime(e.clientX);
+      const onWin = Boolean(e.target.closest(".win"));
+      pan = { off: onWin ? t - cur.a : w / 2, w };
+      rail.setPointerCapture(e.pointerId);
+      setView(t - pan.off, t - pan.off + w, !onWin);
+      e.preventDefault();
+    });
+    rail.addEventListener("pointermove", (e) => {
+      if (pan) setView(railTime(e.clientX) - pan.off, railTime(e.clientX) - pan.off + pan.w, false);
+    });
+    rail.addEventListener("pointerup", () => (pan = null));
+    rail.addEventListener("pointercancel", () => (pan = null));
   }
 
   // стрелки на ручке: ±1 с, с Shift — ±5 с; Home/End — к краям
@@ -459,7 +650,7 @@
       return false;
     }
     inp.classList.remove("bad");
-    (i === 0 ? setStart : setEnd)(t);
+    (i === 0 ? setStart : setEnd)(t, { push: true });
     return true;
   }
 
@@ -471,7 +662,7 @@
     ui.root.querySelectorAll(".now").forEach((b, i) =>
       b.addEventListener("click", () => {
         const v = video();
-        if (v) (i === 0 ? setStart : setEnd)(v.currentTime);
+        if (v) (i === 0 ? setStart : setEnd)(v.currentTime, { push: true });
       })
     );
   }
@@ -638,12 +829,15 @@
             </div>
           </div>
           <div class="scale">
-            <div class="track" title="Перетащите ручки или щёлкните по шкале">
+            <div class="hover" aria-hidden="true"></div>
+            <div class="track" title="Колесо — приблизить, Shift+колесо — сдвинуть, двойной клик — всё видео">
+              <div class="ticks"></div>
               <div class="sel"></div><div class="head"></div>
               <div class="h" data-h="start" role="slider" tabindex="0" aria-label="Начало клипа"></div>
               <div class="h" data-h="end" role="slider" tabindex="0" aria-label="Конец клипа"></div>
             </div>
-            <div class="ends"><span>0:00</span><span class="dur"></span></div>
+            <div class="labels" aria-hidden="true"></div>
+            <div class="rail off" title="Всё видео: перетащите рамку, чтобы сдвинуть шкалу"><div class="mark"></div><div class="win"></div></div>
           </div>
           <div class="fields">
             <div class="field"><span>Начало</span><div class="row"><input inputmode="decimal" spellcheck="false" aria-label="Начало, например 1:30" /><button class="now" title="Поставить момент из предпросмотра">${ICON.now}Сейчас</button></div></div>
@@ -680,7 +874,8 @@
     if (ui.end - ui.start < 1) ui.start = Math.max(0, ui.end - DEFAULT_LEN);
     const mine = ui;
     root.querySelector(".sub").textContent = ui.title;
-    root.querySelector(".dur").textContent = fmt(duration);
+    ui.view = initialView();
+    ui.viewTarget = { ...ui.view };
     root.querySelector(".bg").addEventListener("click", close);
     root.querySelector(".x").addEventListener("click", close);
     root.querySelector(".go").addEventListener("click", () => (ui?.busy ? cancel() : start()));
@@ -731,7 +926,8 @@
     }
     if (inf.duration && Math.abs(inf.duration - ui.duration) > 0.5) {
       ui.duration = inf.duration;
-      root.querySelector(".dur").textContent = fmt(inf.duration);
+      ui.view = initialView();
+      ui.viewTarget = { ...ui.view };
     }
     const b1080 = root.querySelector('[data-mode="hd1080"]');
     if (inf.levels.length && !inf.levels.some((q) => ["hd1080", "hd1440", "hd2160"].includes(q))) {

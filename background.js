@@ -67,10 +67,16 @@ async function buildMenus() {
     }
     chrome.contextMenus.create({ id: `sep1@${where}`, type: "separator", contexts, ...extra });
     chrome.contextMenus.create({ id: `panel@${where}`, title: "Сводка комментариев — открыть панель", contexts, ...extra });
-    // у иконки Chrome максимум 6 пунктов — клип только в меню страницы
-    if (where === "page") chrome.contextMenus.create({ id: `clip@${where}`, title: "Вырезать клип из видео", contexts, ...extra });
-    chrome.contextMenus.create({ id: `preview@${where}`, title: "Открыть превью видео", contexts, ...extra });
-    chrome.contextMenus.create({ id: `download@${where}`, title: "Скачать превью", contexts, ...extra });
+    chrome.contextMenus.create({ id: `clip@${where}`, title: "Вырезать клип из видео", contexts, ...extra });
+    // У иконки Chrome — не больше 6 пунктов верхнего уровня: превью там в подменю.
+    if (where === "action") {
+      chrome.contextMenus.create({ id: `thumb@${where}`, title: "Превью видео", contexts, ...extra });
+      chrome.contextMenus.create({ id: `preview@${where}`, parentId: `thumb@${where}`, title: "Открыть превью", contexts, ...extra });
+      chrome.contextMenus.create({ id: `download@${where}`, parentId: `thumb@${where}`, title: "Скачать превью", contexts, ...extra });
+    } else {
+      chrome.contextMenus.create({ id: `preview@${where}`, title: "Открыть превью видео", contexts, ...extra });
+      chrome.contextMenus.create({ id: `download@${where}`, title: "Скачать превью", contexts, ...extra });
+    }
   }
 }
 
