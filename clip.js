@@ -277,7 +277,7 @@
     .dlg.busy .go { background: rgba(255, 255, 255, .12); }
     .dlg.busy .go:hover { background: rgba(255, 255, 255, .2); }
 
-    .msg { position: absolute; left: 50%; bottom: -54px; padding: 9px 16px 10px; border-radius: 999px;
+    .msg { position: absolute; left: 50%; bottom: 24px; z-index: 3; padding: 9px 16px 10px; border-radius: 999px;
       background: rgba(28, 28, 30, .94); box-shadow: 0 8px 24px rgba(0, 0, 0, .4); font-size: 13.5px; white-space: nowrap;
       transform: translate(-50%, 8px); opacity: 0; pointer-events: none;
       transition: opacity .16s ease-out, transform .22s cubic-bezier(.23, 1, .32, 1); }
@@ -456,7 +456,10 @@
     t = Math.max(0, Math.min(t, ui.duration));
     if (push && t > ui.end - MIN_GAP) ui.end = Math.min(ui.duration, t + Math.max(MIN_GAP, ui.end - ui.start));
     ui.start = Math.max(0, Math.min(t, ui.end - MIN_GAP));
-    if (push) revealRange();
+    if (push) {
+      revealRange();
+      fitIfTiny();
+    }
     render();
     seekPreview(ui.start);
   }
@@ -464,7 +467,10 @@
     t = Math.max(0, Math.min(t, ui.duration));
     if (push && t < ui.start + MIN_GAP) ui.start = Math.max(0, t - Math.max(MIN_GAP, ui.end - ui.start));
     ui.end = Math.min(ui.duration, Math.max(t, ui.start + MIN_GAP));
-    if (push) revealRange();
+    if (push) {
+      revealRange();
+      fitIfTiny();
+    }
     render();
     seekPreview(ui.end);
   }
@@ -551,6 +557,20 @@
     const k = sr.width / (scale.offsetWidth || sr.width); // у окна может быть zoom
     hv.style.left = `${Math.max(24, Math.min((x - sr.left) / k, scale.offsetWidth - 24))}px`;
     hv.classList.add("show");
+    clearTimeout(ui.hoverTimer);
+    ui.hoverTimer = setTimeout(() => ui && hv.classList.remove("show"), 1500);
+  }
+
+  // Отрезок на шкале уже пары ручек — приближаем, чтобы ручки разошлись
+  // (после того как отпустили ручку, нажали I/O или ввели время)
+  function fitIfTiny() {
+    const px = ui.$(".track").clientWidth || 400;
+    const cur = ui.viewTarget || ui.view;
+    const len = ui.end - ui.start;
+    if ((len / (cur.z - cur.a)) * px >= 48 || cur.z - cur.a <= minView() + 0.01) return;
+    const w = Math.max(minView(), len * 3);
+    const c = (ui.start + ui.end) / 2;
+    setView(c - w / 2, c + w / 2);
   }
 
   function bindTrack() {
@@ -574,6 +594,7 @@
       if (!drag) ui.$(".hover").classList.remove("show");
     });
     const stop = () => {
+      if (drag) fitIfTiny();
       drag = null;
     };
     track.addEventListener("pointerup", stop);
@@ -890,8 +911,8 @@
             <button class="link" title="Скопировать ссылку на YouTube с начала клипа — если друзьям удобнее открыть само видео">${ICON.link}Ссылка</button>
             <button class="go">${ICON.download}Скачать клип</button>
           </div>
-          <div class="msg" role="status"></div>
         </div>
+        <div class="msg" role="status"></div>
       </div>`;
     (document.fullscreenElement || document.documentElement).appendChild(host);
     const wrap = root.querySelector(".wrap");
