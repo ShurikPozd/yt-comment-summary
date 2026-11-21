@@ -67,6 +67,8 @@ async function buildMenus() {
     }
     chrome.contextMenus.create({ id: `sep1@${where}`, type: "separator", contexts, ...extra });
     chrome.contextMenus.create({ id: `panel@${where}`, title: "Сводка комментариев — открыть панель", contexts, ...extra });
+    // у иконки Chrome максимум 6 пунктов — клип только в меню страницы
+    if (where === "page") chrome.contextMenus.create({ id: `clip@${where}`, title: "Вырезать клип из видео", contexts, ...extra });
     chrome.contextMenus.create({ id: `preview@${where}`, title: "Открыть превью видео", contexts, ...extra });
     chrome.contextMenus.create({ id: `download@${where}`, title: "Скачать превью", contexts, ...extra });
   }
@@ -167,6 +169,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
+  if (action === "clip") {
+    if (tab?.id) {
+      const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:clip" }).catch(() => null);
+      if (!r?.ok) chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text: "Обновите страницу видео (F5)" }).catch(() => {});
+    }
+    return;
+  }
+
   if (action === "panel") {
     // sidePanel.open разрешён только в ответ на действие пользователя — клик
     // по пункту меню им и является; вызываем сразу, без await до него.
@@ -233,6 +243,17 @@ async function downloadThumb(tab, id) {
   await chrome.downloads.download({ url, filename: file, conflictAction: "uniquify", saveAs: false });
   return true;
 }
+
+// Клипы: библиотеку склейки вставляем во вкладку по первому клипу — в тот же
+// изолированный мир, где работает clip.js.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "clip:lib" || !sender.tab?.id) return;
+  chrome.scripting
+    .executeScript({ target: { tabId: sender.tab.id, frameIds: [sender.frameId ?? 0] }, files: ["vendor/mediabunny.js"] })
+    .then(() => sendResponse({ ok: true }))
+    .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+  return true;
+});
 
 // Действия из нашей кнопки в плеере YouTube (меню рисует content.js).
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

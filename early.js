@@ -84,7 +84,7 @@
     (e) => {
       if (!e.isTrusted || !e.target.closest) return;
       // клики по нашей кнопке и меню в плеере — не «запуск видео»
-      if (e.target.closest(".ytcs-btn, .ytcs-menu")) return;
+      if (e.target.closest(".ytcs-btn, .ytcs-menu, #ytcs-clip, #ytcs-preview")) return;
       if (e.target.closest("#movie_player, ytd-player") || isTimecodeLink(e.target)) gestureAt = Date.now();
     },
     true

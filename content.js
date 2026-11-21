@@ -46,7 +46,19 @@
     return null;
   }
 
+  // Расширение обновили или отключили — этот экземпляр скрипта осиротел: любой
+  // вызов chrome.* бросает «Extension context invalidated». Тихо ничего не
+  // делаем; после F5 страница получит свежую версию.
+  const alive = () => {
+    try {
+      return Boolean(chrome.runtime?.id);
+    } catch (e) {
+      return false;
+    }
+  };
+
   function send(payload) {
+    if (!alive()) return;
     try {
       chrome.runtime.sendMessage(payload).catch(() => {});
     } catch (e) {
@@ -55,10 +67,15 @@
   }
 
   async function sessionGet(keys) {
+    if (!alive()) return {};
     try {
       return await chrome.storage.session.get(keys);
     } catch (e) {
-      return await chrome.storage.local.get(keys);
+      try {
+        return await chrome.storage.local.get(keys);
+      } catch (e2) {
+        return {};
+      }
     }
   }
 
@@ -116,6 +133,7 @@
 
   async function sessionSet(patch) {
     for (let attempt = 0; attempt < 12; attempt++) {
+      if (!alive()) return;
       try {
         await chrome.storage.session.set(patch);
         return;
@@ -740,6 +758,7 @@
   }
 
   async function handlePage({ forceCollect = false } = {}) {
+    if (!alive()) return;
     const id = videoIdFromUrl();
     if (!id) {
       currentVideoId = null;
@@ -889,6 +908,8 @@
     download: SVG('<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'),
     pause: SVG('<rect x="5" y="4" width="4.5" height="16" rx="1.2"/><rect x="14.5" y="4" width="4.5" height="16" rx="1.2"/>'),
     bar: SVG('<path d="M3 12h18"/><path d="M3 7h2M3 17h2M19 7h2M19 17h2" opacity=".5"/><path d="M4 4l16 16"/>'),
+    // ножницы — «Вырезать клип»
+    clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
   };
 
   let uiMenu = null;
@@ -908,6 +929,7 @@
     m.innerHTML = `
       <div class="ytcs-head">${UI_ICONS.brand}Сводка комментариев</div>
       <button class="ytcs-item" role="menuitem" data-act="panel">${UI_ICONS.panel}<span class="ytcs-label">Открыть сводку и комментарии</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
       <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
       <button class="ytcs-item" role="menuitem" data-act="download">${UI_ICONS.download}<span class="ytcs-label">Скачать превью</span></button>
       <div class="ytcs-sep"></div>
@@ -950,6 +972,7 @@
   async function onMenuClick(e) {
     const item = e.target.closest(".ytcs-item");
     if (!item) return;
+    if (!alive()) return setNote("Расширение обновилось — обновите страницу (F5).");
     const key = item.dataset.toggle;
     if (key) {
       const s = (await chrome.storage.local.get("settings")).settings || {};
@@ -960,6 +983,13 @@
       return;
     }
     const act = item.dataset.act;
+    // клип — окно рисует clip.js здесь же, на странице
+    if (act === "clip") {
+      openMenu(false);
+      if (!globalThis.__ytcsClip?.open) setNote("Обновите страницу видео (F5).");
+      else void globalThis.__ytcsClip.open();
+      return;
+    }
     let r = null;
     try {
       r = await chrome.runtime.sendMessage({ type: "ui:action", action: act });
@@ -1241,7 +1271,7 @@
   });
 
   function ensurePlayerButton() {
-    if (!isWatchPage()) return;
+    if (!alive() || !isWatchPage()) return;
     const settingsBtn = document.querySelector("#movie_player .ytp-settings-button");
     const player = document.querySelector("#movie_player");
     if (!settingsBtn || !player) return;
@@ -1303,6 +1333,11 @@
       case "yt:preview":
         sendResponse({ ok: true });
         void openPreviewOverlay(msg);
+        return;
+      case "yt:clip":
+        sendResponse({ ok: Boolean(globalThis.__ytcsClip) });
+        if (!isWatchPage()) showPageToast("Откройте видео, чтобы вырезать из него клип", UI_ICONS.clip);
+        else void globalThis.__ytcsClip?.open();
         return;
       case "yt:toast":
         showPageToast(String(msg.text || ""));

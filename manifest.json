@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.10.14",
-  "description": "AI-сводка обсуждения, темы и умный поиск по комментариям YouTube. Превью видео в отдельной вкладке и инфо о канале.",
+  "version": "0.11.3",
+  "description": "ИИ-сводка обсуждения, темы и поиск по комментариям YouTube. Клипы из видео, превью и удобные режимы плеера.",
   "permissions": [
     "storage",
     "sidePanel",
     "downloads",
     "tabs",
-    "contextMenus"
+    "contextMenus",
+    "scripting"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -38,7 +39,8 @@
         "https://m.youtube.com/*"
       ],
       "js": [
-        "early-main.js"
+        "early-main.js",
+        "clip-main.js"
       ],
       "run_at": "document_start",
       "world": "MAIN"
@@ -49,7 +51,8 @@
         "https://m.youtube.com/*"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "clip.js"
       ],
       "run_at": "document_idle"
     }
