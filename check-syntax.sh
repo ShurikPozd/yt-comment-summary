@@ -11,7 +11,7 @@ node check-exports.mjs . && echo "= экспорты на месте ="
 echo "== константы верхнего регистра =="
 cstmp=$(mktemp)
 cfail=0
-for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/icons.js sidepanel/card.js sidepanel/video-tldr.js sidepanel/selfcheck-ui.js selfcheck.js groq.js prompts.js config.js library/library.js library/search.js library/state.js library/store.js library/youtube.js library/catalog.js library/view-lib.js library/queue-view.js library/watch.js library/wl.js library/triage.js library/tidy.js library/backup.js library/semantic.js library/sem-ui.js library/sem-worker.js; do
+for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/icons.js sidepanel/card.js sidepanel/video-tldr.js sidepanel/selfcheck-ui.js selfcheck.js groq.js prompts.js config.js tldr-core.js tldr-bg.js library/library.js library/search.js library/state.js library/store.js library/youtube.js library/catalog.js library/view-lib.js library/queue-view.js library/watch.js library/wl.js library/triage.js library/tidy.js library/backup.js library/semantic.js library/sem-ui.js library/sem-worker.js; do
   [ -f "$f" ] || continue
   if out=$(node check-consts.mjs "$f") && ! printf '%s' "$out" | grep -q 'НЕ ОБЪЯВЛЕНЫ'; then
     echo "OK   $f"
@@ -26,7 +26,7 @@ echo "== разбор как ESM =="
 tmp=".syntaxcheck.mjs"
 err=$(mktemp)
 fail=0
-for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/sponsor-settings.js sidepanel/preview.js sidepanel/icons.js sidepanel/card.js sidepanel/video-tldr.js sidepanel/selfcheck-ui.js selfcheck.js groq.js prompts.js config.js transcript.js content.js early.js early-main.js clip.js clip-main.js sponsor.js playlists.js playlists-main.js queue.js select.js library/library.js library/search.js library/state.js library/store.js library/youtube.js library/catalog.js library/view-lib.js library/queue-view.js library/watch.js library/wl.js library/triage.js library/tidy.js library/backup.js library/semantic.js library/sem-ui.js background.js; do
+for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/sponsor-settings.js sidepanel/preview.js sidepanel/icons.js sidepanel/card.js sidepanel/video-tldr.js sidepanel/selfcheck-ui.js selfcheck.js groq.js prompts.js config.js transcript.js tldr-core.js tldr-bg.js video-actions.js thumb-preview.js content.js early.js early-main.js clip.js clip-main.js sponsor.js playlists.js playlists-main.js queue.js select.js library/library.js library/search.js library/state.js library/store.js library/youtube.js library/catalog.js library/view-lib.js library/queue-view.js library/watch.js library/wl.js library/triage.js library/tidy.js library/backup.js library/semantic.js library/sem-ui.js library/sem-worker.js background.js; do
   [ -f "$f" ] || continue
   cp "$f" "$tmp"
   if node --check "$tmp" 2>"$err"; then

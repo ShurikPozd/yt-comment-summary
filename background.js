@@ -1,5 +1,6 @@
 // Service worker: открытие боковой панели и контекстное меню.
 import { sanitizeFilename } from "./groq.js";
+import "./tldr-bg.js"; // окно «О чём видео» на ленте: пересказ через порт
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
@@ -233,9 +234,11 @@ async function videoMeta(tab, id) {
   return { title: "", channel: "" };
 }
 
-async function thumbFileName(tab, id) {
+// hint — название и канал, если их уже знает вызывающий (карточка ленты, библиотека):
+// тогда без запроса к YouTube.
+async function thumbFileName(tab, id, hint = null) {
   const s = await readSettings();
-  const { title, channel } = await videoMeta(tab, id);
+  const { title, channel } = hint?.title && hint?.channel ? hint : await videoMeta(tab, id);
   const tpl = s.thumbTemplate || "{title} - {channel}";
   const name = tpl
     .replaceAll("{title}", sanitizeFilename(title || id))
@@ -342,11 +345,27 @@ async function openPreview(tab, id) {
   await chrome.tabs.create({ url: chrome.runtime.getURL(`sidepanel/preview.html?${qs}`), index: (tab?.index ?? 0) + 1 });
 }
 
+// Кнопка «Превью» на обложке (video-actions.js): адреса качеств и имя файла
+// по шаблону из настроек — окно (thumb-preview.js) рисует сама страница.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "ui:preview-info") return;
+  const id = String(msg.videoId || "");
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return sendResponse({ ok: false });
+  const hint = { title: String(msg.title || "").slice(0, 300), channel: String(msg.channel || "").slice(0, 120) };
+  thumbFileName(sender.tab || null, id, hint)
+    .then(({ file, title }) => sendResponse({ ok: true, urls: thumbUrls(id), title: title || hint.title || id, name: file }))
+    .catch(() => sendResponse({ ok: true, urls: thumbUrls(id), title: hint.title || id, name: `${id}.jpg` }));
+  return true;
+});
+
 // Окно превью на странице: скачать выбранное качество / отдать картинку для
 // копирования (у фона есть доступ к i.ytimg.com, у страницы YouTube — нет).
+// Шлют вкладки (контент-скрипт, библиотека) и страницы расширения без вкладки
+// (библиотека в боковой панели).
 const THUMB_URL_RE = /^https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/\w+\.jpg$/;
+const OWN_PAGE = (sender) => String(sender?.url || "").startsWith(chrome.runtime.getURL(""));
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.type !== "ui:thumb" || !sender.tab || !THUMB_URL_RE.test(String(msg.url || ""))) return;
+  if (msg?.type !== "ui:thumb" || !(sender.tab || OWN_PAGE(sender)) || !THUMB_URL_RE.test(String(msg.url || ""))) return;
   if (msg.op === "download") {
     const name = /\.jpg$/i.test(String(msg.name || "")) ? String(msg.name) : "thumbnail.jpg";
     chrome.downloads

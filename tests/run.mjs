@@ -7,6 +7,8 @@
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { buildIndex, search, highlight, stem, swapLayout } from "../library/search.js";
+import { parseTldr, pickEven, runTldr, splitParts } from "../tldr-core.js";
+import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs } from "../groq.js";
 
 let failed = 0;
 let passed = 0;
@@ -165,6 +167,51 @@ const em2 = await call2("editMany", { playlistId: "PL1", add: ["aaaaaaaaaaa"], r
 ok(em2.ok && em2.data === 2 && sentActions[0].action === "ACTION_ADD_VIDEO" && sentActions[1].removedVideoId === "bbbbbbbbbbb", "много видео: вызов из окна плейлистов (add[] / remove[])");
 const ri = await call2("removeItems", { playlistId: "PL1", items: [{ setId: "ABCDEF123456" }, { videoId: "aaaaaaaaaaa" }, { setId: "плохо" }] });
 ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && sentActions[0].setVideoId === "ABCDEF123456" && sentActions[1].removedVideoId === "aaaaaaaaaaa", "убрать конкретные записи (повторы) и все копии");
+
+
+// ---------- пересказ видео (tldr-core.js): общий для панели и окна на ленте ----------
+{
+  const p = parseTldr(["О чём видео: Автор собирает ПК.", "", "Главное:", "0:15 — Выбор корпуса", "- [1:02:03] Итог", "99:00 — за концом"].join("\n"), 3800);
+  ok(p.about === "Автор собирает ПК." && p.points.length === 2 && p.points[1].t === 3723, "разбор пересказа: абзац, пункты, таймкод за концом отброшен");
+  const ten = Array.from({ length: 8 }, (_, i) => ({ t: i * 10, x: String(i) }));
+  const six = pickEven(ten, 6);
+  ok(six.length === 6 && six[0].t === 0 && six[5].t === 70, "до шести пунктов равномерно: первый и последний остаются");
+  ok(splitParts(Array.from({ length: 400 }, (_, i) => `[${i}:00] ` + "слово ".repeat(20))).length > 1, "длинная расшифровка режется на части");
+  ok(isOutputLimitError("429 output tokens per minute") && isSizeLimitError("413 Request too large") && retryAfterMs("try again in 4.2s") === 5200, "виды ошибок лимитов Groq");
+
+  const pacer = createPacer({ itpm: 100000, otpm: 100000, gapMs: 0, maxOut: 900 });
+  const calls = [];
+  const proxy = {
+    chat: async (m) => (calls.push("part"), JSON.stringify({ s: "Часть про сборку.", p: [{ t: "0:10", x: "Корпус" }] })),
+    chatStream: async (m, o, onDelta) => {
+      calls.push("final");
+      const full = ["Автор собирает компьютер.", "", "0:10 — Корпус", "1:00 — Итог"].join("\n");
+      onDelta(full.slice(0, 10));
+      onDelta(full);
+      return full;
+    },
+  };
+  const live = [];
+  const ac = new AbortController();
+  const short = { segments: [{ t: 0, text: "привет" }, { t: 10, text: "корпус" }, { t: 60, text: "итог" }], chapters: [] };
+  const d1 = await runTldr({ transcript: short, title: "ПК", proxy, pacer, signal: ac.signal, onUpdate: (u) => u.live && live.push(u.live) });
+  ok(d1.about === "Автор собирает компьютер." && d1.points.length === 2 && calls.join() === "final" && live.length === 2, "короткое видео — один запрос, текст по мере написания");
+  calls.length = 0;
+  const long = { segments: Array.from({ length: 600 }, (_, i) => ({ t: i * 20, text: "сборка компьютера своими руками ".repeat(6) })), chapters: [] };
+  const d2 = await runTldr({ transcript: long, proxy, pacer, signal: ac.signal });
+  ok(calls.filter((c) => c === "part").length > 1 && calls[calls.length - 1] === "final" && d2.points.length === 2, "длинное видео — части, потом итог");
+  const d3 = await runTldr({ transcript: { segments: [], noiseOnly: true }, proxy, pacer, signal: ac.signal });
+  ok(d3.nosubs && d3.music, "нет субтитров — пересказывать не из чего");
+  const ac2 = new AbortController();
+  ac2.abort();
+  let cancelled = false;
+  try {
+    await runTldr({ transcript: long, proxy, pacer, signal: ac2.signal });
+  } catch (e) {
+    cancelled = Boolean(e.cancelled);
+  }
+  ok(cancelled, "отмена пересказа");
+}
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

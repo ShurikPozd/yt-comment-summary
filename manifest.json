@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.17.19",
+  "version": "0.18.0",
   "description": "ИИ-сводка комментариев YouTube, поиск по всем плейлистам, очередь вместо сотен вкладок, клипы из видео и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -56,10 +56,12 @@
       ],
       "js": [
         "transcript.js",
+        "thumb-preview.js",
         "content.js",
         "clip.js",
         "playlists.js",
         "queue.js",
+        "video-actions.js",
         "select.js"
       ],
       "run_at": "document_idle"
