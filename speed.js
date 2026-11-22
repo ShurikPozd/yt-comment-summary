@@ -45,6 +45,15 @@
   let ready = false; // хранилище прочитано
   let vid = null; // открытое видео
   let carried = null; // скорость прошлого видео этой вкладки (её YouTube перенесёт)
+  // YouTube помнит скорость и между вкладками: новая вкладка откроется с той, что была в
+  // прошлой. Последнюю скорость, поставленную нами или вами, храним общей — чтобы и в новой
+  // вкладке видео канала без своей скорости вернулось к 1×, а не осталось на 1,5× лекций.
+  const CARRY_KEY = "channelSpeedCarry";
+  const CARRY_TTL = 7 * 24 * 3600 * 1000;
+  function noteCarry(rate) {
+    if (OUR_EMBED || !alive()) return; // у встроенного плеера библиотеки своё хранилище YouTube
+    void chrome.storage.local.set({ [CARRY_KEY]: { r: rate, at: Date.now() } }).catch(() => {});
+  }
   // по текущему видео: канал, ваш ли выбор, что поставили мы
   let cur = fresh(null);
   function fresh(id) {
@@ -88,6 +97,7 @@
     self = { rate, at: Date.now() };
     document.dispatchEvent(new CustomEvent("ytcs-speed:set", { detail: String(rate) }));
     if (!core.same(v.playbackRate, rate)) v.playbackRate = rate;
+    noteCarry(rate);
   }
 
   // ---------- Хранилище ----------
@@ -227,6 +237,7 @@
       undo = { ch, prev };
       map = core.remember(map, ch, r, name);
       save();
+      noteCarry(r);
       showNotice("saved");
     }, 900);
   }
@@ -261,11 +272,11 @@
   const NOTICE_CSS = `
     :host { all: initial; position: absolute; top: 16px; left: 16px; right: 16px; z-index: 81;
       display: flex; justify-content: center; pointer-events: none; }
-    .n { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 6px 6px 6px 14px;
-      border-radius: 999px; background: rgba(28, 28, 30, .86);
+    .n { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 7px 7px 7px 16px;
+      border-radius: 999px; background: rgba(28, 28, 30, .9);
       -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       box-shadow: 0 8px 30px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .07);
-      color: #f1f1f1; font: 500 15px/1.3 "YouTube Noto", Roboto, Arial, sans-serif;
+      color: #f1f1f1; font: 500 16px/1.3 "YouTube Noto", Roboto, Arial, sans-serif;
       opacity: 0; transform: translateY(-8px) scale(.97); transform-origin: 50% 0;
       transition: opacity .18s ease, transform .26s cubic-bezier(.22, 1, .36, 1); }
     .n.show { opacity: 1; transform: none; pointer-events: auto; }
@@ -283,6 +294,9 @@
     button:hover, button:focus-visible { background: rgba(255, 255, 255, .24); outline: none; }
     button:active { background: rgba(255, 255, 255, .3); }
     button[hidden] { display: none; }
+    /* большие экраны (2K/4K) — плашка крупнее, как остальные плашки расширения */
+    @media (min-width: 1600px) { .n { zoom: 1.15; } }
+    @media (min-width: 2200px) { .n { zoom: 1.35; } }
     @media (prefers-reduced-motion: reduce) { .n, button { transition: none; } }`;
 
   const notice = { host: null, root: null, kind: "", timer: 0, hover: false };
@@ -405,9 +419,11 @@
 
   if (!alive()) return;
   chrome.storage.local
-    .get(["settings", core.storeKey])
+    .get(["settings", core.storeKey, CARRY_KEY])
     .then((o) => {
       enabled = o.settings?.channelSpeed !== false;
+      const c = o[CARRY_KEY];
+      if (!OUR_EMBED && carried == null && c && Date.now() - c.at < CARRY_TTL && core.cleanRate(c.r) != null) carried = c.r;
       map = o[core.storeKey] && typeof o[core.storeKey] === "object" ? o[core.storeKey] : {};
       ready = true;
       tick();

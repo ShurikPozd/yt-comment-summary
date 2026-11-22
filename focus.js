@@ -165,8 +165,8 @@
   // одинаковые кнопки на обеих карточках; главная (очередь) — цветом расширения
   const BTN_CSS = `
     .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-    .acts button, .acts a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px;
-      border: 0; border-radius: 20px; background: rgba(0,0,0,.05); color: inherit; font: 500 14px/1 Roboto, Arial, sans-serif;
+    .acts button, .acts a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 20px;
+      border: 0; border-radius: 20px; background: rgba(0,0,0,.05); color: inherit; font: 500 15px/1 Roboto, Arial, sans-serif;
       text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color .15s ease, transform .1s ease-out; }
     :host([dark]) .acts button, :host([dark]) .acts a { background: rgba(255,255,255,.1); }
     .acts button:hover, .acts a:hover { background: rgba(0,0,0,.1); }
@@ -204,19 +204,22 @@
 
   // ---------- Вместо рекомендаций справа ----------
   const RELATED_CSS = `
-    :host { all: initial; display: block; margin: 0 0 16px; }
-    .card { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 20px; box-sizing: border-box;
-      border: 1px solid rgba(0,0,0,.1); border-radius: 12px; background: #fff; color: #0f0f0f; text-align: center;
-      font: 400 14px/1.45 Roboto, Arial, sans-serif; }
+    /* остаётся на виду при прокрутке; крупно — на 2K/4K ещё крупнее */
+    :host { all: initial; display: block; margin: 0 0 16px; position: sticky; top: calc(var(--ytd-masthead-height, 56px) + 16px); }
+    .card { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 36px 24px; box-sizing: border-box;
+      border: 1px solid rgba(0,0,0,.1); border-radius: 16px; background: #fff; color: #0f0f0f; text-align: center;
+      font: 400 16px/1.45 Roboto, Arial, sans-serif; }
+    @media (min-width: 1600px) { .card { zoom: 1.15; } }
+    @media (min-width: 2200px) { .card { zoom: 1.3; } }
     :host([dark]) .card { border-color: rgba(255,255,255,.2); background: #0f0f0f; color: #f1f1f1; }
-    .ic { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: rgba(255,59,92,.12); color: #e8002d; }
+    .ic { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 50%; background: rgba(255,59,92,.12); color: #e8002d; }
     :host([dark]) .ic { color: #ff4e6a; }
-    b { font: 700 18px/1.3 Roboto, Arial, sans-serif; }
-    p { margin: -6px 0 4px; color: #606060; max-width: 340px; text-wrap: balance; }
+    b { font: 700 22px/1.3 Roboto, Arial, sans-serif; }
+    p { margin: -4px 0 6px; color: #606060; max-width: 360px; text-wrap: balance; }
     :host([dark]) p { color: #aaa; }`;
   function relatedHtml() {
     return `<div class="card" role="note" aria-label="Рекомендации скрыты">
-      <span class="ic">${SVG(ICON.focus, 26)}</span>
+      <span class="ic">${SVG(ICON.focus, 30)}</span>
       <b>Рекомендации скрыты</b>
       <p>Режим без отвлечений — смотрите то, за чем пришли.</p>
       <div class="acts">${queueBtn()}${libBtn()}</div>

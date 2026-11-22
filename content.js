@@ -1031,6 +1031,11 @@
     .ytcs-item .ytcs-ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .ytcs-item .ytcs-aside { flex: none; color: #ff6b85; font-weight: 600; font-variant-numeric: tabular-nums; position: relative; top: -.075em; }
     .ytcs-sep { height: 1px; margin: 6px 0; background: rgba(255, 255, 255, .1); }
+    /* группы пунктов: линия сверху и подпись группы; пустая группа (всё скрыто) не показывается */
+    .ytcs-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .1); }
+    .ytcs-head + .ytcs-group { margin-top: 0; padding-top: 0; border-top: 0; }
+    .ytcs-group:not(:has(.ytcs-item:not([hidden]))) { display: none; }
+    .ytcs-gh { padding: 6px 16px 4px; font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .55); }
     .ytcs-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px;
       background: rgba(255, 255, 255, .25); transition: background-color .2s ease; }
     .ytcs-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
@@ -1040,16 +1045,19 @@
     .ytcs-note { padding: 4px 16px 6px; font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, .55); min-height: 0; }
     .ytcs-note:empty { display: none; }
     .ytcs-toast { position: absolute; top: 16px; left: 50%; z-index: 80; display: flex; align-items: center; gap: 10px;
-      padding: 10px 18px 11px 14px; border-radius: 999px; background: rgba(28, 28, 30, .86);
+      padding: 12px 22px 13px 16px; border-radius: 999px; background: rgba(28, 28, 30, .9);
       -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       box-shadow: 0 8px 30px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
-      color: #f1f1f1; font: 500 14px/1.3 "YouTube Noto", Roboto, Arial, sans-serif; white-space: nowrap;
+      color: #f1f1f1; font: 500 16px/1.3 "YouTube Noto", Roboto, Arial, sans-serif; white-space: nowrap;
       width: max-content; max-width: calc(100% - 32px); box-sizing: border-box;
       opacity: 0; transform: translate(-50%, -8px) scale(.97); pointer-events: none;
       transition: opacity .18s ease, transform .26s cubic-bezier(.22, 1, .36, 1); }
     .ytcs-toast.page { position: fixed; top: 72px; z-index: 9999; }
+    /* большие экраны (2K/4K) — плашка крупнее, чтобы её было видно */
+    @media (min-width: 1600px) { .ytcs-toast { zoom: 1.15; } }
+    @media (min-width: 2200px) { .ytcs-toast { zoom: 1.35; } }
     .ytcs-toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
-    .ytcs-toast svg { width: 18px; height: 18px; flex: none; color: #ff6b85; }
+    .ytcs-toast svg { width: 20px; height: 20px; flex: none; color: #ff6b85; }
     /* длинная плашка («Сохранено в «…»») в узком плеере переносится, а не обрезается */
     .ytcs-toast span { min-width: 0; white-space: normal; text-wrap: balance; }
     .ytcs-toast .ytcs-spin { animation: ytcs-spin .9s linear infinite; }
@@ -1109,22 +1117,32 @@
     m.setAttribute("role", "menu");
     m.innerHTML = `
       <div class="ytcs-head">${UI_ICONS.brand}Сводка комментариев</div>
-      <button class="ytcs-item" role="menuitem" data-act="panel">${UI_ICONS.panel}<span class="ytcs-label">Открыть сводку и комментарии</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="playlists">${UI_ICONS.save}<span class="ytcs-label">Сохранить в плейлисты</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="quicksave" hidden>${UI_ICONS.quicksave}<span class="ytcs-label ytcs-ellipsis">Сохранить в последний плейлист</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="archive" hidden>${UI_ICONS.archive}<span class="ytcs-label">В архив Telegram</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="library">${UI_ICONS.library}<span class="ytcs-label">Моя библиотека</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
-      <button class="ytcs-item" role="menuitem" data-act="download">${UI_ICONS.download}<span class="ytcs-label">Скачать превью</span></button>
-      <div class="ytcs-sep"></div>
-      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="noAutoplay">${UI_ICONS.pause}<span class="ytcs-label">Не запускать видео само</span><span class="ytcs-switch"></span></button>
-      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
-      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
-      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>
-      <button class="ytcs-item" role="menuitem" data-act="speedreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить скорость канала</span><span class="ytcs-aside">1×</span></button>
-      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
+      <div class="ytcs-group">
+        <button class="ytcs-item" role="menuitem" data-act="panel">${UI_ICONS.panel}<span class="ytcs-label">Открыть сводку и комментарии</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="library">${UI_ICONS.library}<span class="ytcs-label">Моя библиотека</span></button>
+      </div>
+      <div class="ytcs-group">
+        <div class="ytcs-gh">Сохранить</div>
+        <button class="ytcs-item" role="menuitem" data-act="playlists">${UI_ICONS.save}<span class="ytcs-label">Сохранить в плейлисты</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="quicksave" hidden>${UI_ICONS.quicksave}<span class="ytcs-label ytcs-ellipsis">Сохранить в последний плейлист</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="archive" hidden>${UI_ICONS.archive}<span class="ytcs-label">В архив Telegram</span></button>
+      </div>
+      <div class="ytcs-group">
+        <div class="ytcs-gh">Видео и превью</div>
+        <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="download">${UI_ICONS.download}<span class="ytcs-label">Скачать превью</span></button>
+      </div>
+      <div class="ytcs-group">
+        <div class="ytcs-gh">Плеер</div>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="noAutoplay">${UI_ICONS.pause}<span class="ytcs-label">Не запускать видео само</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitem" data-act="speedreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить скорость канала</span><span class="ytcs-aside">1×</span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
+      </div>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());
@@ -1237,7 +1255,7 @@
     } catch (e) {
       r = { ok: false, text: "Расширение обновилось — обновите страницу (F5)" };
     }
-    archiveToast(r?.text || "Не получилось сохранить в архив", r?.ok ? "ok" : "err", r?.ok ? 2600 : 4200);
+    archiveToast(r?.text || "Не получилось сохранить в архив", r?.ok ? "ok" : "err", r?.ok ? 3500 : 5000);
   }
 
   // «Сбросить скорость канала · 1,5×» — когда у канала видео она запомнена (speed.js)
@@ -1333,7 +1351,7 @@
   // вне просмотра — вверху страницы.
   let toastTimer = null;
   // ms — сколько показывать (0 — пока не сменит следующая плашка).
-  function showPageToast(text, iconSvg = "", ms = 1800) {
+  function showPageToast(text, iconSvg = "", ms = 2600) {
     ensureUiStyle();
     let t = document.getElementById("ytcs-toast");
     const host = (isWatchPage() && document.querySelector("#movie_player")) || document.body;
