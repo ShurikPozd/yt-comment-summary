@@ -414,6 +414,25 @@ button.primary.busy::after {
   align-items: center;
   gap: 8px;
   padding: 0 16px 8px;
+  container-type: inline-size;
+}
+
+/* «Библиотека» рядом с «Анализировать»: с подписью, а в узкой панели — только значок */
+.icon-btn.lib-btn {
+  width: auto;
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+@container (max-width: 459px) {
+  .icon-btn.lib-btn {
+    width: 34px;
+    padding: 0;
+  }
+
+  .lib-btn .lbl {
+    display: none;
+  }
 }
 
 #btn-analyze {

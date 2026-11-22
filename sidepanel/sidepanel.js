@@ -3037,13 +3037,15 @@ function bindEvents() {
     setTab("settings");
   });
   $("btn-settings-back").addEventListener("click", () => setTab("summary"));
-  $("btn-open-library").addEventListener("click", async () => {
+  async function openLibraryFromPanel() {
     const { libraryWhere } = await chrome.storage.local.get("libraryWhere");
     if (libraryWhere === "panel") return showLibraryPane({});
     await chrome.runtime.sendMessage({ type: "lib:open" }).catch(() => {});
     // библиотека — во всю вкладку; панель справа больше не нужна и не занимает место
     window.close();
-  });
+  }
+  $("btn-open-library").addEventListener("click", openLibraryFromPanel);
+  $("btn-lib").addEventListener("click", openLibraryFromPanel);
   // библиотеку попросили показать здесь (меню плеера, правый клик, клавиша)
   chrome.storage.session.get("panelLibrary").then(({ panelLibrary }) => {
     if (panelLibrary && Date.now() - panelLibrary.at < 15000) showLibraryPane(panelLibrary);

@@ -118,6 +118,8 @@ export function updateQueue({ keep = false } = {}) {
   }
   $("#q").placeholder = state.queue.length ? `Поиск в очереди: ${videosWord(state.queue.length)}` : "Поиск в очереди";
   $("#q-play").disabled = !list.length;
+  // очередь пуста — без кнопки «Смотреть», порядка и фильтров длины: выбирать не из чего
+  document.body.classList.toggle("q-none", !state.queue.length);
   saveHash();
 }
 

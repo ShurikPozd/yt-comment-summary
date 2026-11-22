@@ -87,10 +87,16 @@ chrome.storage.session
 const YT_PAGES = ["https://www.youtube.com/*", "https://m.youtube.com/*"];
 const PAGE_CTX = ["page", "link", "video", "image", "frame"];
 
+// [ключ настройки, подпись, значение по умолчанию]
 const TOGGLES = [
-  ["noAutoplay", "Не запускать видео автоматически"],
-  ["hideProgress", "Скрыть полосу прогресса и длительность"],
+  ["noAutoplay", "Не запускать видео само", false],
+  ["hideProgress", "Скрыть полосу прогресса и длительность", false],
+  ["sponsorSkip", "Пропускать рекламные вставки", true],
 ];
+const toggleOn = (s, key) => {
+  const t = TOGGLES.find(([k]) => k === key);
+  return s[key] === undefined ? Boolean(t?.[2]) : Boolean(s[key]);
+};
 
 async function readSettings() {
   return (await chrome.storage.local.get("settings")).settings || {};
@@ -101,33 +107,39 @@ async function buildMenus() {
   const s = await readSettings();
   // выделили текст где угодно — сразу искать его в своих плейлистах
   chrome.contextMenus.create({ id: `${libraryWhere === "panel" ? "librarypanel" : "library"}@selection`, title: "Найти «%s» в моих плейлистах", contexts: ["selection"] });
-  // Для правого клика по иконке Chrome ограничивает меню 6 пунктами верхнего
-  // уровня — укладываемся.
-  for (const [where, contexts, extra] of [
-    ["page", PAGE_CTX, { documentUrlPatterns: YT_PAGES }],
-    ["action", ["action"], {}],
-  ]) {
-    for (const [key, title] of TOGGLES) {
-      chrome.contextMenus.create({ id: `${key}@${where}`, title, type: "checkbox", checked: Boolean(s[key]), contexts, ...extra });
-    }
-    chrome.contextMenus.create({ id: `sep1@${where}`, type: "separator", contexts, ...extra });
-    chrome.contextMenus.create({ id: `panel@${where}`, title: "Сводка комментариев — открыть панель", contexts, ...extra });
-    chrome.contextMenus.create({ id: `clip@${where}`, title: "Вырезать клип из видео", contexts, ...extra });
-    // у иконки Chrome уже 6 пунктов (предел) — плейлисты только в меню страницы и по Alt+Shift+S
-    if (where === "page") {
-      chrome.contextMenus.create({ id: `playlists@${where}`, title: "Сохранить в плейлисты…", contexts, ...extra });
-      chrome.contextMenus.create({ id: `${libraryWhere === "panel" ? "librarypanel" : "library"}@${where}`, title: "Моя библиотека — поиск по плейлистам", contexts, ...extra });
-    }
-    // У иконки Chrome — не больше 6 пунктов верхнего уровня: превью там в подменю.
-    if (where === "action") {
-      chrome.contextMenus.create({ id: `thumb@${where}`, title: "Превью видео", contexts, ...extra });
-      chrome.contextMenus.create({ id: `preview@${where}`, parentId: `thumb@${where}`, title: "Открыть превью", contexts, ...extra });
-      chrome.contextMenus.create({ id: `download@${where}`, parentId: `thumb@${where}`, title: "Скачать превью", contexts, ...extra });
-    } else {
-      chrome.contextMenus.create({ id: `preview@${where}`, title: "Открыть превью видео", contexts, ...extra });
-      chrome.contextMenus.create({ id: `download@${where}`, title: "Скачать превью", contexts, ...extra });
-    }
+  const lib = libraryWhere === "panel" ? "librarypanel" : "library";
+  const mk = (id, title, contexts, extra = {}, more = {}) => chrome.contextMenus.create({ id, title, contexts, ...extra, ...more });
+
+  // Правый клик по иконке расширения. Chrome показывает здесь не больше 6 пунктов
+  // верхнего уровня — поэтому действия с видео и переключатели плеера в подменю.
+  const A = ["action"];
+  mk("panel@action", "Открыть сводку и комментарии", A);
+  mk(`${lib}@action`, "Моя библиотека", A);
+  mk("video@action", "Это видео", A);
+  mk("playlists@action", "Сохранить в плейлисты…", A, {}, { parentId: "video@action" });
+  mk("quicksave@action", "Сохранить в последний плейлист", A, {}, { parentId: "video@action" });
+  mk("defer@action", "Отложить в очередь", A, {}, { parentId: "video@action" });
+  chrome.contextMenus.create({ id: "sepv@action", type: "separator", contexts: A, parentId: "video@action" });
+  mk("clip@action", "Вырезать клип", A, {}, { parentId: "video@action" });
+  mk("preview@action", "Открыть превью", A, {}, { parentId: "video@action" });
+  mk("download@action", "Скачать превью", A, {}, { parentId: "video@action" });
+  mk("collect@action", "Собрать вкладки YouTube в очередь", A);
+  mk("player@action", "Плеер", A);
+  for (const [key, title] of TOGGLES) {
+    chrome.contextMenus.create({ id: `${key}@action`, title, type: "checkbox", checked: toggleOn(s, key), contexts: A, parentId: "player@action" });
   }
+
+  // Правый клик на странице YouTube — всё под значком расширения, без ограничений.
+  const P = PAGE_CTX;
+  const onYT = { documentUrlPatterns: YT_PAGES };
+  mk("panel@page", "Открыть сводку и комментарии", P, onYT);
+  mk(`${lib}@page`, "Моя библиотека", P, onYT);
+  chrome.contextMenus.create({ id: "sep0@page", type: "separator", contexts: P, ...onYT });
+  mk("playlists@page", "Сохранить в плейлисты…", P, onYT);
+  mk("quicksave@page", "Сохранить в последний плейлист", ["page", "video"], { documentUrlPatterns: ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*"] });
+  mk("clip@page", "Вырезать клип", P, onYT);
+  mk("preview@page", "Открыть превью", P, onYT);
+  mk("download@page", "Скачать превью", P, onYT);
   // Очередь «посмотреть потом»
   const WATCH_PAGES = ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*"];
   const VIDEO_LINKS = ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*", "https://youtu.be/*", "https://m.youtube.com/watch*"];
@@ -135,6 +147,11 @@ async function buildMenus() {
   chrome.contextMenus.create({ id: "defer@page", title: "Отложить видео в очередь", contexts: ["page", "video"], documentUrlPatterns: WATCH_PAGES });
   chrome.contextMenus.create({ id: "queueadd@link", title: "Добавить в очередь", contexts: ["link"], targetUrlPatterns: VIDEO_LINKS });
   chrome.contextMenus.create({ id: "collect@page", title: "Собрать вкладки YouTube в очередь", contexts: ["page", "video"], documentUrlPatterns: YT_PAGES });
+  // переключатели плеера — в конце, отдельной группой
+  chrome.contextMenus.create({ id: "sep1@page", type: "separator", contexts: P, ...onYT });
+  for (const [key, title] of TOGGLES) {
+    chrome.contextMenus.create({ id: `${key}@page`, title, type: "checkbox", checked: toggleOn(s, key), contexts: P, ...onYT });
+  }
 }
 
 // Галочки следуют за настройками, где бы их ни поменяли (панель или меню).
@@ -143,7 +160,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const s = changes.settings.newValue || {};
   for (const [key] of TOGGLES) {
     for (const where of ["page", "action"]) {
-      chrome.contextMenus.update(`${key}@${where}`, { checked: Boolean(s[key]) }).catch(() => {});
+      chrome.contextMenus.update(`${key}@${where}`, { checked: toggleOn(s, key) }).catch(() => {});
     }
   }
 });
@@ -239,6 +256,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   if (action === "library" || action === "librarypanel") {
     void openLibrary(info.selectionText || "", tab, "", { where: action === "librarypanel" ? "panel" : "tab" });
+    return;
+  }
+
+  if (action === "quicksave") {
+    if (tab?.id) {
+      const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:quicksave" }).catch(() => null);
+      if (!r?.ok) chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text: "Откройте видео на YouTube (или обновите страницу — F5)" }).catch(() => {});
+    }
     return;
   }
 
