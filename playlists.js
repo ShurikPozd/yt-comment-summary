@@ -409,16 +409,22 @@
     // где «часть видео» — какие именно, узнали при открытии (mine.per): лишний раз не добавляем и не убираем
     const per = mine.per;
     const isIn = (p, v) => (p.has === "all" ? true : p.has === "none" ? false : per.get(v).has(p.id));
+    // по плейлисту — одним запросом на пачку до 50 видео (одно видео — обычный edit)
     const jobs = [];
-    for (const p of ch) for (const v of videoIds) if (isIn(p, v) !== (p.want === "all")) jobs.push({ p, v, add: p.want === "all" });
+    for (const p of ch) {
+      const add = p.want === "all";
+      const vids = videoIds.filter((v) => isIn(p, v) !== add);
+      for (let i = 0; i < vids.length; i += 50) jobs.push({ p, vids: vids.slice(i, i + 50), add });
+    }
     const failed = new Set();
     let done = 0;
     for (const j of jobs) {
       done++;
-      if (ui === mine) setInfo(`Сохраняю… ${done} из ${jobs.length}`);
+      if (ui === mine) setInfo(jobs.length > 1 ? `Сохраняю… ${done} из ${jobs.length}` : "Сохраняю…");
       try {
-        await call("edit", { playlistId: j.p.id, videoId: j.v, add: j.add });
-        if (per) j.add ? per.get(j.v).add(j.p.id) : per.get(j.v).delete(j.p.id);
+        if (j.vids.length === 1) await call("edit", { playlistId: j.p.id, videoId: j.vids[0], add: j.add });
+        else await call("editMany", { playlistId: j.p.id, add: j.add ? j.vids : [], remove: j.add ? [] : j.vids }, 30000);
+        if (per) for (const v of j.vids) j.add ? per.get(v).add(j.p.id) : per.get(v).delete(j.p.id);
       } catch (e) {
         failed.add(j.p);
         // своя причина от YouTube — покажем её, а не «попробуйте ещё раз»
