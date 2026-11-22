@@ -53,6 +53,7 @@
 
       <nav id="tabs" class="tabs hidden" role="tablist" aria-label="Разделы">
         <button data-tab="summary" class="tab active" role="tab" aria-selected="true" aria-controls="view-summary">Сводка</button>
+        <button data-tab="video" class="tab" role="tab" aria-selected="false" aria-controls="view-video" title="Пересказ самого видео по субтитрам">О видео</button>
         <button data-tab="moments" class="tab" role="tab" aria-selected="false" aria-controls="view-moments">Моменты<span id="moments-badge" class="tab-badge hidden"></span></button>
         <button data-tab="topics" class="tab" role="tab" aria-selected="false" aria-controls="view-topics">Темы</button>
         <button data-tab="search" class="tab" role="tab" aria-selected="false" aria-controls="view-search">Поиск</button>
@@ -89,6 +90,10 @@
             </div>
           </section>
           <section id="insights" class="insights hidden"></section>
+        </div>
+
+        <div id="view-video" class="view">
+          <section id="tldr" class="ai-block tldr" aria-live="polite"></section>
         </div>
 
         <div id="view-moments" class="view">
@@ -253,7 +258,7 @@
               <span>Версия <b id="ver-badge">v?</b></span>
               <button id="btn-diag" class="link-btn" title="Показать, какие вкладки видит панель">диагностика</button>
             </div>
-            <div class="hint keys-hint">Клавиши: <kbd>1</kbd>–<kbd>5</kbd> — вкладки, <kbd>/</kbd> — поиск, <kbd>Esc</kbd> — выйти из поля.</div>
+            <div class="hint keys-hint">Клавиши: <kbd>1</kbd>–<kbd>6</kbd> — вкладки, <kbd>/</kbd> — поиск, <kbd>Esc</kbd> — выйти из поля.</div>
             <div id="diag-out" class="hidden"></div>
           </div>
         </div>
@@ -262,6 +267,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="../local-config.js"></script>
+    <script src="../transcript.js"></script>
     <script type="module" src="sidepanel.js"></script>
   </body>
 </html>

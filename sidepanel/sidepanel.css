@@ -3332,3 +3332,111 @@ button.primary.collecting:disabled {
     min-width: 0;
   }
 }
+
+/* ---------- «О видео»: пересказ по субтитрам ---------- */
+.tldr .tldr-about {
+  font-size: 14.5px;
+}
+
+.tldr .tldr-about.live {
+  animation: none;
+}
+
+.tldr-points {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -8px;
+}
+
+/* пункт — таймкод слева и текст во всю оставшуюся ширину, переносится */
+.tldr-row {
+  align-items: flex-start;
+  width: 100%;
+  padding: 7px 8px;
+}
+
+/* таймкоды одной ширины — текст пунктов начинается по одной линии
+   (ширину под самый длинный таймкод списка ставит video-tldr.js) */
+.tldr-row .tc-big {
+  min-width: var(--tc-w, 0);
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.tldr-row-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.tldr-actions {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tldr-progress {
+  margin: 0 0 12px;
+}
+
+.tldr-run .tldr-phase {
+  padding: 12px 8px 14px;
+}
+
+.tldr-cancel-row {
+  margin: -4px 0 12px;
+}
+
+.tldr .error-box + .empty-cta {
+  margin-top: 12px;
+}
+
+.tldr-prev {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 360px) {
+  .tldr-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Семь кнопок в ряд (с «О видео»): минимальные отступы вкладок небольшие —
+   на широкой панели они всё равно растягиваются на всю ширину (flex-grow),
+   а на узкой все вкладки и настройки помещаются без прокрутки. */
+.tab {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.tab.settings-tab {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+@media (max-width: 360px) {
+  .tabs {
+    gap: 0;
+    padding: 0 2px;
+  }
+
+  .tab {
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+
+  .tab.settings-tab {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
+
+@media (max-width: 340px) {
+  .tab-badge {
+    display: none;
+  }
+}
