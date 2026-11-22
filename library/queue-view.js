@@ -7,6 +7,7 @@ import { $, esc, nf, plural, state, videosWord } from "./state.js";
 import { ago, durOk, fmtLen, mark, more, update } from "./view-lib.js";
 import { openWatch, refreshWatchSide, watch, watchHere } from "./watch.js";
 import { wlCardHtml } from "./wl.js";
+import "./triage.js";
 
 // ---------- очередь «посмотреть потом» ----------
 export const qmsg = (msg) => chrome.runtime.sendMessage(msg).catch(() => null);
@@ -204,6 +205,7 @@ export function renderQueueSide() {
       <div><div class="q-num">${nf.format(started)}</div><div class="q-lbl">начато</div></div>
       <div><div class="q-num">${nf.format(shorts)}</div><div class="q-lbl">Shorts и до 1 мин</div></div>
     </div>` : ""}
+    ${q.length > 1 ? `<button type="button" class="ghost q-triage" data-act="triage" title="Видео по одному, крупно: ← убрать, → оставить, ↑ наверх">${icon("library", { size: 16 })}Разобрать завалы · ${nf.format(q.length)}</button>` : ""}
     <details class="q-card q-set" ${state.qSetOpen ?? !narrow() ? "open" : ""}>
       <summary class="q-h">Как работает очередь</summary>
       ${sw("removeWatched", "Убирать досмотренное", "Досмотрели до конца — видео само уходит из очереди")}

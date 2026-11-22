@@ -1643,6 +1643,282 @@ body[data-watch] .body {
   }
 }
 
+/* ---------- «Разобрать завалы» ---------- */
+body[data-triage] .filters,
+body[data-triage] .body,
+body[data-triage] .watch {
+  display: none;
+}
+
+.triage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(100vh - 3.2rem - 33px);
+  padding: 18px var(--pad) 32px;
+}
+
+.t-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.t-ttl {
+  flex: 1;
+  min-width: 0;
+}
+
+.t-ttl b {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.t-ttl span {
+  color: var(--muted);
+}
+
+.t-order {
+  margin-left: 0;
+}
+
+.t-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.t-progress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--t) var(--ease);
+}
+
+.t-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.t-card {
+  width: min(100%, calc((100vh - 3.2rem - 33px - 330px) * 16 / 9), 1100px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+.t-thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-l);
+  overflow: hidden;
+  background: var(--bg-3);
+  box-shadow: var(--shadow);
+}
+
+.t-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.t-thumb .dur {
+  font-size: 0.95rem;
+  right: 12px;
+  bottom: 12px;
+}
+
+.t-thumb .prog {
+  height: 6px;
+}
+
+.t-info h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.3;
+}
+
+.t-facts {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.t-card.in-from-right {
+  animation: t-in-right 0.26s var(--ease);
+}
+
+.t-card.in-from-left {
+  animation: t-in-left 0.26s var(--ease);
+}
+
+.t-card.in-from-bottom {
+  animation: t-in-bottom 0.26s var(--ease);
+}
+
+@keyframes t-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(60px) rotate(1.5deg);
+  }
+}
+
+@keyframes t-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-60px) rotate(-1.5deg);
+  }
+}
+
+@keyframes t-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+.t-acts {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.t-btn {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  justify-items: start;
+  min-width: 9.5rem;
+  padding: 12px 18px;
+  border-radius: var(--r-l);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: 1.05rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, transform 0.1s ease-out, border-color var(--t-fast) ease;
+}
+
+.t-btn svg {
+  grid-row: 1 / 3;
+}
+
+.t-btn kbd {
+  color: var(--muted);
+  font: 500 0.8rem "Segoe UI", Roboto, sans-serif;
+}
+
+.t-btn:hover {
+  background: var(--bg-hover);
+}
+
+.t-btn:active {
+  transform: scale(0.97);
+}
+
+.t-btn.del:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.t-btn.keep {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.t-btn.keep kbd {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.t-btn.keep:hover {
+  background: var(--accent-hover);
+}
+
+.t-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.t-undo:hover {
+  color: var(--fg);
+}
+
+.t-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.t-next img {
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  opacity: 0.75;
+}
+
+.t-done {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.q-triage {
+  justify-content: center;
+}
+
+/* колонка очереди прокручивается — карточки и кнопки не сжимаются */
+.q-side > * {
+  flex: none;
+}
+
+/* ---------- карточки колонки очереди — по центру ---------- */
+.q-stats > div {
+  text-align: center;
+}
+
+.q-wl,
+.q-undo {
+  text-align: center;
+  align-items: stretch;
+}
+
+@media (max-width: 640px) {
+  .t-ttl {
+    flex-basis: 100%;
+  }
+  .t-btn {
+    min-width: 0;
+    flex: 1 1 40%;
+  }
+  .t-next {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
