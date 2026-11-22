@@ -16,6 +16,11 @@ async function load(base) {
     const { pipeline, env } = await import("../vendor/transformers/transformers.min.js");
     env.allowLocalModels = false;
     env.useBrowserCache = true; // модель — в кеш браузера, второй раз без сети
+    // без кеша загрузчика ONNX: Transformers.js подключает его через blob:-адрес, а правила
+    // безопасности страниц расширения (CSP: только 'self') такие адреса запрещают —
+    // «no available backend found … Failed to fetch dynamically imported module: blob:…».
+    // Загрузчик и wasm берутся прямо из vendor/transformers (свои файлы, без сети).
+    env.useWasmCache = false;
     env.backends.onnx.wasm.wasmPaths = { mjs: base + "ort-wasm-simd-threaded.asyncify.mjs", wasm: base + "ort-wasm-simd-threaded.asyncify.wasm" };
     env.backends.onnx.wasm.numThreads = 1; // многопоточность требует изоляции страницы — с ней не работал бы встроенный плеер
     const parts = new Map();
