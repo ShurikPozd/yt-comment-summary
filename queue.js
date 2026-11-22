@@ -154,10 +154,11 @@
   }
   // Раскладка под размер плеера: сколько колонок и какой ширины карточки, чтобы
   // всё влезло без обрезки. Места совсем мало — показываем меньше видео, но крупно.
-  function offerLayout(pw, ph, n) {
+  function offerLayout(pw, ph, n, withAbout = false) {
     const pad = Math.max(14, Math.round(Math.min(pw, ph) * 0.05));
     const head = pw < 520 ? 44 : 56;
-    const text = pw < 520 ? 44 : 60;
+    // под названием — строка «о чём» из готового пересказа (если есть): закладываем место
+    const text = pw < 520 ? 44 : withAbout ? 100 : 60;
     const gap = pw < 520 ? 10 : 16;
     for (let count = n; count >= 1; count--) {
       const all = [];
@@ -186,12 +187,35 @@
   }
   let offerItems = null;
   let offerResize = null;
-  function offer(items) {
+  let offerAbout = {};
+  // «О чём» — первая фраза уже готового пересказа (окно «О чём видео» или вкладка «О видео»),
+  // ничего нового не запрашиваем
+  const firstSentence = (t) => {
+    const s = String(t || "").replace(/\s+/g, " ").trim();
+    const m = s.match(/^.{20,220}?[.!?…](?=\s|$)/);
+    return m ? m[0] : s.slice(0, 200);
+  };
+  async function offer(items) {
+    offerAbout = {};
+    try {
+      const keys = (items || []).map((r) => `tldr:${r.id}`);
+      const got = keys.length ? await chrome.storage.local.get(keys) : {};
+      for (const r of items || []) {
+        const about = got[`tldr:${r.id}`]?.about;
+        if (about) offerAbout[r.id] = firstSentence(about);
+      }
+    } catch (e) {
+      /* расширение обновилось — без строк «о чём» */
+    }
+    drawOffer(items);
+  }
+  function drawOffer(items) {
     hideOffer();
     const player = document.querySelector("#movie_player");
     if (!items?.length || !player) return;
     offerItems = items;
-    const L = offerLayout(player.clientWidth || 640, player.clientHeight || 360, items.length);
+    const pw = player.clientWidth || 640;
+    const L = offerLayout(pw, player.clientHeight || 360, items.length, pw >= 520 && items.some((r) => offerAbout[r.id]));
     const cols = L.cols;
     items = items.slice(0, L.count);
     offerPageStyle();
@@ -222,6 +246,8 @@
       .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: #ff0033; }
       .c b { display: -webkit-box; -webkit-line-clamp: ${L.small ? 1 : 2}; -webkit-box-orient: vertical; overflow: hidden; font: 500 ${L.w < 200 ? 13 : 15}px/1.35 Roboto, Arial, sans-serif; }
       .c span.s { color: #aaa; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
+      .c span.ab { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: #d0d0d6;
+        font: 400 ${L.w < 200 ? 12 : 13}px/1.4 Roboto, Arial, sans-serif; padding-left: 8px; border-left: 2px solid #ff3b5c; }
       @keyframes in { from { opacity: 0; } }
       @media (prefers-reduced-motion: reduce) { .o { animation: none; } .th { transition: none; } }
     </style>
@@ -234,7 +260,7 @@
           const sub = [r.channel, r.len ? (p > 5 ? `осталось ${fmtDur(left(r))}` : "") : r.short ? "Shorts" : ""].filter(Boolean).join(" · ");
           return `<button class="c" data-go="${esc(r.id)}" title="${esc(r.title)}">
             <span class="th"><img alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/mqdefault.jpg">${r.len ? `<span class="d">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}</span>
-            <b>${esc(r.title || "Видео")}</b>${sub ? `<span class="s">${esc(sub)}</span>` : ""}
+            <b>${esc(r.title || "Видео")}</b>${sub ? `<span class="s">${esc(sub)}</span>` : ""}${!L.small && offerAbout[r.id] ? `<span class="ab" title="${esc(offerAbout[r.id])}">${esc(offerAbout[r.id])}</span>` : ""}
           </button>`;
         })
         .join("")}</div>
@@ -255,7 +281,7 @@
       const now = `${player.clientWidth}x${player.clientHeight}`;
       if (now !== last && offerHost) {
         last = now;
-        offer(offerItems);
+        drawOffer(offerItems);
       }
     });
     offerResize.observe(player);
