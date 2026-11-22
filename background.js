@@ -13,8 +13,30 @@ async function cleanupLocalCache() {
   }
 }
 
+// Встроенный плеер YouTube на странице расширения: Chrome не шлёт Referer со
+// страниц расширений, и YouTube отвечает «Ошибка 153». Правило ставит Referer
+// только запросам к youtube.com/embed и только с наших страниц.
+async function setupEmbedReferer() {
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [1],
+      addRules: [
+        {
+          id: 1,
+          priority: 1,
+          action: { type: "modifyHeaders", requestHeaders: [{ header: "referer", operation: "set", value: `https://${chrome.runtime.id}.chromiumapp.org/` }] },
+          condition: { urlFilter: "||youtube.com/embed/", resourceTypes: ["sub_frame"], initiatorDomains: [chrome.runtime.id] },
+        },
+      ],
+    });
+  } catch (e) {
+    console.warn("embed referer:", e);
+  }
+}
+
 function setup() {
   void cleanupLocalCache();
+  void setupEmbedReferer();
   chrome.storage.session
     .setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" })
     .catch((e) => console.error("setAccessLevel:", e));

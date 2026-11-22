@@ -381,20 +381,31 @@
     .ctl .done:hover:not(:disabled) { background: #272727; }
     :host([dark]) .ctl .done:hover:not(:disabled) { background: #d9d9d9; }
     button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-    .list { max-height: 380px; overflow: auto; overscroll-behavior: contain; padding: 0 8px 8px; scrollbar-width: thin; }
-    .row { display: grid; grid-template-columns: 120px minmax(0,1fr); gap: 10px; align-items: start; width: 100%; padding: 6px 8px;
-      border: 0; border-radius: 10px; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+    /* галерея: текущее — крупно на всю ширину, остальные — плиткой в две колонки */
+    .list { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-height: min(640px, 70vh); overflow: auto;
+      overscroll-behavior: contain; padding: 0 8px 10px; scrollbar-width: thin; }
+    .row { display: flex; flex-direction: column; gap: 7px; min-width: 0; width: 100%; padding: 6px; border: 0; border-radius: 12px;
+      background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; transition: background-color .15s ease; }
     .row:hover { background: rgba(0,0,0,.05); }
     :host([dark]) .row:hover { background: rgba(255,255,255,.1); }
-    .row.cur { background: rgba(255,59,92,.12); }
-    .th { position: relative; width: 120px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: rgba(127,127,127,.2); }
-    .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: #ff0033; }
-    .now { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff;
+    .row.hero { grid-column: 1 / -1; padding: 8px; }
+    .cur-line { display: flex; align-items: center; gap: 10px; margin: 0 16px 10px; padding: 9px 12px; border-radius: 10px;
+      background: rgba(255,59,92,.1); min-width: 0; }
+    .cur-line span { flex: none; padding: 2px 8px; border-radius: 999px; background: #ff0033; color: #fff; font: 500 12px Roboto, Arial, sans-serif; }
+    .cur-line b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px Roboto, Arial, sans-serif; }
+    .th { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: rgba(127,127,127,.2); }
+    .th img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease-out; }
+    .row:hover .th img { transform: scale(1.04); }
+    .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: #ff0033; }
+    .len { position: absolute; right: 6px; bottom: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(0,0,0,.8); color: #fff;
       font: 500 12px Roboto, Arial, sans-serif; }
-    .rt { min-width: 0; }
+    .now { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; background: #ff0033; color: #fff;
+      font: 500 12px Roboto, Arial, sans-serif; }
+    .rt { min-width: 0; padding: 0 2px; }
     .rt b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 500 14px/1.35 Roboto, Arial, sans-serif; }
+    .row.hero .rt b { font-size: 16px; }
     .rt span { display: block; margin-top: 3px; color: #606060; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (prefers-reduced-motion: reduce) { .th img { transition: none; } }
     :host([dark]) .rt span { color: #aaa; }
     .note { margin: 0 16px 12px; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.05); display: flex; align-items: center; gap: 10px; }
     :host([dark]) .note { background: rgba(255,255,255,.08); }
@@ -441,15 +452,15 @@
     const leftAll = queue.reduce((a, r) => a + left(r), 0);
     const prev = i > 0 ? queue[i - 1] : null;
     const next = i >= 0 ? queue[i + 1] || null : queue[0] || null;
-    // ближайшие: пара предыдущих, текущее и следующие
-    const from = Math.max(0, (i < 0 ? 0 : i) - 2);
-    const rows = queue.slice(from, from + 40);
-    const row = (r) => {
+    // галерея — что дальше: следующее крупно, остальные плиткой (текущее — строкой выше)
+    const rows = (i >= 0 ? queue.slice(i + 1) : queue.filter((x) => x.id !== id)).slice(0, 40);
+    const curRec = i >= 0 ? queue[i] : null;
+    const row = (r, k) => {
       const p = pos[r.id] || 0;
       const pct = r.len ? Math.min(100, Math.round((p / r.len) * 100)) : 0;
-      const sub = [r.channel, r.len ? (p > 5 ? `осталось ${fmtDur(left(r))}` : fmtDur(r.len)) : r.short ? "Shorts" : ""].filter(Boolean).join(" · ");
-      return `<button class="row${r.id === id ? " cur" : ""}" data-go="${esc(r.id)}" title="${esc(r.title)}">
-        <span class="th"><img loading="lazy" alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/mqdefault.jpg">${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${r.id === id ? `<span class="now">Сейчас</span>` : ""}</span>
+      const sub = [r.channel, r.len && p > 5 ? `осталось ${fmtDur(left(r))}` : r.short ? "Shorts" : ""].filter(Boolean).join(" · ");
+      return `<button class="row${k === 0 ? " hero" : ""}" data-go="${esc(r.id)}" title="${esc(r.title)}">
+        <span class="th"><img loading="lazy" alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/${k === 0 ? "hqdefault" : "mqdefault"}.jpg">${r.len ? `<span class="len">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${k === 0 ? `<span class="now">Дальше</span>` : ""}</span>
         <span class="rt"><b>${esc(r.title || "Видео")}</b><span>${esc(sub)}</span></span>
       </button>`;
     };
@@ -466,12 +477,12 @@
           <button class="done" data-act="done" ${i >= 0 ? "" : "disabled"} title="Досмотрел: убрать из очереди и дальше — Shift+]">${svg("check")}Досмотрел</button>
           <button data-act="next" ${next ? "" : "disabled"} title="Следующее в очереди — клавиша ]">Дальше${svg("next")}</button>
         </div>
+        ${curRec ? `<div class="cur-line"><span>Сейчас</span><b title="${esc(curRec.title)}">${esc(curRec.title || "Видео")}</b></div>` : ""}
         <div class="list">${rows.map(row).join("")}</div>
       </div>`;
     const list = host.shadowRoot.querySelector(".list");
-    const cur = host.shadowRoot.querySelector(".row.cur");
-    if (list && cur && host.dataset.cur !== id) list.scrollTop = Math.max(0, cur.offsetTop - list.offsetTop - 8);
-    else if (list) list.scrollTop = keepScroll;
+    // новое видео — галерея с начала; то же — оставляем, где листали
+    if (list) list.scrollTop = host.dataset.cur !== id ? 0 : keepScroll;
     host.dataset.cur = id;
   }
 
