@@ -2,7 +2,7 @@
 // («что приготовить утром» → «Шакшука на завтрак», «learn english» → «Present Simple»).
 //
 // Модель paraphrase-multilingual-MiniLM-L12-v2 (русский, английский и ещё 50 языков)
-// работает прямо в браузере через Transformers.js (vendor/transformers): один раз
+// работает прямо в браузере через Transformers.js (vendor/transformers) в отдельном потоке: один раз
 // скачивается с Hugging Face (~120 МБ, кладётся в кеш браузера), дальше — без сети.
 // Названия видео «читаются» один раз (вектор на видео) и хранятся в IndexedDB
 // сжатыми до 8 бит; новые видео дочитываются после обновления каталога.
@@ -24,7 +24,6 @@ export const sem = {
   error: "",
   qvec: null, // { q, v } — вектор текущего запроса
 };
-let fe = null;
 let index = null; // { dim, rows: Map(id → row), keys: [], vec: Int8Array, scale: Float32Array }
 let listeners = [];
 export const onSem = (f) => listeners.push(f);
@@ -38,37 +37,52 @@ const docKey = (v) => {
   return h;
 };
 
-async function loadModel() {
-  if (fe) return fe;
-  const { pipeline, env } = await import("../vendor/transformers/transformers.min.js");
-  env.allowLocalModels = false;
-  env.useBrowserCache = true; // модель — в кеш браузера, второй раз без сети
-  const base = chrome.runtime.getURL("vendor/transformers/");
-  env.backends.onnx.wasm.wasmPaths = { mjs: base + "ort-wasm-simd-threaded.asyncify.mjs", wasm: base + "ort-wasm-simd-threaded.asyncify.wasm" };
-  env.backends.onnx.wasm.numThreads = 1; // многопоточность требует изоляции страницы — с ней не работал бы встроенный плеер
-  const parts = new Map();
-  fe = await pipeline("feature-extraction", MODEL, {
-    dtype: "q8",
-    device: "wasm",
-    progress_callback: (p) => {
-      if (p.status !== "progress" || !p.total) return;
-      parts.set(p.file, [p.loaded, p.total]);
-      let a = 0;
-      let b = 0;
-      for (const [x, y] of parts.values()) {
-        a += x;
-        b += y;
+// Модель живёт в отдельном потоке (sem-worker.js) — страница не подвисает, пока она читает названия.
+let worker = null;
+let ready = false;
+let seq = 0;
+const waiting = new Map();
+const BASE = chrome.runtime.getURL("vendor/transformers/");
+
+function call(msg, transfer) {
+  if (!worker) {
+    worker = new Worker(new URL("./sem-worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = (e) => {
+      const m = e.data || {};
+      if (m.type === "progress") {
+        sem.dl = m.pct;
+        emit();
+        return;
       }
-      sem.dl = Math.round((a / b) * 100);
-      emit();
-    },
+      const w = waiting.get(m.id);
+      if (!w) return;
+      waiting.delete(m.id);
+      if (m.ok) w.resolve(m);
+      else w.reject(new Error(m.error || "ошибка модели"));
+    };
+    worker.onerror = (e) => {
+      for (const w of waiting.values()) w.reject(new Error(e.message || "поток модели остановился"));
+      waiting.clear();
+      worker = null;
+      ready = false;
+    };
+  }
+  const id = ++seq;
+  return new Promise((resolve, reject) => {
+    waiting.set(id, { resolve, reject });
+    worker.postMessage({ ...msg, id, base: BASE }, transfer || []);
   });
-  return fe;
+}
+
+async function loadModel() {
+  if (ready) return;
+  await call({ type: "init" });
+  ready = true;
 }
 
 async function embed(texts) {
-  const out = await (await loadModel())(texts, { pooling: "mean", normalize: true });
-  return { data: out.data, dim: out.dims[1] };
+  const r = await call({ type: "embed", texts });
+  return { data: r.data, dim: r.dim };
 }
 
 function quantize(vec, dim, n) {
@@ -102,7 +116,7 @@ export async function ensureIndex() {
   if (!state.cat || sem.status === "loading" || sem.status === "indexing") return;
   sem.error = "";
   try {
-    if (!fe) {
+    if (!ready) {
       sem.status = "loading";
       emit();
       await loadModel();
@@ -154,7 +168,6 @@ export async function ensureIndex() {
           await saveIndex(); // прервали на середине — продолжим с этого места
           lastSave = Date.now();
         }
-        await new Promise((r) => setTimeout(r, 0)); // страница не замирает
       }
       await saveIndex();
     }
