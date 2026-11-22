@@ -197,7 +197,7 @@ function emptyHtml(ic, title, text, btn = "") {
 }
 
 const goBtn = (label) =>
-  `<button type="button" class="primary tt-go" data-tt="go">${icon("subtitles", { size: 18 })}${esc(label)}<kbd>Пробел</kbd></button>`;
+  `<button type="button" class="primary tt-go" data-tt="go">${icon("subtitles", { size: 18 })}${esc(label)}<kbd class="key">Пробел</kbd></button>`;
 
 function head(right = "") {
   return `<div class="tt-head"><span class="tt-kicker">${icon("subtitles", { size: 16 })}О чём видео</span>${right}</div>`;
