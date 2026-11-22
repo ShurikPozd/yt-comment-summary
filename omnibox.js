@@ -109,6 +109,32 @@ export function setupOmnibox({ openLibrary }) {
     run.catch(() => {});
   });
 
+  // Яндекс Браузер (и другие на Chromium) по Enter сами открывают корень расширения
+  // «chrome-extension://<id>/?q=…» — такой страницы нет («Файл недоступен»).
+  // Подхватываем этот адрес и превращаем вкладку в библиотеку с тем же запросом.
+  const root = chrome.runtime.getURL("");
+  chrome.tabs.onUpdated.addListener((tabId, info) => {
+    const url = info.url || "";
+    if (!url.startsWith(root)) return;
+    let u;
+    try {
+      u = new URL(url);
+    } catch (e) {
+      return;
+    }
+    if (u.pathname !== "/" && u.pathname !== "") return;
+    const inp = parseInput(u.searchParams.get("q") || "");
+    const next =
+      inp.kind === "video"
+        ? null
+        : libraryUrl(inp.kind === "search" ? inp.q : "", inp.kind === "queue" ? "queue" : "");
+    if (inp.kind === "video") {
+      void getData()
+        .then((data) => chrome.tabs.update(tabId, { url: videoUrl(data?.byId.get(inp.id) || { id: inp.id }) }))
+        .catch(() => {});
+    } else void chrome.tabs.update(tabId, { url: next }).catch(() => {});
+  });
+
   // ввод бросили — вернуть первую строку к началу
   chrome.omnibox.onInputCancelled.addListener(() => {
     chrome.omnibox.setDefaultSuggestion({ description: suggest(null, "").head });
