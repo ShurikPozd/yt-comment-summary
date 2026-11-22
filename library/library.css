@@ -85,6 +85,23 @@
 
 * {
   box-sizing: border-box;
+  /* скроллбары — тонкие, в цвет расширения (как в боковой панели) */
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-hover) transparent;
+}
+
+/* ленты кнопок, которые листаются вбок (колесом мыши тоже): затухание у края */
+.h-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+.h-scroll.at-end {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 html,
@@ -785,8 +802,16 @@ mark {
   .pl-list {
     flex-direction: row;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     gap: 8px;
-    padding-bottom: 6px;
+    padding-bottom: 2px;
+  }
+  .pl-list.at-end {
+    -webkit-mask-image: none;
+    mask-image: none;
   }
   .pl {
     grid-template-columns: auto auto;
@@ -818,7 +843,10 @@ mark {
     grid-row: auto;
     flex-wrap: nowrap;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     margin: 0 calc(var(--pad) * -1);
     padding: 0 var(--pad);
   }

@@ -696,14 +696,16 @@ button.primary.busy::after {
 }
 
 /* кнопки равной ширины во всю панель: рядом, если влезают, иначе столбиком */
+/* кнопки растягиваются по строке: одиночная последняя — на всю ширину, без пустоты */
 .empty-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 16px 24px;
 }
 
 .empty-actions button {
+  flex: 1 1 190px;
   justify-content: center;
 }
 

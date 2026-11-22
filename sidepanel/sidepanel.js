@@ -41,6 +41,25 @@ const LOCAL_CONFIG =
 
 const $ = (id) => document.getElementById(id);
 
+// Ряды, которые листаются вбок (вкладки, чипы фильтров): колесо мыши листает
+// их влево-вправо — как в «Моей библиотеке».
+document.addEventListener(
+  "wheel",
+  (e) => {
+    if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+      if (el.scrollWidth <= el.clientWidth + 1) continue;
+      const ox = getComputedStyle(el).overflowX;
+      if (ox !== "auto" && ox !== "scroll") continue;
+      const before = el.scrollLeft;
+      el.scrollLeft += e.deltaY;
+      if (el.scrollLeft !== before) e.preventDefault();
+      return;
+    }
+  },
+  { passive: false }
+);
+
 // Страница с видео на YouTube. Раньше регулярка требовала обязательный префикс
 // www./m. и знала только /watch и /shorts — из-за этого валидная вкладка могла
 // не найтись и панель молча показывала «видео не найдено».

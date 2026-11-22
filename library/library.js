@@ -201,6 +201,33 @@ if (EMBED) {
 }
 setupWhere();
 
+// Ленты, которые листаются вбок (чипы длины, плейлисты в узком окне): колесо мыши
+// листает их влево-вправо, а затухание у края пропадает, когда долистали до конца.
+document.addEventListener(
+  "wheel",
+  (e) => {
+    if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+      if (el.scrollWidth <= el.clientWidth + 1) continue;
+      const ox = getComputedStyle(el).overflowX;
+      if (ox !== "auto" && ox !== "scroll") continue;
+      const before = el.scrollLeft;
+      el.scrollLeft += e.deltaY;
+      if (el.scrollLeft !== before) e.preventDefault(); // докрутили до края — дальше листается страница
+      return;
+    }
+  },
+  { passive: false }
+);
+document.addEventListener(
+  "scroll",
+  (e) => {
+    const el = e.target;
+    if (el instanceof Element && el.scrollWidth > el.clientWidth) el.classList.toggle("at-end", el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
+  },
+  true
+);
+
 // иконки из общего набора расширения
 for (const el of document.querySelectorAll("[data-icon]")) el.innerHTML = icon(el.dataset.icon, { size: Number(el.dataset.size) || 16 });
 

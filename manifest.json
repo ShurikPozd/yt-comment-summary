@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "ИИ-сводка комментариев YouTube, поиск по всем плейлистам, очередь вместо сотен вкладок, клипы из видео и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -149,5 +149,8 @@
     "defer-video": {
       "description": "Отложить это видео в очередь (и закрыть вкладку)"
     }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   }
 }
