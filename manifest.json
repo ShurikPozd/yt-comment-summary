@@ -55,6 +55,7 @@
         "https://m.youtube.com/*"
       ],
       "js": [
+        "transcript.js",
         "content.js",
         "clip.js",
         "playlists.js",
@@ -87,6 +88,7 @@
         "https://www.youtube.com/embed/*"
       ],
       "js": [
+        "transcript.js",
         "content.js",
         "sponsor.js"
       ],

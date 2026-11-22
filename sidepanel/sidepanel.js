@@ -33,6 +33,7 @@ import { DEFAULTS } from "../config.js";
 import { icon, hydrateIcons } from "./icons.js";
 import { renderSummaryCard } from "./card.js";
 import { initSelfCheckUI } from "./selfcheck-ui.js";
+import { initVideoTldr, renderVideoTldr } from "./video-tldr.js";
 
 hydrateIcons();
 
@@ -1072,6 +1073,7 @@ async function loadFor(videoId) {
   }
   renderHeader();
   renderBottomMatters();
+  if (switched) void renderVideoTldr();
   const st = obj[`collect:${videoId}`];
   updateCollectStatus(st?.status, st?.fetched, st?.max, st?.error || null, st?.stopped);
   // loadFor зовётся и на каждый фокус панели: перерисовываем, только если
@@ -1237,7 +1239,7 @@ function humanCollectError(error) {
 
 // ---------------- Вкладки ----------------
 
-const TAB_ORDER = ["summary", "moments", "topics", "search", "comments", "settings"];
+const TAB_ORDER = ["summary", "video", "moments", "topics", "search", "comments", "settings"];
 let currentTab = "summary";
 
 function setTab(name) {
@@ -1265,6 +1267,7 @@ function setTab(name) {
     renderInsights();
   }
   if (name === "moments") renderMoments();
+  if (name === "video") void renderVideoTldr();
   if (name === "comments") renderComments();
   if (name === "search") renderSearchResults();
   if (name === "settings") {
@@ -3404,7 +3407,7 @@ function bindEvents() {
       return;
     }
     if (!state.videoId) return;
-    const tabs = ["summary", "moments", "topics", "search", "comments"];
+    const tabs = ["summary", "video", "moments", "topics", "search", "comments"];
     const n = Number(e.key);
     if (n >= 1 && n <= tabs.length) {
       setTab(tabs[n - 1]);
@@ -3479,6 +3482,24 @@ async function main() {
       fillSettingsFields();
       setTab("settings");
     },
+  });
+  // «О видео»: пересказ по субтитрам — общий с анализом клиент и бюджет лимитов Groq
+  initVideoTldr({
+    proxy,
+    getState: () => state,
+    paceRequest,
+    settleOutput,
+    pushBudgetAfterOutputError,
+    retryAfterMs,
+    isOutputLimitError,
+    isRateLimitError,
+    isSizeLimitError,
+    friendlyError,
+    findActiveVideoTab,
+    seekTo,
+    showToast,
+    setTab,
+    esc,
   });
   chrome.runtime.onMessage.addListener(onRuntimeMessage);
   // Переключатели плеера могут поменять из контекстного меню — держим панель

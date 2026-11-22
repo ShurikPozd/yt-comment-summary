@@ -597,6 +597,104 @@
     return { replies, next };
   }
 
+  // ---------------- Расшифровка видео («О видео») ----------------
+  // Основной путь — youtubei/v1/get_panel (transcript.js, без DOM: работает и во
+  // встроенном плеере библиотеки). Запасные — только на странице видео:
+  // timedtext из данных плеера (если YouTube отдаст его без PO-токена) и
+  // родная панель «Расшифровка видео».
+
+  // captionTracks из inline-данных страницы — только при первой загрузке
+  // этого видео (после SPA-перехода там данные прошлого ролика).
+  function inlineCaptionTracks(id) {
+    for (const s of document.scripts) {
+      const t = s.textContent;
+      if (!t || !t.includes("captionTracks") || !t.includes(id)) continue;
+      const m = t.match(/"captionTracks":(\[.*?\])\s*,\s*"audioTracks"/s);
+      if (!m) continue;
+      try {
+        const tracks = JSON.parse(m[1]);
+        if (tracks.some((x) => String(x.baseUrl || "").includes(`v=${id}`))) return tracks;
+      } catch (e) {
+        /* не JSON — пропускаем */
+      }
+    }
+    return [];
+  }
+
+  async function transcriptFromTimedtext(id) {
+    const tracks = inlineCaptionTracks(id);
+    if (!tracks.length) return null;
+    // ручная дорожка раньше автоматической
+    const track = tracks.find((x) => x.kind !== "asr") || tracks[0];
+    const url = new URL(track.baseUrl, location.origin);
+    url.searchParams.set("fmt", "json3");
+    const resp = await fetch(url.href, { credentials: "include" });
+    const body = await resp.text();
+    if (!resp.ok || !body.trim()) return null; // без PO-токена YouTube отдаёт пустоту
+    const data = JSON.parse(body);
+    const segments = [];
+    for (const ev of data.events || []) {
+      const text = (ev.segs || [])
+        .map((s) => s.utf8 || "")
+        .join("")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text) segments.push({ t: Math.floor((ev.tStartMs || 0) / 1000), text });
+    }
+    return segments.length ? { segments, chapters: [], source: "timedtext" } : null;
+  }
+
+  async function transcriptFromDom(id) {
+    if (OUR_EMBED || location.pathname !== "/watch" || videoIdFromUrl() !== id) return null;
+    const read = () => [...document.querySelectorAll("transcript-segment-view-model, ytd-transcript-segment-renderer")];
+    let nodes = read();
+    let opened = null;
+    if (!nodes.length) {
+      // кнопки «Показать расшифровку» нет — значит, у видео нет субтитров
+      const btn = document.querySelector("ytd-video-description-transcript-section-renderer button");
+      if (!btn) return null;
+      btn.click();
+      opened = true;
+      for (let i = 0; i < 40 && !(nodes = read()).length; i++) await sleep(250);
+    }
+    const segments = [];
+    for (const n of nodes) {
+      const ts =
+        n.querySelector(".segment-timestamp")?.textContent ||
+        n.querySelector('[aria-hidden="true"]')?.textContent ||
+        "";
+      const text = (n.querySelector(".segment-text, span[role='text']")?.textContent || "").replace(/\s+/g, " ").trim();
+      const t = globalThis.__ytcsTranscript?.hmsToSec(ts);
+      if (text && Number.isFinite(t)) segments.push({ t, text });
+    }
+    if (opened) {
+      const panel = nodes[0]?.closest("ytd-engagement-panel-section-list-renderer");
+      panel?.querySelector("#visibility-button button, #visibility-button yt-button-shape button")?.click();
+    }
+    return segments.length ? { segments, chapters: [], source: "dom" } : null;
+  }
+
+  async function getTranscript(id) {
+    let main = null;
+    let mainErr = null;
+    try {
+      main = await globalThis.__ytcsTranscript.fetchTranscript(id, { clientVersion: innerTubeConfig().version });
+      if (main.segments.length || main.noiseOnly) return main;
+    } catch (e) {
+      mainErr = e;
+    }
+    for (const fallback of [transcriptFromTimedtext, transcriptFromDom]) {
+      try {
+        const r = await fallback(id);
+        if (r?.segments.length) return r;
+      } catch (e) {
+        console.warn("[ytcs] запасной путь расшифровки:", e);
+      }
+    }
+    if (mainErr) throw mainErr;
+    return main; // пусто — субтитров у видео нет
+  }
+
   function decodeBase64Url(s) {
     try {
       const b64 = String(s).replace(/-/g, "+").replace(/_/g, "/");
@@ -1472,6 +1570,18 @@
         }
         fetchReplies(msg.token)
           .then((r) => sendResponse({ ok: true, ...r }))
+          .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true; // ответ асинхронный
+      }
+      case "yt:transcript": {
+        // расшифровка для вкладки «О видео»; только своего видео
+        const id = videoIdFromUrl();
+        if (!id || (msg.videoId && msg.videoId !== id) || !globalThis.__ytcsTranscript) {
+          sendResponse({ ok: false, error: "other-video" });
+          return false;
+        }
+        getTranscript(id)
+          .then((r) => sendResponse({ ok: true, videoId: id, ...r }))
           .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
         return true; // ответ асинхронный
       }
