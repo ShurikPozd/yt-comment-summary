@@ -323,6 +323,55 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// ---------------- Рекламные вставки (SponsorBlock) ----------------
+// Открытая бесплатная база сообщества SponsorBlock (sponsor.ajay.app, данные —
+// CC BY-NC-SA 4.0). Спрашиваем приватно: по первым 4 символам sha256 от id
+// видео — сервер отдаёт сегменты всех видео с таким префиксом и не узнаёт,
+// какое из них вы смотрите. Ответ кэшируем в session (до закрытия браузера,
+// но не дольше SB_TTL — сообщество размечает свежие видео постепенно).
+const SB_CATS = ["sponsor", "selfpromo", "interaction", "intro", "outro", "preview", "music_offtopic", "filler"];
+const SB_TTL = 2 * 60 * 60 * 1000;
+const SB_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+async function sbSegments(videoId) {
+  const key = `sb:${videoId}`;
+  try {
+    const hit = (await chrome.storage.session.get(key))[key];
+    if (hit && Date.now() - hit.at < SB_TTL) return hit.segments;
+  } catch (e) {
+    /* без кэша */
+  }
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(videoId))), (b) => b.toString(16).padStart(2, "0")).join("");
+  const url = `https://sponsor.ajay.app/api/skipSegments/${hash.slice(0, 4)}?categories=${encodeURIComponent(JSON.stringify(SB_CATS))}`;
+  const r = await fetch(url, { credentials: "omit", cache: "no-store" });
+  let segments = [];
+  if (r.ok) {
+    const list = await r.json();
+    const mine = Array.isArray(list) ? list.find((v) => v?.videoID === videoId) : null;
+    segments = (mine?.segments || [])
+      .filter((s) => s?.actionType === "skip" && SB_CATS.includes(s.category) && Array.isArray(s.segment))
+      .map((s) => ({ cat: s.category, start: Number(s.segment[0]) || 0, end: Number(s.segment[1]) || 0, uuid: String(s.UUID || ""), dur: Number(s.videoDuration) || 0 }))
+      .filter((s) => s.end - s.start >= 0.5);
+  } else if (r.status !== 404) {
+    // 404 — для этого префикса разметки нет; остальное — сбой, не кэшируем
+    throw new Error("SponsorBlock: HTTP " + r.status);
+  }
+  try {
+    await chrome.storage.session.set({ [key]: { at: Date.now(), segments } });
+  } catch (e) {
+    /* хранилище переполнено — обойдёмся без кэша */
+  }
+  return segments;
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "sb:segments" || !SB_ID_RE.test(String(msg.videoId || ""))) return;
+  sbSegments(msg.videoId)
+    .then((segments) => sendResponse({ ok: true, segments }))
+    .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+  return true;
+});
+
 async function downloadThumb(tab, id) {
   const url = await bestThumb(id);
   if (!url) return false;

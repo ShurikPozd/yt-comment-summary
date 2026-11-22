@@ -26,7 +26,7 @@ echo "== разбор как ESM =="
 tmp=".syntaxcheck.mjs"
 err=$(mktemp)
 fail=0
-for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/preview.js sidepanel/icons.js sidepanel/card.js groq.js prompts.js config.js content.js early.js early-main.js clip.js clip-main.js playlists.js playlists-main.js queue.js library/library.js library/search.js background.js; do
+for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/sponsor-settings.js sidepanel/preview.js sidepanel/icons.js sidepanel/card.js groq.js prompts.js config.js content.js early.js early-main.js clip.js clip-main.js sponsor.js playlists.js playlists-main.js queue.js library/library.js library/search.js background.js; do
   [ -f "$f" ] || continue
   cp "$f" "$tmp"
   if node --check "$tmp" 2>"$err"; then

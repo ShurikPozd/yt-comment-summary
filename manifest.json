@@ -17,7 +17,8 @@
     "https://m.youtube.com/*",
     "https://i.ytimg.com/*",
     "http://localhost:8080/*",
-    "https://*.onrender.com/*"
+    "https://*.onrender.com/*",
+    "https://sponsor.ajay.app/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -59,6 +60,16 @@
         "queue.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "sponsor.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     },
     {
       "matches": [

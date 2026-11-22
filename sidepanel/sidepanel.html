@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="sidepanel.css" />
+    <link rel="stylesheet" href="sponsor-settings.css" />
     <script src="theme-boot.js"></script>
   </head>
   <body>
@@ -173,6 +174,15 @@
               </span>
               <input type="checkbox" id="set-hide-progress" class="switch" />
             </label>
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Пропускать рекламные вставки</span>
+                <span class="hint">Рекламу спонсоров и другие вставки размечают зрители в открытой базе SponsorBlock. Выберите, что делать с каждым видом: пропускать само, только отмечать на полосе прогресса или не трогать.</span>
+              </span>
+              <input type="checkbox" id="set-sponsor" class="switch" />
+            </label>
+            <div id="sb-cats" class="sb-cats"></div>
+            <p class="hint sb-credit">Разметка — сообщество <a href="https://sponsor.ajay.app/" target="_blank" rel="noopener">SponsorBlock</a>, лицензия <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.ru" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. Сервер не узнаёт, какое видео вы смотрите.</p>
             <div class="shortcuts">
               <div class="sc"><span>Автозапуск вкл/выкл</span><span class="sc-keys"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></span></div>
               <div class="sc"><span>Полоса прогресса</span><span class="sc-keys"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></span></div>
@@ -263,5 +273,6 @@
 
     <script src="../local-config.js"></script>
     <script type="module" src="sidepanel.js"></script>
+    <script type="module" src="sponsor-settings.js"></script>
   </body>
 </html>

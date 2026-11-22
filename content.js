@@ -827,7 +827,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -836,6 +836,7 @@
     const before = { ...playerPrefs };
     playerPrefs.noAutoplay = Boolean(settings?.noAutoplay);
     playerPrefs.hideProgress = Boolean(settings?.hideProgress);
+    playerPrefs.sponsorSkip = settings?.sponsorSkip !== false; // пропуск вставок — sponsor.js, по умолчанию вкл.
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -846,6 +847,8 @@
         showPageToast(playerPrefs.noAutoplay ? "Видео не будут запускаться сами" : "Автозапуск видео — как обычно", UI_ICONS.pause);
       } else if (before.hideProgress !== playerPrefs.hideProgress) {
         showPageToast(playerPrefs.hideProgress ? "Полоса прогресса скрыта" : "Полоса прогресса видна", UI_ICONS.bar);
+      } else if (before.sponsorSkip !== playerPrefs.sponsorSkip) {
+        showPageToast(playerPrefs.sponsorSkip ? "Рекламные вставки будут пропускаться" : "Рекламные вставки — как обычно", UI_ICONS.skip);
       }
     }
   }
@@ -933,6 +936,8 @@
     defer: SVG('<path d="M20 12a8 8 0 1 1-8-8"/><path d="M12 8v4l2.5 1.5"/><path d="M19 4v5h-5"/>'),
     // стопка плейлистов — «Моя библиотека»
     library: SVG('<rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/>'),
+    // «перескок» через вставку — «Пропускать рекламные вставки»
+    skip: SVG('<path d="M3 19h3M18 19h3"/><path d="M8.5 19h7" stroke-dasharray="1 2.5" opacity=".6"/><path d="M4.5 15.5c1.8-6.5 13.2-6.5 15 0"/><path d="M19.5 11.5v4h-4"/>'),
     // ножницы — «Вырезать клип»
     clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
   };
@@ -963,6 +968,7 @@
       <div class="ytcs-sep"></div>
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="noAutoplay">${UI_ICONS.pause}<span class="ytcs-label">Не запускать видео само</span><span class="ytcs-switch"></span></button>
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
+      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламные вставки</span><span class="ytcs-switch"></span></button>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());
