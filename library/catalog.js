@@ -33,6 +33,7 @@ export async function sync() {
     renderSync();
 
     const videos = new Map();
+    const gone = []; // удалённые и скрытые — для «Порядка в плейлистах»
     const queue = pls.slice();
     let fatal = null;
     const worker = async () => {
@@ -49,11 +50,14 @@ export async function sync() {
               let rec = videos.get(v.id);
               if (!rec) {
                 // удалённые и скрытые («[Удалённое видео]») — без канала и длительности
-                if (!v.channel && !v.short && /^\[.*\]$/.test(v.title)) continue;
+                if (!v.channel && !v.short && /^\[.*\]$/.test(v.title)) {
+                  gone.push({ pid: p.id, id: v.id, setId: v.setId || "", title: v.title, pos: v.pos });
+                  continue;
+                }
                 videos.set(v.id, (rec = { id: v.id, title: v.title, channel: v.channel, channelId: v.channelId, len: v.len, short: Boolean(v.short), info: v.info, in: [] }));
                 state.progress.videos++;
               }
-              rec.in.push([p.id, v.pos]);
+              rec.in.push([p.id, v.pos, v.setId || ""]); // номер записи — чтобы убрать именно её (повторы)
             }
             token = r.next;
             if (!token) break;
@@ -89,6 +93,7 @@ export async function sync() {
       syncedAt: Date.now(),
       playlists: pls.filter((p) => !(p.id === "LL" && p.failed && !p.count)).map(({ id, title, privacy, count, thumb, failed }) => ({ id, title, privacy, count, thumb, failed: Boolean(failed) })),
       videos: [...videos.values()],
+      gone,
     };
     await kv("catalog", cat);
     useCatalog(cat, { keep: Boolean(state.cat) }); // обновили в фоне — не сбиваем прокрутку

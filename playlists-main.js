@@ -115,6 +115,25 @@
     return ids.length;
   }
 
+  // Убрать конкретные записи: по номеру записи (setVideoId — ровно эту копию)
+  // или по id видео (все его копии в плейлисте). Для «Порядка в плейлистах».
+  async function removeItems(playlistId, items) {
+    const actions = (items || [])
+      .slice(0, 100)
+      .map((x) =>
+        x?.setId && /^[\w-]{6,40}$/.test(x.setId)
+          ? { action: "ACTION_REMOVE_VIDEO", setVideoId: x.setId }
+          : /^[A-Za-z0-9_-]{11}$/.test(x?.videoId || "")
+            ? { action: "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", removedVideoId: x.videoId }
+            : null
+      )
+      .filter(Boolean);
+    if (!actions.length) return 0;
+    const j = await post("browse/edit_playlist", { playlistId, actions });
+    if (j?.status && j.status !== "STATUS_SUCCEEDED") throw Object.assign(new Error(j.status), { code: "edit" });
+    return actions.length;
+  }
+
   // Новый плейлист сразу с этим видео
   async function create(title, privacy, videoIds) {
     const j = await post("playlist/create", { title, privacyStatus: privacy || "PRIVATE", videoIds });
@@ -256,6 +275,7 @@
     list: (r) => list(r.videoIds),
     edit: (r) => edit(r.playlistId, r.videoId, r.add),
     editMany: (r) => editMany(r.playlistId, r.videoIds, r.add),
+    removeItems: (r) => removeItems(r.playlistId, r.items),
     create: (r) => create(r.title, r.privacy, r.videoIds),
     library: () => library(),
     playlists: () => playlists(),

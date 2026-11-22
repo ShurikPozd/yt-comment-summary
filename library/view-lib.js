@@ -8,6 +8,7 @@ import { highlight, search } from "./search.js";
 import { $, PAGE, SPECIAL, esc, nf, plWord, plural, state, videosWord } from "./state.js";
 import { watch } from "./watch.js";
 import { yt } from "./youtube.js";
+import "./tidy.js";
 
 // ---------- поиск и фильтры ----------
 export function durOk(v, dur) {
@@ -193,6 +194,7 @@ export function renderSide() {
   html += special.map(row).join("");
   if (rest.length) html += `<div class="pl-sep">Плейлисты · ${nf.format(rest.length)}</div>` + rest.map(row).join("");
   if (!items.length) html += `<div class="pl-sep">Плейлист не найден</div>`;
+  if (!q) html += `<button type="button" class="ghost td-open" data-td="open" title="Удалённые видео, повторы, видео во многих плейлистах">${icon("settings", { size: 16 })}Порядок в плейлистах</button>`;
   box.innerHTML = html;
 }
 

@@ -1919,6 +1919,131 @@ body[data-triage] .watch {
   }
 }
 
+/* ---------- «Порядок в плейлистах» ---------- */
+.td-open {
+  justify-content: center;
+  margin: 10px 6px 4px;
+}
+
+.tidy {
+  margin: 0 0 22px;
+  padding: 18px;
+  border-radius: var(--r-l);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.td-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.td-top b {
+  font-size: 1.2rem;
+}
+
+.td-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.td-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--r-m);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.td-h b {
+  display: block;
+  font-size: 1.02rem;
+}
+
+.td-h span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.td-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.td-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.td-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.td-row small {
+  flex: none;
+  color: var(--muted);
+}
+
+.td-link {
+  cursor: pointer;
+}
+
+.td-link:hover {
+  background: var(--bg-hover);
+}
+
+.td-more,
+.td-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.td-note {
+  margin-top: 12px;
+}
+
+.td-ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.td-sec button.primary {
+  justify-content: center;
+}
+
+.td-busy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.td-msg {
+  margin-bottom: 12px;
+  color: var(--fg-2);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
