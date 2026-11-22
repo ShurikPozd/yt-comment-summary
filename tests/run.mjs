@@ -519,5 +519,44 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   delete globalThis.chrome;
 }
 
+// ---------- скорость по каналам (speed-core.js) ----------
+{
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(new URL("../speed-core.js", import.meta.url), "utf8"), ctx);
+  const C = ctx.__ytcsSpeedCore;
+  const A = "UC" + "a".repeat(22);
+  const B = "UC" + "b".repeat(22);
+  ok(C.isChannelId(A) && !C.isChannelId("@lectures") && !C.isChannelId("UCshort"), "id канала — UC и 22 символа");
+  ok(C.fmtRate(1.5) === "1,5×" && C.fmtRate(1.25) === "1,25×" && C.fmtRate(2) === "2×" && C.fmtRate(1) === "1×", "скорость по-русски: 1,5×");
+  ok(C.cleanRate(1.2500001) === 1.25 && C.cleanRate(9) === 4 && C.cleanRate(0.1) === 0.25 && C.cleanRate("x") === null && C.cleanRate(0) === null, "скорость в пределах плеера");
+  let m = C.remember({}, A, 1.5, "  Лекции  ", 10);
+  ok(m[A].r === 1.5 && m[A].n === "Лекции" && m[A].t === 10, "запомнить скорость канала");
+  ok(Object.keys(C.remember(m, "@handle", 2, "x")).length === 1 && Object.keys(C.remember(m, B, NaN, "x")).length === 1, "без id канала и без скорости не запоминаем");
+  ok(C.remember(m, A, 2, "", 20)[A].n === "Лекции", "пустое название не затирает прежнее");
+  ok(!(A in C.forget(m, A)) && A in m, "забыть канал, исходный объект цел");
+  // ограничение размера: вытесняются давно не открытые
+  let big = {};
+  for (let i = 0; i < 5; i++) big = C.remember(big, "UC" + String(i).repeat(22), 1.5, "c" + i, i, 3);
+  ok(Object.keys(big).length === 3 && !("UC" + "0".repeat(22) in big) && "UC" + "4".repeat(22) in big, "больше предела — вытесняются самые старые");
+  big = C.touch(big, "UC" + "2".repeat(22), "", 100);
+  big = C.remember(big, B, 2, "b", 101, 3);
+  ok("UC" + "2".repeat(22) in big && !("UC" + "3".repeat(22) in big), "открытый недавно канал не вытесняется");
+  ok(C.entryOf({ [A]: { r: "abc" } }, A) === null && C.entryOf({ [A]: { r: 1.5 } }, A).r === 1.5, "битая запись не читается");
+  ok(JSON.stringify(C.list({ [A]: { r: 1.5, n: "a", t: 1 }, [B]: { r: 2, n: "b", t: 5 } }).map((e) => e.id)) === JSON.stringify([B, A]), "список: сначала недавние");
+  // что делать с новым видео
+  const base = { enabled: true, stored: null, current: 1, carried: null, userChose: false, live: false };
+  const P = (o) => JSON.stringify(C.plan({ ...base, ...o }));
+  ok(P({ stored: 1.5 }) === JSON.stringify({ rate: 1.5, why: "channel" }), "у канала 1,5× — ставим");
+  ok(P({ stored: 1.5, current: 1.5 }) === "null", "уже 1,5× — ничего не делаем и не показываем");
+  ok(P({ stored: 1.5, userChose: true }) === "null", "ваш выбор в этом видео не перебиваем");
+  ok(P({ stored: 1.5, live: true }) === "null", "прямой эфир не трогаем");
+  ok(P({ stored: 1.5, enabled: false }) === "null", "выключено — ничего не делаем");
+  ok(P({ current: 1.5, carried: 1.5 }) === JSON.stringify({ rate: 1, why: "restore" }), "скорость лекций не переносится на канал без скорости");
+  ok(P({ current: 1.25, carried: null }) === "null", "обычную скорость YouTube не трогаем");
+  ok(P({ current: 1.25, carried: 1.5 }) === "null", "скорость сменилась не нами — не трогаем");
+  ok(P({ stored: 1, current: 1.5, carried: 1.5 }) === JSON.stringify({ rate: 1, why: "channel" }), "музыка 1× после лекций 1,5×");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);
