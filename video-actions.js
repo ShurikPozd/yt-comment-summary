@@ -192,12 +192,13 @@
     .vb.busy { cursor: progress; }
     .spin { animation: va-spin .9s linear infinite; }
     @keyframes va-spin { to { transform: rotate(360deg); } }
-    .toast { position: fixed; top: 20px; left: 50%; z-index: 5; display: flex; align-items: center; gap: 10px;
+    /* своя плашка — только на страницах расширения: внизу по центру, не закрывает шапку и обложки */
+    .toast { position: fixed; bottom: 24px; left: 50%; z-index: 5; display: flex; align-items: center; gap: 10px;
       width: max-content; max-width: calc(100vw - 32px); padding: 10px 18px 11px 14px; border-radius: 999px;
       background: rgba(28, 28, 30, .9); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       box-shadow: 0 8px 30px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
       color: #f1f1f1; font: 500 14px/1.3 Roboto, "YouTube Sans", Arial, sans-serif;
-      opacity: 0; transform: translate(-50%, -8px) scale(.97); pointer-events: none;
+      opacity: 0; transform: translate(-50%, 8px) scale(.97); pointer-events: none;
       transition: opacity .18s ease, transform .26s cubic-bezier(.22, 1, .36, 1); }
     .toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
     .toast svg { width: 18px; height: 18px; flex: none; color: #ff6b85; }
