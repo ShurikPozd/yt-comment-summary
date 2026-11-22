@@ -10,7 +10,8 @@
     "tabs",
     "contextMenus",
     "scripting",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "alarms"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",

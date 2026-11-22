@@ -2108,6 +2108,225 @@ input[type="search"]::-webkit-search-cancel-button {
   overflow: auto;
 }
 
+/* ---------- Проверка («всё ли работает») ---------- */
+.selfcheck {
+  scroll-margin-top: 12px;
+  --sc-warn: #f0a531;
+  --sc-warn-soft: rgba(240, 165, 49, 0.16);
+  --sc-pos-soft: rgba(60, 207, 142, 0.16);
+  --sc-neg-soft: rgba(255, 95, 102, 0.16);
+}
+
+:root[data-theme="light"] .selfcheck,
+body[data-theme="light"] .selfcheck {
+  --sc-warn: #a85f00;
+  --sc-warn-soft: rgba(230, 140, 0, 0.14);
+  --sc-pos-soft: rgba(18, 163, 95, 0.12);
+  --sc-neg-soft: rgba(229, 56, 62, 0.1);
+}
+
+.sc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 12px;
+  row-gap: 2px;
+  margin-bottom: 12px;
+}
+
+.sc-head h3 {
+  margin: 0;
+}
+
+.sc-when {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.sc-when.ok {
+  color: var(--pos);
+}
+
+.sc-when.warn {
+  color: var(--sc-warn);
+}
+
+.sc-when.fail {
+  color: var(--neg-ink);
+  font-weight: 600;
+}
+
+button.primary.sc-run {
+  width: 100%;
+  height: 40px;
+  font-size: 14px;
+}
+
+button.primary.sc-run:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.sc-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sc-list:empty {
+  display: none;
+}
+
+.sc-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: var(--r-s);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.sc-item.fail {
+  border-color: color-mix(in srgb, var(--neg) 45%, transparent);
+}
+
+.sc-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sc-item.ok .sc-mark {
+  background: var(--sc-pos-soft);
+  color: var(--pos);
+}
+
+.sc-item.fail .sc-mark {
+  background: var(--neg);
+  color: #fff;
+}
+
+.sc-item.warn .sc-mark {
+  background: var(--sc-warn-soft);
+  color: var(--sc-warn);
+}
+
+.sc-item.run .sc-mark::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--fg-2);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.sc-mark .ic {
+  stroke-width: 3;
+}
+
+.sc-body {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.sc-title {
+  color: var(--fg);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.sc-text {
+  margin-top: 2px;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sc-item.run .sc-text,
+.sc-item.skip .sc-text {
+  color: var(--muted);
+}
+
+.sc-hint {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sc-hint::before {
+  content: "Что делать: ";
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+.selfcheck .switch-row {
+  margin-top: 12px;
+}
+
+/* Плашка сверху панели: проверка нашла поломку */
+.sc-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--neg) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--neg) 40%, transparent);
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.sc-alert-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--neg);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sc-alert-text {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.sc-alert .link-btn {
+  flex: none;
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+#app.on-settings .sc-alert {
+  display: none;
+}
+
 /* Недавние сводки */
 .history-list {
   display: grid;

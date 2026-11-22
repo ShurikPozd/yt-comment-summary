@@ -32,6 +32,7 @@ import {
 import { DEFAULTS } from "../config.js";
 import { icon, hydrateIcons } from "./icons.js";
 import { renderSummaryCard } from "./card.js";
+import { initSelfCheckUI } from "./selfcheck-ui.js";
 
 hydrateIcons();
 
@@ -3452,6 +3453,14 @@ async function main() {
   proxy.token = state.settings.token;
   proxy.model = state.settings.model;
   bindEvents();
+  initSelfCheckUI({
+    // секрет может жить только в local-config.js — фон его не видит, передаём
+    getServer: () => ({ baseUrl: state.settings.baseUrl, token: state.settings.token, model: state.settings.model }),
+    openSettings: () => {
+      fillSettingsFields();
+      setTab("settings");
+    },
+  });
   chrome.runtime.onMessage.addListener(onRuntimeMessage);
   // Переключатели плеера могут поменять из контекстного меню — держим панель
   // в курсе, иначе следующее «Сохранить» вернуло бы старые значения.
