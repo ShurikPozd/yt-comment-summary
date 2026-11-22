@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "description": "ИИ-сводка комментариев YouTube, поиск по всем плейлистам, очередь вместо сотен вкладок, клипы из видео и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -59,7 +59,8 @@
         "content.js",
         "clip.js",
         "playlists.js",
-        "queue.js"
+        "queue.js",
+        "select.js"
       ],
       "run_at": "document_idle"
     },
@@ -141,6 +142,12 @@
         "default": "Alt+Shift+S"
       },
       "description": "Сохранить видео в плейлисты (поиск и несколько сразу)"
+    },
+    "save-to-last-playlist": {
+      "description": "Сохранить видео в последний плейлист (куда сохраняли последним)"
+    },
+    "toggle-queue-mode": {
+      "description": "Вкл/выкл «Режим очереди» на ленте: нажатые видео улетают в очередь"
     },
     "open-library": {
       "description": "Открыть «Мою библиотеку» — поиск по всем плейлистам"

@@ -104,15 +104,19 @@
     return true;
   }
 
-  // Много видео одним запросом (пачку собирает вызывающий: YouTube принимает
-  // несколько действий в одном edit_playlist — проверено, добавление и удаление)
-  async function editMany(playlistId, videoIds, add) {
-    const ids = (videoIds || []).filter((x) => /^[A-Za-z0-9_-]{11}$/.test(x)).slice(0, 100);
-    if (!ids.length) return 0;
-    const actions = ids.map((v) => (add ? { action: "ACTION_ADD_VIDEO", addedVideoId: v } : { action: "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", removedVideoId: v }));
+  // Много видео в один плейлист одним запросом: добавить add[], убрать remove[]
+  // (YouTube принимает много действий в одном edit_playlist — проверено, добавление
+  // и удаление). Пачки по ~50 режет вызывающий (playlists.js, library/wl.js).
+  async function editMany(playlistId, add, remove) {
+    const ok = (x) => /^[A-Za-z0-9_-]{11}$/.test(x);
+    const actions = [
+      ...(add || []).filter(ok).map((v) => ({ action: "ACTION_ADD_VIDEO", addedVideoId: v })),
+      ...(remove || []).filter(ok).map((v) => ({ action: "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", removedVideoId: v })),
+    ].slice(0, 100);
+    if (!actions.length) return 0;
     const j = await post("browse/edit_playlist", { playlistId, actions });
     if (j?.status && j.status !== "STATUS_SUCCEEDED") throw Object.assign(new Error(j.status), { code: "edit" });
-    return ids.length;
+    return actions.length;
   }
 
   // Убрать конкретные записи: по номеру записи (setVideoId — ровно эту копию)
@@ -274,7 +278,11 @@
   const ops = {
     list: (r) => list(r.videoIds),
     edit: (r) => edit(r.playlistId, r.videoId, r.add),
-    editMany: (r) => editMany(r.playlistId, r.videoIds, r.add),
+    // два вида вызова: { videoIds, add: true|false } (библиотека) и { add: [], remove: [] } (окно плейлистов)
+    editMany: (r) =>
+      Array.isArray(r.videoIds)
+        ? editMany(r.playlistId, r.add ? r.videoIds : [], r.add ? [] : r.videoIds)
+        : editMany(r.playlistId, Array.isArray(r.add) ? r.add : [], Array.isArray(r.remove) ? r.remove : []),
     removeItems: (r) => removeItems(r.playlistId, r.items),
     create: (r) => create(r.title, r.privacy, r.videoIds),
     library: () => library(),
