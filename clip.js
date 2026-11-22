@@ -869,6 +869,7 @@
   async function open(range = null) {
     if (!isWatch()) return false;
     close();
+    globalThis.__ytcsPlaylists?.close?.(); // одно окно за раз — иначе спорят за клавиши
     const v = video();
     if (!v) return false;
     const host = document.createElement("div");

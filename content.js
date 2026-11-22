@@ -908,6 +908,8 @@
     download: SVG('<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'),
     pause: SVG('<rect x="5" y="4" width="4.5" height="16" rx="1.2"/><rect x="14.5" y="4" width="4.5" height="16" rx="1.2"/>'),
     bar: SVG('<path d="M3 12h18"/><path d="M3 7h2M3 17h2M19 7h2M19 17h2" opacity=".5"/><path d="M4 4l16 16"/>'),
+    // закладка с плюсом — «Сохранить в плейлисты»
+    save: SVG('<path d="M6 4h12v16l-6-4-6 4z"/><path d="M12 8v5"/><path d="M9.5 10.5h5"/>'),
     // ножницы — «Вырезать клип»
     clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
   };
@@ -929,6 +931,7 @@
     m.innerHTML = `
       <div class="ytcs-head">${UI_ICONS.brand}Сводка комментариев</div>
       <button class="ytcs-item" role="menuitem" data-act="panel">${UI_ICONS.panel}<span class="ytcs-label">Открыть сводку и комментарии</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="playlists">${UI_ICONS.save}<span class="ytcs-label">Сохранить в плейлисты</span></button>
       <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
       <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
       <button class="ytcs-item" role="menuitem" data-act="download">${UI_ICONS.download}<span class="ytcs-label">Скачать превью</span></button>
@@ -983,6 +986,13 @@
       return;
     }
     const act = item.dataset.act;
+    // плейлисты — окно рисует playlists.js здесь же, на странице
+    if (act === "playlists") {
+      openMenu(false);
+      if (!globalThis.__ytcsPlaylists?.open) setNote("Обновите страницу видео (F5).");
+      else void globalThis.__ytcsPlaylists.open();
+      return;
+    }
     // клип — окно рисует clip.js здесь же, на странице
     if (act === "clip") {
       openMenu(false);
@@ -1340,6 +1350,17 @@
         sendResponse({ ok: Boolean(globalThis.__ytcsClip) && isWatchPage() && !other });
         if (!isWatchPage()) showPageToast("Откройте видео, чтобы вырезать из него клип", UI_ICONS.clip);
         else if (!other) void globalThis.__ytcsClip?.open(Number.isFinite(msg.start) ? { start: msg.start, end: msg.end } : null);
+        return;
+      }
+      case "yt:playlists": {
+        // своё видео страницы или ролик, по превью которого щёлкнули правой кнопкой
+        const ok = Boolean(globalThis.__ytcsPlaylists);
+        sendResponse({ ok });
+        if (ok) {
+          void globalThis.__ytcsPlaylists.open({ videoId: msg.videoId || null, title: msg.title || "" }).then((opened) => {
+            if (!opened) showPageToast("Откройте видео или щёлкните правой кнопкой по превью ролика", UI_ICONS.save);
+          });
+        }
         return;
       }
       case "yt:toast":

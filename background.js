@@ -68,6 +68,8 @@ async function buildMenus() {
     chrome.contextMenus.create({ id: `sep1@${where}`, type: "separator", contexts, ...extra });
     chrome.contextMenus.create({ id: `panel@${where}`, title: "Сводка комментариев — открыть панель", contexts, ...extra });
     chrome.contextMenus.create({ id: `clip@${where}`, title: "Вырезать клип из видео", contexts, ...extra });
+    // у иконки Chrome уже 6 пунктов (предел) — плейлисты только в меню страницы и по Alt+Shift+S
+    if (where === "page") chrome.contextMenus.create({ id: `playlists@${where}`, title: "Сохранить в плейлисты…", contexts, ...extra });
     // У иконки Chrome — не больше 6 пунктов верхнего уровня: превью там в подменю.
     if (where === "action") {
       chrome.contextMenus.create({ id: `thumb@${where}`, title: "Превью видео", contexts, ...extra });
@@ -172,6 +174,16 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const s = await readSettings();
     s[action] = Boolean(info.checked);
     await chrome.storage.local.set({ settings: s }); // контент-скрипт и панель подхватят сами
+    return;
+  }
+
+  if (action === "playlists") {
+    // по превью в ленте — тот ролик, иначе видео страницы
+    const vid = videoIdFrom(info.linkUrl || "") || videoIdFrom(tab?.url || "");
+    if (tab?.id) {
+      const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:playlists", videoId: vid }).catch(() => null);
+      if (!r?.ok) chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text: "Обновите страницу (F5)" }).catch(() => {});
+    }
     return;
   }
 
@@ -291,6 +303,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 const COMMAND_TOGGLES = { "toggle-no-autoplay": "noAutoplay", "toggle-hide-progress": "hideProgress" };
 
 chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "save-to-playlists") {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\//.test(tab.url || "")) {
+      chrome.tabs.sendMessage(tab.id, { type: "yt:playlists" }).catch(() => {});
+    }
+    return;
+  }
   const key = COMMAND_TOGGLES[command];
   if (!key) return;
   const s = await readSettings();

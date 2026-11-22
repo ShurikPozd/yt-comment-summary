@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.11.6",
+  "version": "0.12.3",
   "description": "ИИ-сводка обсуждения, темы и поиск по комментариям YouTube. Клипы из видео, превью и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -40,7 +40,8 @@
       ],
       "js": [
         "early-main.js",
-        "clip-main.js"
+        "clip-main.js",
+        "playlists-main.js"
       ],
       "run_at": "document_start",
       "world": "MAIN"
@@ -52,7 +53,8 @@
       ],
       "js": [
         "content.js",
-        "clip.js"
+        "clip.js",
+        "playlists.js"
       ],
       "run_at": "document_idle"
     }
@@ -96,6 +98,12 @@
         "default": "Alt+Shift+H"
       },
       "description": "Вкл/выкл: скрыть полосу прогресса и длительность"
+    },
+    "save-to-playlists": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Сохранить видео в плейлисты (поиск и несколько сразу)"
     }
   }
 }
