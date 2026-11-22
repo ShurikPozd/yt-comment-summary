@@ -331,7 +331,8 @@ button.primary:disabled {
 /* строка под шапкой: слева — поиск плейлиста (над их списком), справа — фильтры */
 .filters {
   display: grid;
-  grid-template-columns: var(--side) auto minmax(0, 1fr);
+  /* фильтры занимают остаток и переносятся, «Порядок» — по своей ширине: ничего не наезжает */
+  grid-template-columns: var(--side) minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px var(--gap);
   padding: 16px var(--pad) 0;
@@ -382,6 +383,7 @@ button.primary:disabled {
 /* Список — как в настройках панели: своя стрелка с отступом от края,
    а в Chrome 135+ и само выпадающее меню в стиле страницы */
 .sort select {
+  white-space: nowrap;
   height: 2.3rem;
   padding: 0 2.6rem 0 14px;
   border-radius: var(--r-s);

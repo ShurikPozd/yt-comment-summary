@@ -550,7 +550,7 @@
     .it .t { min-width: 0; padding: 0 4px; }
     .it b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 16px; font-weight: 600; line-height: 1.3; }
     .it span { display: block; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 14px; }
-    .it .rm { position: absolute; right: 14px; top: 14px; width: 34px; height: 34px; padding: 0; border-radius: 50%;
+    .it .rm { position: absolute; left: 14px; top: 14px; width: 34px; height: 34px; padding: 0; border-radius: 50%;
       background: rgba(15, 15, 15, .78); color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); opacity: 0; }
     .it .rm:hover { background: var(--acc); color: var(--on-acc); }
     .it:hover .rm, .it .rm:focus-visible { opacity: 1; }
@@ -614,6 +614,7 @@
         <div class="foot"><button class="open" data-q="open">${QICON.open}Открыть очередь</button></div>
       </aside>`;
     q$ = (s) => root.querySelector(s);
+    root.querySelector(".list").addEventListener("scroll", () => globalThis.__ytcsVideoActions?.refresh(), { passive: true });
     root.addEventListener("click", (e) => {
       const b = e.target.closest("[data-q]");
       if (!b) return;
@@ -649,6 +650,15 @@
           )
           .join("")
       : `<div class="hint">${QICON.queue}<b>Очередь пуста</b>Нажмите на видео в ленте — оно прилетит сюда. Ещё раз по тому же видео — уберёт из очереди.</div>`;
+    // на обложках колонки — «Превью» и «О чём видео» (справа сверху), как на карточках YouTube
+    const VA = globalThis.__ytcsVideoActions;
+    if (VA) {
+      for (const th of q$(".list").querySelectorAll(".it .th")) {
+        const it = th.closest(".it");
+        const r = rows.find((x) => x.id === it.querySelector(".rm")?.dataset.id);
+        if (r) VA.attach(th, { videoId: r.id, title: r.title, channel: r.channel, len: r.len, card: it });
+      }
+    }
     if (queueList.length > rows.length) q$(".list").insertAdjacentHTML("beforeend", `<div class="empty">и ещё ${queueList.length - rows.length} видео — в «Открыть очередь»</div>`);
   }
 

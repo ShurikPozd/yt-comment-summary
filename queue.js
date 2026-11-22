@@ -494,6 +494,16 @@
     // новое видео — галерея с начала; то же — оставляем, где листали
     if (list) list.scrollTop = host.dataset.cur !== id ? 0 : keepScroll;
     host.dataset.cur = id;
+    // на обложках галереи — те же «Превью» и «О чём видео», что на карточках YouTube
+    const VA = globalThis.__ytcsVideoActions;
+    if (VA && list) {
+      for (const th of list.querySelectorAll(".row .th")) {
+        const rowEl = th.closest(".row");
+        const r = queue.find((x) => x.id === rowEl.dataset.go);
+        if (r) VA.attach(th, { videoId: r.id, title: r.title, channel: r.channel, len: r.len, card: rowEl });
+      }
+      list.addEventListener("scroll", () => VA.refresh(), { passive: true });
+    }
   }
 
   function onClick(e) {

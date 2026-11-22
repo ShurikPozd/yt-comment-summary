@@ -16,6 +16,7 @@ import { kv } from "./store.js";
 import { more, renderSide, renderSync, update } from "./view-lib.js";
 import { closeWatch, openWatch, watchHere } from "./watch.js";
 import { yt } from "./youtube.js";
+import "./cover-actions.js"; // «Превью» и «О чём видео» на обложках
 
 // ---------- адрес страницы: #q=…&pl=… (можно добавить в закладки) ----------
 export function readHash() {
