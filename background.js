@@ -1,6 +1,7 @@
 // Service worker: открытие боковой панели и контекстное меню.
 import { sanitizeFilename } from "./groq.js";
 import "./tldr-bg.js"; // окно «О чём видео» на ленте: пересказ через порт
+import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адресной строке — поиск по библиотеке
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
@@ -513,6 +514,8 @@ async function openLibrary(q = "", from = null, view = "", extra = {}) {
   }
   await chrome.tabs.create({ url, ...(here ? { index: here.index + 1, windowId: here.windowId } : {}) });
 }
+setupOmnibox({ openLibrary }); // слушатели — сразу при запуске, иначе Chrome не разбудит фон
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== "lib:open") return;
   openLibrary(String(msg.q || ""), sender.tab || null, String(msg.view || ""), { forceTab: Boolean(msg.forceTab), where: msg.where === "panel" ? "panel" : msg.where === "tab" ? "tab" : "" })

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.20.2",
+  "version": "0.21.0",
   "description": "ИИ-сводка комментариев YouTube, поиск по всем плейлистам, очередь вместо сотен вкладок, клипы из видео и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -99,6 +99,9 @@
       "all_frames": true
     }
   ],
+  "omnibox": {
+    "keyword": "yt"
+  },
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"
   },
