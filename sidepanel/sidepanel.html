@@ -11,6 +11,7 @@
     <div id="lib-pane" class="lib-pane" hidden></div>
     <div id="app">
       <div id="bg-run" class="bg-run hidden" role="status"></div>
+      <div id="selfcheck-alert" class="sc-alert hidden" role="status"></div>
       <header id="video-header" class="hidden">
         <div class="thumb-wrap">
           <img id="thumbnail" alt="" />
@@ -246,6 +247,23 @@
             <button id="btn-save-settings" class="primary">Сохранить</button>
             <button id="btn-settings-back" class="ghost">Назад</button>
             <span id="settings-status"></span>
+          </div>
+
+          <div class="settings-block selfcheck" id="selfcheck-block">
+            <div class="sc-head">
+              <h3>Проверка</h3>
+              <span id="selfcheck-when" class="sc-when"></span>
+            </div>
+            <p class="hint">YouTube иногда меняет внутренние форматы, и функции ломаются тихо. Проверка за 10–20 секунд прогонит основные запросы — только чтение, в аккаунте ничего не меняется.</p>
+            <button id="btn-selfcheck" class="primary sc-run">Проверить, всё ли работает</button>
+            <ul id="selfcheck-list" class="sc-list" aria-live="polite"></ul>
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Проверять раз в сутки сами</span>
+                <span class="hint">Тихо, в фоне, когда открыт YouTube. Если что-то сломается — на значке расширения появится «!».</span>
+              </span>
+              <input type="checkbox" id="set-selfcheck-auto" class="switch" />
+            </label>
           </div>
 
           <div class="settings-block diag-block">

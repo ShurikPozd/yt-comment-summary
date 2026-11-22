@@ -1,5 +1,6 @@
 // Service worker: открытие боковой панели и контекстное меню.
 import { sanitizeFilename } from "./groq.js";
+import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
 // local, где его никто не читал и не удалял. Убираем один раз при запуске.
@@ -63,6 +64,7 @@ function setup() {
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((e) => console.error("sidePanel behavior:", e));
   void buildMenus();
+  void setupSelfCheck();
 }
 
 chrome.runtime.onInstalled.addListener(setup);
@@ -738,4 +740,64 @@ chrome.commands.onCommand.addListener(async (command, cmdTab) => {
   s[key] = !s[key];
   // контент-скрипт увидит изменение и покажет плашку-подтверждение на странице
   await chrome.storage.local.set({ settings: s });
+});
+
+// ---------------- Самопроверка ----------------
+// «Проверить, всё ли работает» (selfcheck.js): по кнопке в настройках панели и
+// тихо раз в сутки. Сломалось — «!» на значке расширения и плашка в панели.
+let selfCheckRun = null;
+const ACTION_TITLE = chrome.runtime.getManifest().action?.default_title || "Сводка комментариев YouTube";
+
+async function showSelfCheckBadge(report) {
+  const bad = report && !report.running ? failuresOf(report) : [];
+  const names = bad.map((x) => CHECKS.find((c) => c.id === x.id)?.title || x.id);
+  await chrome.action.setBadgeText({ text: bad.length ? "!" : "" }).catch(() => {});
+  if (bad.length) await chrome.action.setBadgeBackgroundColor({ color: "#e5383e" }).catch(() => {});
+  await chrome.action
+    .setTitle({ title: bad.length ? `${ACTION_TITLE} — проверка нашла неполадки: ${names.join(", ")}` : ACTION_TITLE })
+    .catch(() => {});
+}
+
+function startSelfCheck(opts) {
+  // одна проверка за раз: повторное нажатие получает ту же
+  return (selfCheckRun ||= (async () => {
+    // ход проверки — в хранилище (пунктов пять, записей с десяток), панель
+    // перерисовывает его на лету
+    const save = (report) => void chrome.storage.local.set({ [SELFCHECK_KEY]: JSON.parse(JSON.stringify(report)) });
+    const report = await runSelfCheck({ ...opts, repairEmbed: setupEmbedReferer, onUpdate: save });
+    await chrome.storage.local.set({ [SELFCHECK_KEY]: report });
+    await showSelfCheckBadge(report);
+    return report;
+  })().finally(() => (selfCheckRun = null)));
+}
+
+async function setupSelfCheck() {
+  // будильник раз в час смотрит, не пора ли (прошли сутки и открыт YouTube)
+  if (!(await chrome.alarms.get(SELFCHECK_ALARM).catch(() => null))) {
+    await chrome.alarms.create(SELFCHECK_ALARM, { delayInMinutes: 10, periodInMinutes: 60 }).catch(() => {});
+  }
+  // после перезапуска браузера значок пуст — вернуть «!», если поломка не ушла
+  const { [SELFCHECK_KEY]: last } = await chrome.storage.local.get(SELFCHECK_KEY);
+  await showSelfCheckBadge(last);
+}
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== SELFCHECK_ALARM || selfCheckRun) return;
+  const got = await chrome.storage.local.get([SELFCHECK_KEY, SELFCHECK_AUTO_KEY]);
+  if (got[SELFCHECK_AUTO_KEY] === false) return;
+  const last = got[SELFCHECK_KEY];
+  if (last?.at && Date.now() - last.at < AUTO_EVERY && !last.running) return;
+  // тихо: только когда YouTube уже открыт (своих вкладок не открываем)
+  const yt = await chrome.tabs.query({ url: ["https://www.youtube.com/*"] });
+  if (!yt.some((t) => !t.discarded && t.status === "complete" && !/\/embed\//.test(t.url || ""))) return;
+  void startSelfCheck({ auto: true });
+});
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "selfcheck:run" || sender.tab) return;
+  const s = msg.server && typeof msg.server === "object" ? msg.server : {};
+  startSelfCheck({ auto: false, server: { baseUrl: String(s.baseUrl || ""), token: String(s.token || ""), model: String(s.model || "") } })
+    .then((report) => sendResponse({ ok: true, report }))
+    .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+  return true;
 });

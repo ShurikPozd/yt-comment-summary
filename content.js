@@ -481,6 +481,38 @@
     return null;
   }
 
+  // Один тред: новая схема (сущность по commentKey) или старая (commentRenderer)
+  function parseThreadNode(ctr, videoId, entities) {
+    const commentKey = ctr?.commentViewModel?.commentViewModel?.commentKey;
+    const entity = commentKey ? entities.get(commentKey) || entities.get(decodeBase64Url(commentKey)) : null;
+    if (entity) return parseThreadV2(entity, videoId, entities);
+    if (ctr?.commentRenderer) return parseThread({ commentRenderer: ctr.commentRenderer }, videoId);
+    return null;
+  }
+
+  // Самопроверка (selfcheck.js): первая страница комментариев тем же кодом,
+  // что и обычный сбор, — и сколько полей разобралось. Только чтение.
+  async function selfCheckComments(videoId) {
+    innerTubeConfig();
+    const cfgFromPage = Boolean(ytcfgCache);
+    const page = await innerTubePost({ context: baseContext(), videoId });
+    const token = commentSectionToken(page);
+    if (!token) return { cfgFromPage, section: false };
+    const data = await innerTubePost({ context: baseContext(), continuation: token });
+    const entities = buildEntityMap(data);
+    const nodes = findThreadNodes(data);
+    const r = { cfgFromPage, section: true, threads: nodes.length, parsed: 0, withAuthor: 0, withTime: 0, withLikes: 0, next: Boolean(findNextToken(data)) };
+    for (const node of nodes) {
+      const c = parseThreadNode(node.commentThreadRenderer, videoId, entities);
+      if (!c?.id || !c.text.trim()) continue;
+      r.parsed++;
+      if (c.author && c.author !== "?") r.withAuthor++;
+      if (c.time) r.withTime++;
+      if (c.likes > 0) r.withLikes++;
+    }
+    return r;
+  }
+
   async function collectViaInnerTube(videoId, limit, onBatch, mine, order = "top") {
     const out = [];
     const seen = new Set();
@@ -506,15 +538,7 @@
       for (const node of findThreadNodes(data)) {
         if (out.length >= limit) break;
         const ctr = node.commentThreadRenderer;
-        const commentKey = ctr?.commentViewModel?.commentViewModel?.commentKey;
-        const entity = commentKey ? entities.get(commentKey) || entities.get(decodeBase64Url(commentKey)) : null;
-
-        let parsed = null;
-        if (entity) {
-          parsed = parseThreadV2(entity, videoId, entities);
-        } else if (ctr?.commentRenderer) {
-          parsed = parseThread({ commentRenderer: ctr.commentRenderer }, videoId);
-        }
+        const parsed = parseThreadNode(ctr, videoId, entities);
         if (!parsed || !parsed.text.trim() || seen.has(parsed.id)) continue;
         // Токен ветки ответов: панель подгрузит их по клику «Ответы (N)».
         const replyToken = (ctr?.replies?.commentRepliesRenderer?.contents || []).find(
@@ -1428,6 +1452,13 @@
         if (collector) collector.cancelled = true;
         sendResponse({ ok: true });
         return false;
+      case "yt:selfcheck": {
+        if (OUR_EMBED) return;
+        selfCheckComments(String(msg.videoId || ""))
+          .then((r) => sendResponse({ ok: true, ...r }))
+          .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true; // ответ асинхронный
+      }
       case "yt:replies": {
         if (!msg.token) {
           sendResponse({ ok: false, error: "no token" });
