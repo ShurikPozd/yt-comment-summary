@@ -134,9 +134,10 @@
     .wrap.open .dlg { opacity: 1; transform: none; }
     .dlg > * { flex-shrink: 0; }
 
-    .top { display: flex; align-items: flex-start; gap: 12px; }
+    /* шапка окна отделена линией — сразу видно, где заголовок */
+    .top { display: flex; align-items: flex-start; gap: 12px; margin: 0 -20px; padding: 0 20px 14px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
     .heads { flex: 1; min-width: 0; }
-    h2 { margin: 0; font-size: 17px; font-weight: 650; line-height: 1.25; }
+    h2 { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.25; }
     .sub { margin-top: 3px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #a6a6ad; font-size: 13px; }
 
     button { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center;

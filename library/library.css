@@ -208,6 +208,7 @@ svg {
   outline: 0;
   background: transparent;
   font-size: 1.08rem;
+  padding: 0 0 2px; /* строчные буквы визуально «садятся» ниже значка лупы — приподнимаем на пиксель */
 }
 
 .search input::placeholder {
@@ -1961,19 +1962,23 @@ body[data-triage] .watch {
   border: 1px solid var(--border);
 }
 
+/* шапка блока отделена линией — сразу видно, где заголовок */
 .td-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  /* отступ над шапкой (18 у блока − 6) = отступу под ней до линии — кнопка ровно посередине */
+  margin: -6px 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-strong);
 }
 
 .td-top b {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.2rem;
+  font-size: 1.4rem;
 }
 
 .td-grid {

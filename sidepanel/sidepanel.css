@@ -1897,10 +1897,13 @@ input[type="search"]::-webkit-search-cancel-button {
   border: 1px solid var(--border);
 }
 
+/* заголовок блока — крупнее пунктов и отделён линией, чтобы читался как заголовок */
 .settings-block h3 {
-  margin-bottom: 12px;
-  font-size: 13.5px;
-  font-weight: 650;
+  margin: 0 -16px 14px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .settings-block label {

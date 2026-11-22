@@ -354,12 +354,14 @@
   const CSS = `
     :host { all: initial; display: block; margin: 0 0 16px; }
     .box { font: 400 14px/1.4 Roboto, Arial, sans-serif; color: #0f0f0f; border: 1px solid rgba(0,0,0,.1);
-      border-radius: 12px; overflow: hidden; background: #fff; }
+      border-radius: 12px; overflow: hidden; background: #fff; container-type: inline-size; }
     :host([dark]) .box { color: #f1f1f1; border-color: rgba(255,255,255,.2); background: #0f0f0f; }
-    .head { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
+    /* шапка панели отделена линией — сразу видно, где заголовок */
+    .head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,.08); }
+    :host([dark]) .head { border-bottom-color: rgba(255,255,255,.12); }
     .ttl { flex: 1; min-width: 0; }
-    .ttl b { display: block; font: 700 18px/1.3 Roboto, Arial, sans-serif; }
-    .ttl span { display: block; margin-top: 2px; color: #606060; font-size: 13px; }
+    .ttl b { display: block; font: 700 20px/1.3 Roboto, Arial, sans-serif; }
+    .ttl span { display: block; margin-top: 2px; color: #606060; font-size: 14px; }
     :host([dark]) .ttl span { color: #aaa; }
     .all { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-radius: 17px;
       background: rgba(0,0,0,.05); color: inherit; font: 500 13px Roboto, Arial, sans-serif; cursor: pointer; white-space: nowrap; }
@@ -368,7 +370,7 @@
     :host([dark]) .all:hover { background: rgba(255,255,255,.2); }
     .ctl[hidden] { display: none; }
     .ctl { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 8px; padding: 0 16px 12px; }
-    .ctl button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; padding: 0 10px;
+    .ctl button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; height: 40px; padding: 0 10px;
       border: 0; border-radius: 20px; background: rgba(0,0,0,.05); color: inherit; font: 500 14px Roboto, Arial, sans-serif;
       cursor: pointer; transition: background-color .15s ease, transform .1s ease-out; white-space: nowrap; }
     :host([dark]) .ctl button { background: rgba(255,255,255,.1); }
@@ -376,10 +378,18 @@
     :host([dark]) .ctl button:hover:not(:disabled) { background: rgba(255,255,255,.2); }
     .ctl button:active:not(:disabled) { transform: scale(.97); }
     .ctl button:disabled { opacity: .4; cursor: default; }
-    .ctl .done { background: #0f0f0f; color: #fff; }
-    :host([dark]) .ctl .done { background: #f1f1f1; color: #0f0f0f; }
-    .ctl .done:hover:not(:disabled) { background: #272727; }
-    :host([dark]) .ctl .done:hover:not(:disabled) { background: #d9d9d9; }
+    /* главная кнопка — цветом расширения, как «Открыть очередь» и «Сохранить» */
+    .ctl .done, :host([dark]) .ctl .done { background: #e8002d; color: #fff; font-weight: 600; }
+    :host([dark]) .ctl .done { background: #ff3b5c; }
+    .ctl .done:hover:not(:disabled) { background: #c80027; }
+    :host([dark]) .ctl .done:hover:not(:disabled) { background: #ff2149; }
+    /* узкая колонка справа: «Назад»/«Дальше» и «Вся очередь» — только значками, ничего не обрезается */
+    @container (max-width: 380px) {
+      .ctl { grid-template-columns: 44px 1fr 44px; }
+      .ctl [data-act="prev"], .ctl [data-act="next"] { padding: 0; }
+      .ctl [data-act="prev"] .lbl, .ctl [data-act="next"] .lbl, .all .lbl { display: none; }
+      .all { width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; }
+    }
     button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     /* галерея: текущее — крупно на всю ширину, остальные — плиткой в две колонки */
     .list { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-height: min(640px, 70vh); overflow: auto;
@@ -389,7 +399,7 @@
     .row:hover { background: rgba(0,0,0,.05); }
     :host([dark]) .row:hover { background: rgba(255,255,255,.1); }
     .row.hero { grid-column: 1 / -1; padding: 8px; }
-    .cur-line { display: flex; align-items: center; gap: 10px; margin: 0 16px 10px; padding: 9px 12px; border-radius: 10px;
+    .cur-line { display: flex; align-items: center; gap: 10px; margin: 0 16px 12px; padding: 10px 12px; border-radius: 10px;
       background: rgba(255,59,92,.1); min-width: 0; }
     .cur-line span { flex: none; padding: 2px 8px; border-radius: 999px; background: #ff3b5c; color: #fff; font: 500 12px Roboto, Arial, sans-serif; }
     .cur-line b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px Roboto, Arial, sans-serif; }
@@ -469,13 +479,13 @@
       <div class="box" role="region" aria-label="Очередь">
         <div class="head">
           <div class="ttl"><b>Очередь</b><span>${i >= 0 ? `${i + 1} из ${total}` : total ? `${total} видео` : "больше ничего нет"}${leftAll ? ` · осталось ≈ ${fmtDur(leftAll)}` : ""}</span></div>
-          <button class="all" data-act="all" title="Вся очередь — в «Моей библиотеке»">${svg("list", 18)}Вся очередь</button>
+          <button class="all" data-act="all" title="Вся очередь — в «Моей библиотеке»" aria-label="Вся очередь">${svg("list", 18)}<span class="lbl">Вся очередь</span></button>
         </div>
         ${done ? `<div class="note"><span>Досмотрено — убрано из очереди</span><button data-act="undo">${svg("undo", 16)}Вернуть</button></div>` : ""}
         <div class="ctl" ${done && !total ? "hidden" : ""}>
-          <button data-act="prev" ${prev ? "" : "disabled"} title="Предыдущее в очереди — клавиша [">${svg("prev")}Назад</button>
+          <button data-act="prev" ${prev ? "" : "disabled"} title="Предыдущее в очереди — клавиша [" aria-label="Назад">${svg("prev")}<span class="lbl">Назад</span></button>
           <button class="done" data-act="done" ${i >= 0 ? "" : "disabled"} title="Досмотрел: убрать из очереди и дальше — Shift+]">${svg("check")}Досмотрел</button>
-          <button data-act="next" ${next ? "" : "disabled"} title="Следующее в очереди — клавиша ]">Дальше${svg("next")}</button>
+          <button data-act="next" ${next ? "" : "disabled"} title="Следующее в очереди — клавиша ]" aria-label="Дальше"><span class="lbl">Дальше</span>${svg("next")}</button>
         </div>
         ${curRec ? `<div class="cur-line"><span>Сейчас</span><b title="${esc(curRec.title)}">${esc(curRec.title || "Видео")}</b></div>` : ""}
         <div class="list">${rows.map(row).join("")}</div>

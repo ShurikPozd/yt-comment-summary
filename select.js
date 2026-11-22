@@ -522,11 +522,15 @@
       transform: translateX(0); transition: transform .3s cubic-bezier(.23, 1, .32, 1); }
     .col.off { transform: translateX(105%); }
     @media (min-width: 2200px) and (min-height: 1150px) { .col { --z: 1.3; } }
-    .head { display: flex; align-items: center; gap: 10px; }
-    .ttl { flex: 1; min-width: 0; }
-    .ttl b { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; line-height: 1.2; }
-    .num { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px;
-      background: var(--acc); color: var(--on-acc); font-size: 14px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    /* заголовок с числом — по центру всей полосы от левого края до крестика */
+    .head { display: grid; grid-template-columns: 1fr 44px; gap: 8px; align-items: center;
+      margin: -2px -20px 0; padding: 0 20px 14px; border-bottom: 1px solid var(--line); }
+    @media (max-width: 760px) { .head { margin: 0 -12px; padding: 0 12px 10px; } }
+    .ttl { grid-column: 1; min-width: 0; }
+    .ttl b { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 24px; font-weight: 700; line-height: 1.2; }
+    .head .x { grid-column: 2; justify-self: end; }
+    .num { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 9px; border-radius: 999px;
+      background: var(--acc); color: var(--on-acc); font-size: 16px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
     .num[hidden] { display: none; }
     button { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
       gap: 8px; height: 40px; padding: 0 16px 1px; border-radius: 12px; font: inherit; font-weight: 600; white-space: nowrap;
@@ -544,8 +548,8 @@
     /* обложка — фоном, а не <img>: иначе к ней цепляются панельки чужих расширений-просмотрщиков */
     .it .th { flex: none; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: var(--btn) center / cover no-repeat; }
     .it .t { min-width: 0; padding: 0 4px; }
-    .it b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 15px; font-weight: 600; line-height: 1.3; }
-    .it span { display: block; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 13.5px; }
+    .it b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 16px; font-weight: 600; line-height: 1.3; }
+    .it span { display: block; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 14px; }
     .it .rm { position: absolute; right: 14px; top: 14px; width: 34px; height: 34px; padding: 0; border-radius: 50%;
       background: rgba(15, 15, 15, .78); color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); opacity: 0; }
     .it .rm:hover { background: var(--acc); color: var(--on-acc); }
