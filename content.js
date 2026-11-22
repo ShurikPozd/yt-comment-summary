@@ -949,7 +949,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, focusMode: false };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -959,6 +959,7 @@
     playerPrefs.noAutoplay = Boolean(settings?.noAutoplay);
     playerPrefs.hideProgress = Boolean(settings?.hideProgress);
     playerPrefs.sponsorSkip = settings?.sponsorSkip !== false; // пропуск вставок — sponsor.js, по умолчанию вкл.
+    playerPrefs.focusMode = Boolean(settings?.focusMode); // «Без отвлечений» — focus.js
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -971,6 +972,8 @@
         showPageToast(playerPrefs.hideProgress ? "Полоса прогресса скрыта" : "Полоса прогресса видна", UI_ICONS.bar);
       } else if (before.sponsorSkip !== playerPrefs.sponsorSkip) {
         showPageToast(playerPrefs.sponsorSkip ? "Рекламные вставки будут пропускаться" : "Рекламные вставки — как обычно", UI_ICONS.skip);
+      } else if (before.focusMode !== playerPrefs.focusMode) {
+        showPageToast(playerPrefs.focusMode ? "Режим без отвлечений включён" : "Режим без отвлечений выключен", UI_ICONS.focus);
       }
     }
   }
@@ -1066,6 +1069,8 @@
     skip: SVG('<path d="M3 19h3M18 19h3"/><path d="M8.5 19h7" stroke-dasharray="1 2.5" opacity=".6"/><path d="M4.5 15.5c1.8-6.5 13.2-6.5 15 0"/><path d="M19.5 11.5v4h-4"/>'),
     // ножницы — «Вырезать клип»
     clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
+    // видоискатель с точкой — «Без отвлечений» (тот же знак на карточках focus.js)
+    focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
   let uiMenu = null;
@@ -1096,6 +1101,7 @@
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="noAutoplay">${UI_ICONS.pause}<span class="ytcs-label">Не запускать видео само</span><span class="ytcs-switch"></span></button>
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
+      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());

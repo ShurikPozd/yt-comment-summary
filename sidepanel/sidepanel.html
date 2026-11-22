@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="sidepanel.css" />
     <link rel="stylesheet" href="sponsor-settings.css" />
+    <link rel="stylesheet" href="focus-settings.css" />
     <script src="theme-boot.js"></script>
   </head>
   <body>
@@ -198,6 +199,19 @@
             </div>
           </div>
 
+          <!-- «Без отвлечений»: пункты рисует и сохраняет focus-settings.js -->
+          <div class="settings-block focus-block">
+            <h3>Без отвлечений</h3>
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Режим без отвлечений</span>
+                <span class="hint">Прячет на YouTube то, на чём легко залипнуть, — смотрите то, за чем пришли. Ниже выберите, что прятать. Переключается и из меню кнопки расширения в плеере.</span>
+              </span>
+              <input type="checkbox" id="set-focus" class="switch" />
+            </label>
+            <div id="focus-opts" class="focus-opts"></div>
+          </div>
+
           <div class="settings-block">
             <h3>Сбор и анализ</h3>
             <label>Максимум комментариев
@@ -299,5 +313,6 @@
     <script src="../transcript.js"></script>
     <script type="module" src="sidepanel.js"></script>
     <script type="module" src="sponsor-settings.js"></script>
+    <script type="module" src="focus-settings.js"></script>
   </body>
 </html>

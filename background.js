@@ -102,6 +102,7 @@ const TOGGLES = [
   ["noAutoplay", "Не запускать видео само", false],
   ["hideProgress", "Скрыть полосу прогресса и длительность", false],
   ["sponsorSkip", "Пропускать рекламные вставки", true],
+  ["focusMode", "Без отвлечений", false], // что именно прячется — focus.js, настройки — в панели
 ];
 const toggleOn = (s, key) => {
   const t = TOGGLES.find(([k]) => k === key);
@@ -811,7 +812,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Alt+Shift+Y открывает панель (_execute_action — Chrome делает это сам),
 // Alt+Shift+K / Alt+Shift+H переключают режимы плеера. Поменять сочетания
 // можно на chrome://extensions/shortcuts.
-const COMMAND_TOGGLES = { "toggle-no-autoplay": "noAutoplay", "toggle-hide-progress": "hideProgress" };
+const COMMAND_TOGGLES = { "toggle-no-autoplay": "noAutoplay", "toggle-hide-progress": "hideProgress", "toggle-focus": "focusMode" };
 
 chrome.commands.onCommand.addListener(async (command, cmdTab) => {
   if (command === "open-library") {
