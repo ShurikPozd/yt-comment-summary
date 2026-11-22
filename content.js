@@ -1376,6 +1376,20 @@
           .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
         return true; // ответ асинхронный
       }
+      case "yt:transcript-for": {
+        // расшифровка любого видео для окна «О чём видео» на обложке: запрос со страницы
+        // YouTube (из фонового скрипта расширения YouTube субтитры не отдаёт)
+        const vid = String(msg.videoId || "");
+        if (!/^[A-Za-z0-9_-]{11}$/.test(vid) || !globalThis.__ytcsTranscript) {
+          sendResponse({ ok: false });
+          return false;
+        }
+        globalThis.__ytcsTranscript
+          .fetchTranscript(vid, {})
+          .then((transcript) => sendResponse({ ok: true, transcript }))
+          .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+        return true;
+      }
       case "yt:seek": {
         // Перемотка по таймкоду из комментария. DOM общий с страницей, так что
         // изолированный мир контент-скрипта может управлять <video> напрямую.

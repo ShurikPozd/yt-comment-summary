@@ -72,8 +72,39 @@ function send(job, msg) {
 
 // Задача заводится сразу (до первого await) — второй «start» на то же видео
 // подписывается на неё, а не запускает параллельный пересказ.
+// Субтитры берёт вкладка YouTube (запрос со страницы YouTube, как у «О видео»):
+// из фонового скрипта YouTube отвечает расширению отказом. Нет вкладки — пробуем сами.
+async function transcriptFor(vid, tabId, signal) {
+  const tabs = [];
+  if (tabId != null) tabs.push(tabId);
+  try {
+    for (const t of await chrome.tabs.query({ url: ["https://www.youtube.com/*"] })) if (t.id !== tabId && !t.discarded) tabs.push(t.id);
+  } catch (e) {
+    /* без вкладок */
+  }
+  let lastErr = null;
+  for (const id of tabs.slice(0, 3)) {
+    if (signal.aborted) throw new Error("cancelled");
+    try {
+      const r = await chrome.tabs.sendMessage(id, { type: "yt:transcript-for", videoId: vid });
+      if (r?.ok) return r.transcript;
+      if (r?.error) {
+        lastErr = new Error(r.error);
+        if (/^transcript:/.test(r.error)) break; // YouTube ответил — другая вкладка ответит так же
+      }
+    } catch (e) {
+      /* во вкладке нет нашего скрипта (открыта до обновления) — следующая */
+    }
+  }
+  try {
+    return await globalThis.__ytcsTranscript.fetchTranscript(vid, { signal });
+  } catch (e) {
+    throw lastErr && /^transcript:/.test(lastErr.message) ? lastErr : e;
+  }
+}
+
 function start(vid, { title, duration }, port) {
-  const job = { ac: new AbortController(), ports: new Set([port]), last: null };
+  const job = { ac: new AbortController(), ports: new Set([port]), last: null, tabId: port?.sender?.tab?.id ?? null };
   jobs.set(vid, job);
   void runJob(job, vid, title, duration);
 }
@@ -104,7 +135,7 @@ async function runJob(job, vid, title, duration) {
     if (!timer) timer = setTimeout(flush, 80);
   };
   try {
-    const tr = await globalThis.__ytcsTranscript.fetchTranscript(vid, { signal });
+    const tr = await transcriptFor(vid, job.tabId, signal);
     if (signal.aborted) return;
     onUpdate({ phase: "Читаю субтитры…", frac: 0.12 });
     const data = await runTldr({ vid, transcript: tr, title, duration, lang: s.lang || "ru", proxy, pacer, signal, onUpdate });
