@@ -131,6 +131,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
 function videoIdFrom(url) {
   try {
     const u = new URL(url);
+    // наша вкладка «Моя библиотека» со встроенным плеером: …/library.html#w=ID
+    if (u.protocol === "chrome-extension:" && u.host === chrome.runtime.id && u.pathname === "/library/library.html") {
+      const w = new URLSearchParams(u.hash.slice(1)).get("w");
+      return /^[A-Za-z0-9_-]{11}$/.test(w || "") ? w : null;
+    }
     if (!/(^|\.)youtube\.com$|^youtu\.be$/.test(u.hostname)) return null;
     let id = null;
     if (u.hostname === "youtu.be") id = u.pathname.slice(1, 12);

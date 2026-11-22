@@ -963,6 +963,7 @@ function renderWatch() {
           <button type="button" class="ghost" data-w="back" title="Вернуться к списку — Esc">${icon("chevron", { size: 16 }).replace("<svg", '<svg style="transform:rotate(180deg)"')}К списку</button>
           ${isQ ? `<button type="button" class="primary" data-w="done" title="Убрать из очереди и дальше — Shift+]">${icon("check", { size: 16 })}Досмотрел</button>` : ""}
           ${upNext.length ? `<button type="button" class="ghost" data-w="next" title="Следующее — ]">Дальше${icon("chevron", { size: 16 })}</button>` : ""}
+          <button type="button" class="ghost" data-w="panel" title="Боковая панель: сводка, моменты, темы и поиск по комментариям этого видео">${icon("chat", { size: 16 })}Комментарии и сводка</button>
           <button type="button" class="ghost" data-w="yt" title="Открыть это видео на YouTube">${icon("external", { size: 16 })}На YouTube</button>
         </div>
       </div>
@@ -1148,6 +1149,11 @@ document.addEventListener("click", (e) => {
   else if (a === "next") watchGo(1);
   else if (a === "done") void watchDone();
   else if (a === "close-over") $("#watch .w-over").hidden = true;
+  else if (a === "panel") {
+    // панель — сразу в ответ на клик (иначе Chrome не откроет); она сама найдёт
+    // эту вкладку и видео в ней, скрипты расширения работают и во встроенном плеере
+    chrome.sidePanel.open({ windowId: myWindowId }).catch(() => {});
+  }
   else if (a === "yt") {
     saveWatchPos();
     playerCmd("pauseVideo");

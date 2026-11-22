@@ -8,6 +8,18 @@
 (() => {
   if (globalThis.__ytcs) return;
 
+  // Встроенный плеер (youtube.com/embed) — только внутри нашей «Моей библиотеки»;
+  // встроенные видео на чужих сайтах расширение не трогает.
+  if (location.pathname.startsWith("/embed/")) {
+    let ours = false;
+    try {
+      ours = location.ancestorOrigins?.[0] === `chrome-extension://${chrome.runtime.id}`;
+    } catch (e) {
+      ours = false;
+    }
+    if (!ours) return;
+  }
+
   const CACHE_KEY = "ytcs:player-prefs"; // копия настроек для синхронного старта
   const prefs = { noAutoplay: false, hideProgress: false };
   try {

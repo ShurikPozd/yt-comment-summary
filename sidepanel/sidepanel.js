@@ -44,6 +44,10 @@ const $ = (id) => document.getElementById(id);
 // www./m. и знала только /watch и /shorts — из-за этого валидная вкладка могла
 // не найтись и панель молча показывала «видео не найдено».
 const YT_VIDEO_RE = /^https:\/\/([a-z0-9-]+\.)*youtube\.com\/(watch|shorts|live)(\/|[?#]|$)/i;
+// Наша «Моя библиотека» со встроенным плеером (…/library.html#w=ID) — тоже
+// вкладка с видео: скрипты расширения работают в её плеере, как на YouTube.
+const LIBRARY_PAGE = chrome.runtime.getURL("library/library.html");
+const isVideoUrl = (url) => YT_VIDEO_RE.test(url || "") || (String(url || "").startsWith(LIBRARY_PAGE) && /[#&]w=[A-Za-z0-9_-]{11}/.test(url));
 
 /* =======================================================================
    Диагностика: ставится СИНХРОННО, до любого await и до main().
@@ -2865,7 +2869,7 @@ function onRuntimeMessage(msg, sender) {
 // (chrome-extension://…), и видео не находится. Поэтому перебираем все обычные
 // окна и берём активную вкладку с /watch|/shorts.
 async function findActiveVideoTab() {
-  const YT = YT_VIDEO_RE;
+  const YT = { test: isVideoUrl };
   const pool = [];
   let wins = [];
   try {
@@ -2943,7 +2947,7 @@ async function refreshFromActiveTab() {
   // вкладка, за которой следит панель: сообщения от других вкладок YouTube
   // (канал в фоне, другое окно) не должны сбрасывать панель
   state.tabId = tab?.id ?? null;
-  if (!tab?.id || !YT_VIDEO_RE.test(tab.url || "")) {
+  if (!tab?.id || !isVideoUrl(tab.url)) {
     renderBottomMatters();
     if (tab?.url && /youtube\.com/i.test(tab.url)) {
       setEmptyState("chat", "Откройте видео", "Это YouTube, но не страница видео. Откройте ролик или Shorts — комментарии соберутся сами.");
@@ -3413,8 +3417,13 @@ function bindEvents() {
     }
   });
   chrome.tabs.onActivated.addListener(refreshFromActiveTab);
-  chrome.tabs.onUpdated.addListener((_id, info) => {
-    if (info.status === "complete") refreshFromActiveTab();
+  chrome.tabs.onUpdated.addListener((id, info) => {
+    if (info.status === "complete") return void refreshFromActiveTab();
+    // в библиотеке видео меняется без перезагрузки (меняется только #w=…)
+    if (info.url && (id === state.tabId || String(info.url).startsWith(LIBRARY_PAGE))) {
+      clearTimeout(state.libRefreshTimer);
+      state.libRefreshTimer = setTimeout(refreshFromActiveTab, 900); // плееру нужно мгновение, чтобы загрузиться
+    }
   });
   window.addEventListener("focus", refreshFromActiveTab);
   window.addEventListener("focus", () => void wakeServer());

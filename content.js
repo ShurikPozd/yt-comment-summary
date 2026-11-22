@@ -1,6 +1,20 @@
 "use strict";
 
 (() => {
+  // Встроенный плеер (youtube.com/embed) — только внутри нашей «Моей библиотеки»;
+  // встроенные видео на чужих сайтах расширение не трогает.
+  if (location.pathname.startsWith("/embed/")) {
+    let ours = false;
+    try {
+      ours = location.ancestorOrigins?.[0] === `chrome-extension://${chrome.runtime.id}`;
+    } catch (e) {
+      ours = false;
+    }
+    if (!ours) return;
+  }
+  // встроенный плеер в «Моей библиотеке» — работаем как на странице видео
+  const OUR_EMBED = location.pathname.startsWith("/embed/");
+
   // Запасные значения: настоящие берём из ytcfg страницы (см. innerTubeConfig),
   // иначе после очередного обновления YouTube сбор через API тихо сломается.
   const FALLBACK_INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
@@ -41,6 +55,8 @@
   function videoIdFromUrl() {
     const m = location.pathname.match(/^\/watch/) && new URLSearchParams(location.search).get("v");
     if (m) return m;
+    const e = OUR_EMBED && location.pathname.match(/^\/embed\/([A-Za-z0-9_-]{11})/);
+    if (e) return e[1];
     const s = location.pathname.match(/^\/shorts\/([A-Za-z0-9_-]{6,20})/);
     if (s) return s[1];
     return null;
@@ -180,7 +196,9 @@
       document.querySelector("h1.title.style-scope") ||
       document.querySelector("ytd-reel-video-renderer h1 yt-formatted-string") ||
       document.querySelector("ytd-reel-video-renderer h1");
-    const title = (titleEl?.textContent || document.title.replace(" - YouTube", "") || "").trim();
+    // во встроенном плеере название и канал — в его шапке
+    const embedTitle = OUR_EMBED ? document.querySelector(".ytp-title-link, .ytp-title-text a")?.textContent : "";
+    const title = (titleEl?.textContent || embedTitle || document.title.replace(" - YouTube", "") || "").trim();
 
     const owner = document.querySelector("#owner") || document.querySelector("ytd-watch-metadata #owner");
     const nameEl =
@@ -191,7 +209,8 @@
       document.querySelector("#channel-name");
 
     const linkEl = nameEl?.tagName === "A" ? nameEl : (nameEl?.querySelector("a") || nameEl);
-    const channelName = (linkEl?.textContent || nameEl?.textContent || "").trim();
+    const embedChannel = OUR_EMBED ? document.querySelector(".ytp-title-channel-name, .ytp-title-expanded-title a")?.textContent : "";
+    const channelName = (linkEl?.textContent || nameEl?.textContent || embedChannel || "").trim();
     let channelUrl = (linkEl?.getAttribute("href") || "").trim() || null;
     if (channelUrl && !/^(https?:\/\/|\/)/i.test(channelUrl)) channelUrl = "/" + channelUrl;
 
@@ -217,7 +236,7 @@
     // Длительность нужна, чтобы отсеять «таймкоды» за концом видео. При
     // SPA-навигации плеер какое-то время держит прошлое видео, поэтому берём
     // её, только если плеер уже переключён на текущий id.
-    const playerId = document.querySelector("ytd-watch-flexy")?.getAttribute("video-id");
+    const playerId = OUR_EMBED ? id : document.querySelector("ytd-watch-flexy")?.getAttribute("video-id");
     const dur = playerId === id ? document.querySelector("video")?.duration : NaN;
 
     return {
@@ -229,7 +248,7 @@
       channelSubs,
       channelAvatar,
       thumbs,
-      pageUrl: location.href.split("&")[0],
+      pageUrl: OUR_EMBED ? `https://www.youtube.com/watch?v=${id}` : location.href.split("&")[0],
       collectedAt: Date.now(),
     };
   }
@@ -843,7 +862,7 @@
 
   // Блокировка автозапуска — в early.js: он грузится раньше плеера и успевает
   // остановить видео до первого кадра.
-  const isWatchPage = () => location.pathname === "/watch";
+  const isWatchPage = () => location.pathname === "/watch" || OUR_EMBED;
 
   // ---------------- Кнопка и меню в плеере YouTube ----------------
   // Своё меню в стиле плеера (системное контекстное меню Chrome не
@@ -949,6 +968,9 @@
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());
     m.addEventListener("click", onMenuClick);
     player.appendChild(m);
+    // во встроенном плеере библиотеки: «отложить» закрыло бы саму библиотеку,
+    // а окна плейлистов и клипа там пока не работают
+    if (OUR_EMBED) for (const act of ["defer", "library", "playlists", "clip"]) m.querySelector(`[data-act="${act}"]`)?.remove();
     return m;
   }
 
