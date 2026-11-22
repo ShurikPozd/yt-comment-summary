@@ -3,7 +3,8 @@
 //   - разбор ответов YouTube в playlists-main.js на маленьких образцах — по одному на
 //     каждый формат, который YouTube уже успел поменять (старый и новый вид видео,
 //     Shorts плиткой, токены продолжения в разных местах, шапка плейлиста);
-//   - быстрое обновление библиотеки: что изменилось в плейлисте (library/sync-plan.js).
+//   - быстрое обновление библиотеки: что изменилось в плейлисте (library/sync-plan.js);
+//   - «В архив Telegram»: тело запроса к боту, разбор ответов, фон с поддельным chrome/fetch.
 // Запускается из check-syntax.sh перед коммитом.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -11,6 +12,7 @@ import { buildIndex, search, highlight, stem, swapLayout, tokens } from "../libr
 import { parseTldr, pickEven, runTldr, splitParts } from "../tldr-core.js";
 import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs } from "../groq.js";
 import { countOf, dayOf, fullDue, listsOf, readPlaylist, sameList, splice, syncSummary, updDay } from "../library/sync-plan.js";
+import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
 import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
@@ -380,6 +382,74 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
     cancelled = Boolean(e.cancelled);
   }
   ok(cancelled, "отмена пересказа");
+}
+
+// ---------- «В архив Telegram» (archive-core.js, archive-bg.js) ----------
+{
+  const e = { title: "ПК", about: "Автор собирает компьютер.", points: [{ t: 10, x: "Корпус" }, { t: 3725, x: "Итог" }] };
+  ok(tldrPlain(e) === "Автор собирает компьютер.\n\n0:10 — Корпус\n1:02:05 — Итог", "пересказ текстом для поста");
+  ok(tldrPlain(null) === "" && tldrPlain({ about: "x".repeat(5000) }).length === 3000, "пересказ: нет кеша / слишком длинный");
+  ok(fmtLen(59) === "0:59" && fmtLen(3600) === "1:00:00", "длительность м:сс / ч:мм:сс");
+  const b = archiveBody({ videoId: "dQw4w9WgXcQ", title: "  Т  ", channel: "К".repeat(200), len: 61.7 }, "о чём");
+  ok(b && b.title === "Т" && b.channel.length === 120 && b.len === 61 && b.tldr === "о чём", "тело запроса к боту");
+  ok(archiveBody({ videoId: "bad" }) === null && archiveBody({ videoId: "dQw4w9WgXcQ/.." }) === null, "негодный id видео не уходит");
+  const saved = archiveResult(200, { ok: true, status: "saved", category: "Музыка", queued: false });
+  ok(saved.ok && archiveMessage(saved) === "Сохранено в «Музыка»", "сохранено — в какую папку");
+  ok(archiveMessage(archiveResult(200, { ok: true, status: "exists", category: "Игры" })) === "Уже в архиве — «Игры»", "уже в архиве");
+  ok(/уточнит позже/.test(archiveMessage(archiveResult(200, { ok: true, status: "saved", category: "Видео", queued: true }))), "ИИ лежит — папку уточнит позже");
+  ok(archiveResult(404, null).kind === "update" && /Обновите бота/.test(archiveResult(404, null).text), "старый бот без адреса — «Обновите бота»");
+  ok(archiveResult(405, null).kind === "update", "старый бот: 405 — тоже «Обновите бота»");
+  ok(archiveResult(403, { error: "forbidden" }).kind === "forbidden" && archiveResult(429, {}).kind === "busy", "секрет и лимит");
+  ok(archiveResult(503, { code: "tg_offline" }).kind === "offline" && archiveResult(0, null).kind === "network" && archiveResult(-1, null).kind === "timeout", "бот не на связи / сеть / таймаут");
+  ok(archiveResult(500, {}).kind === "error" && archiveResult(200, { error: "x" }).ok === false, "сбой бота и странный ответ");
+
+  // фон: поддельные chrome.* и fetch
+  const store = { "tldr:dQw4w9WgXcQ": e, settings: { baseUrl: "https://bot.example/", token: "test-token" } };
+  const listeners = [];
+  globalThis.chrome = {
+    runtime: {
+      getURL: (p) => `chrome-extension://abc/${p}`,
+      onConnect: { addListener() {} },
+      onMessage: { addListener: (fn) => listeners.push(fn) },
+    },
+    storage: {
+      local: {
+        get: async (k) => (k === null ? { ...store } : typeof k === "string" ? (k in store ? { [k]: store[k] } : {}) : {}),
+        set: async (o) => Object.assign(store, o),
+      },
+    },
+  };
+  const realFetch = globalThis.fetch;
+  const sent = [];
+  let reply = { status: 200, body: { ok: true, status: "saved", category: "Железо", queued: false } };
+  globalThis.fetch = async (url, opt = {}) => {
+    if (String(url).endsWith("local-config.js")) return { ok: false };
+    sent.push({ url: String(url), opt });
+    await new Promise((r) => setTimeout(r, 5));
+    return { status: reply.status, ok: reply.status === 200, json: async () => reply.body };
+  };
+  const bg = await import("../archive-bg.js");
+  const info = { videoId: "dQw4w9WgXcQ", title: "Сборка ПК", channel: "Мастер", len: 754 };
+  const [r1, r2] = await Promise.all([bg.saveVideo(info), bg.saveVideo(info)]);
+  const req = sent[0];
+  const body = JSON.parse(req.opt.body);
+  ok(sent.length === 1 && r1.ok && r2.ok, "двойной щелчок — один запрос к боту");
+  ok(req.url === "https://bot.example/api/save-video" && req.opt.headers["X-Sec-Token"] === "test-token" && req.opt.method === "POST", "адрес и секрет — как у /api/chat");
+  ok(body.title === "Сборка ПК" && body.len === 754 && body.tldr.includes("0:10 — Корпус"), "в бот уходит и готовый пересказ");
+  ok(r1.text === "Сохранено в «Железо»" && store["tgarch:dQw4w9WgXcQ"]?.cat === "Железо", "итог и отметка «уже в архиве»");
+  reply = { status: 404, body: null };
+  const r3 = await bg.saveVideo({ videoId: "aaaaaaaaaaa", title: "x" });
+  ok(!r3.ok && /Обновите бота/.test(r3.text) && !store["tgarch:aaaaaaaaaaa"], "старый бот — понятный текст, без отметки");
+  const ready = await new Promise((res) => listeners.some((fn) => fn({ type: "archive:ready" }, { tab: { id: 1 } }, res) === true));
+  ok(ready.ok === true, "кнопка видна, когда бот настроен");
+  store.settings = { baseUrl: "https://bot.example", token: "" };
+  const r4 = await bg.saveVideo(info);
+  ok(!r4.ok && r4.kind === "setup" && /не настроен/.test(r4.text), "без секрета — подсказка про настройки");
+  const before = sent.length;
+  const silent = listeners.map((fn) => fn({ type: "archive:save", info }, { url: "https://evil.example/" }, () => {}));
+  ok(silent.every((x) => x !== true) && sent.length === before, "чужая страница фон не просит");
+  globalThis.fetch = realFetch;
+  delete globalThis.chrome;
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
