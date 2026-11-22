@@ -391,7 +391,7 @@
     .row.hero { grid-column: 1 / -1; padding: 8px; }
     .cur-line { display: flex; align-items: center; gap: 10px; margin: 0 16px 10px; padding: 9px 12px; border-radius: 10px;
       background: rgba(255,59,92,.1); min-width: 0; }
-    .cur-line span { flex: none; padding: 2px 8px; border-radius: 999px; background: #ff0033; color: #fff; font: 500 12px Roboto, Arial, sans-serif; }
+    .cur-line span { flex: none; padding: 2px 8px; border-radius: 999px; background: #ff3b5c; color: #fff; font: 500 12px Roboto, Arial, sans-serif; }
     .cur-line b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px Roboto, Arial, sans-serif; }
     .th { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: rgba(127,127,127,.2); }
     .th img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease-out; }
@@ -399,7 +399,7 @@
     .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: #ff0033; }
     .len { position: absolute; right: 6px; bottom: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(0,0,0,.8); color: #fff;
       font: 500 12px Roboto, Arial, sans-serif; }
-    .now { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; background: #ff0033; color: #fff;
+    .now { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; background: #ff3b5c; color: #fff;
       font: 500 12px Roboto, Arial, sans-serif; }
     .rt { min-width: 0; padding: 0 2px; }
     .rt b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 500 14px/1.35 Roboto, Arial, sans-serif; }
@@ -604,7 +604,7 @@
         font: 400 14px/1.4 Roboto, Arial, sans-serif; box-shadow: 0 8px 30px rgba(0,0,0,.35); animation: in .18s ease-out; }
       .t span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .t button { flex: none; height: 34px; padding: 0 14px; border: 0; border-radius: 17px; background: rgba(255,255,255,.12);
-        color: #3ea6ff; font: 500 14px Roboto, Arial, sans-serif; cursor: pointer; }
+        color: #ff6b85; font: 500 14px Roboto, Arial, sans-serif; cursor: pointer; }
       .t button:hover { background: rgba(255,255,255,.2); }
       @keyframes in { from { opacity: 0; transform: translateY(8px); } }
       @media (prefers-reduced-motion: reduce) { .t { animation: none; } }

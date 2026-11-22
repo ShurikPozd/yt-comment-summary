@@ -149,10 +149,10 @@
       box-sizing: border-box; display: grid; place-items: center; color: transparent;
       background: rgba(0, 0, 0, .45); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .9), 0 1px 4px rgba(0, 0, 0, .35); }
     .ytcs-mark svg { width: 18px; height: 18px; }
-    .ytcs-mark.on { background: rgba(62, 166, 255, .22); box-shadow: inset 0 0 0 3px #3ea6ff; }
-    .ytcs-mark.on i { background: #3ea6ff; color: #0f0f0f; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
-    html:not([dark]) .ytcs-mark.on { background: rgba(6, 95, 212, .16); box-shadow: inset 0 0 0 3px #065fd4; }
-    html:not([dark]) .ytcs-mark.on i { background: #065fd4; color: #fff; }
+    .ytcs-mark.on { background: rgba(255, 59, 92, .2); box-shadow: inset 0 0 0 3px #ff3b5c; }
+    .ytcs-mark.on i { background: #ff3b5c; color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+    html:not([dark]) .ytcs-mark.on { background: rgba(232, 0, 45, .12); box-shadow: inset 0 0 0 3px #e8002d; }
+    html:not([dark]) .ytcs-mark.on i { background: #e8002d; color: #fff; }
     /* кнопка «Пересказать» другого расширения (Яндекс) стоит в том же углу — сдвигаем её правее кружка */
     yt-thumbnail-view-model > .ya-video-summarization-preview-button, ytd-thumbnail .ya-video-summarization-preview-button { margin-left: 40px !important; }
     @media (prefers-reduced-motion: reduce) { .ytcs-mark { transition: none; } }`;
@@ -249,9 +249,9 @@
     }
 
     :host { --bg: #fff; --fg: #0f0f0f; --line: rgba(0, 0, 0, .08); --btn: rgba(0, 0, 0, .06); --btn-h: rgba(0, 0, 0, .11);
-      --acc: #065fd4; --acc-h: #0556c0; --on-acc: #fff; --acc-text: #065fd4; }
+      --acc: #e8002d; --acc-h: #c80027; --on-acc: #fff; --acc-text: #d1002a; }
     :host([dark]) { --bg: #282828; --fg: #f1f1f1; --line: rgba(255, 255, 255, .1); --btn: rgba(255, 255, 255, .1); --btn-h: rgba(255, 255, 255, .18);
-      --acc: #3ea6ff; --acc-h: #65b8ff; --on-acc: #0f0f0f; --acc-text: #3ea6ff; }
+      --acc: #ff3b5c; --acc-h: #ff2149; --on-acc: #fff; --acc-text: #ff6b85; }
     @media (prefers-reduced-motion: reduce) { .bar, .bar[hidden], .hov { transition: none; } }`;
   const SVG = (paths) =>
     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -503,7 +503,7 @@
     .ytcs-qbadge b { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px 9px 14px; border-radius: 999px;
       background: rgba(255, 255, 255, .95); color: #0f0f0f; font: 600 15px/1 Roboto, Arial, sans-serif; white-space: nowrap;
       box-shadow: 0 4px 16px rgba(0, 0, 0, .35); }
-    .ytcs-qbadge svg { width: 18px; height: 18px; stroke-width: 2.6; color: #065fd4; }
+    .ytcs-qbadge svg { width: 18px; height: 18px; stroke-width: 2.6; color: #e8002d; }
     @keyframes ytcs-qin { from { opacity: 0; } }
     html.ytcs-qmode .ytcs-queued [class*='LockupMetadataViewModelTextContainer'], html.ytcs-qmode .ytcs-queued [class*='LockupMetadata'] h3,
     html.ytcs-qmode .ytcs-queued #details, html.ytcs-qmode .ytcs-queued #meta,
@@ -524,10 +524,10 @@
     @media (min-width: 2200px) and (min-height: 1150px) { .col { --z: 1.3; } }
     .head { display: flex; align-items: center; gap: 10px; }
     .ttl { flex: 1; min-width: 0; }
-    .ttl b { display: flex; align-items: baseline; gap: 10px; font-size: 20px; font-weight: 700; }
-    .num { display: inline-block; min-width: 28px; padding: 2px 9px 3px; border-radius: 999px; text-align: center;
-      background: var(--acc); color: var(--on-acc); font-size: 15px; font-weight: 700; }
-    .ttl > span { display: block; margin-top: 4px; color: var(--muted); font-size: 13.5px; }
+    .ttl b { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; line-height: 1.2; }
+    .num { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px;
+      background: var(--acc); color: var(--on-acc); font-size: 14px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    .ttl > span { display: block; margin-top: 4px; color: var(--muted); font-size: 14px; }
     button { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
       gap: 8px; height: 40px; padding: 0 16px 1px; border-radius: 12px; font: inherit; font-weight: 600; white-space: nowrap;
       color: var(--fg); background: var(--btn); transition: background-color .14s ease, transform .1s ease-out; }
@@ -536,31 +536,32 @@
     button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
     button svg { width: 20px; height: 20px; flex: none; }
     .x { width: 40px; padding: 0; border-radius: 50%; }
-    .drop { position: relative; flex: none; height: 74px; border-radius: 14px; display: grid; place-items: center;
-      border: 2px dashed var(--line2); color: var(--muted); font-size: 13.5px; text-align: center; padding: 0 12px; }
-    .drop.hit { animation: hit .5s ease-out; }
-    @keyframes hit { 0% { border-color: var(--acc); background: var(--acc-soft); } 100% { border-color: var(--line2); background: transparent; } }
     .list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; margin: 0 -8px; padding: 0 8px;
       display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; }
     .it { position: relative; display: flex; gap: 10px; align-items: center; padding: 6px; border-radius: 12px; }
     .it:hover { background: var(--btn); }
-    .it img { flex: none; width: 112px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--btn); }
+    /* обложка — фоном, а не <img>: иначе к ней цепляются панельки чужих расширений-просмотрщиков */
+    .it .th { flex: none; width: 128px; aspect-ratio: 16 / 9; border-radius: 8px; background: var(--btn) center / cover no-repeat; }
     .it .t { flex: 1; min-width: 0; }
-    .it b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; font-weight: 600; line-height: 1.3; }
-    .it span { display: block; margin-top: 3px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 12.5px; }
+    .it b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 15px; font-weight: 600; line-height: 1.3; }
+    .it span { display: block; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 13.5px; }
     .it .rm { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; padding: 0; border-radius: 50%;
       background: var(--bg); box-shadow: 0 1px 4px rgba(0, 0, 0, .3); opacity: 0; }
     .it:hover .rm, .it .rm:focus-visible { opacity: 1; }
     .it .rm svg { width: 16px; height: 16px; }
     .it.new { animation: land .45s cubic-bezier(.23, 1, .32, 1); }
     @keyframes land { from { transform: scale(.92); background: var(--acc-soft); } }
-    .empty { padding: 20px 8px; color: var(--muted); text-align: center; line-height: 1.5; }
+    .empty { padding: 20px 8px; color: var(--muted); text-align: center; line-height: 1.5; font-size: 14px; }
+    /* пустая очередь — подсказка по центру колонки; сюда же «прилетает» первое видео */
+    .hint { margin: auto 0; padding: 28px 16px; border: 2px dashed var(--line2); border-radius: 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.45; }
+    .hint svg { width: 40px; height: 40px; color: var(--acc); }
+    .hint b { color: var(--fg); font-size: 17px; }
     /* узкое окно: колонка узкая — обложка над названием */
     @media (max-width: 760px) {
       .col { padding: 12px 10px; }
-      .drop { height: auto; padding: 10px 8px; font-size: 13px; }
       .it { flex-direction: column; align-items: stretch; gap: 6px; }
-      .it img { width: 100%; }
+      .it .th { width: 100%; }
       .foot .open { padding: 0 10px; }
     }
     .foot { display: flex; gap: 8px; }
@@ -579,10 +580,10 @@
     @media (max-width: 620px) { .tog .lbl { display: none; } .tog { width: 46px; padding: 0; } }
 
     :host { --bg: #fff; --bg-h: #f2f2f2; --fg: #0f0f0f; --muted: #606060; --line: rgba(0, 0, 0, .1); --line2: rgba(0, 0, 0, .18);
-      --btn: rgba(0, 0, 0, .05); --btn-h: rgba(0, 0, 0, .1); --acc: #065fd4; --acc-h: #0556c0; --on-acc: #fff; --acc-soft: rgba(6, 95, 212, .1); }
+      --btn: rgba(0, 0, 0, .05); --btn-h: rgba(0, 0, 0, .1); --acc: #e8002d; --acc-h: #c80027; --on-acc: #fff; --acc-soft: rgba(232, 0, 45, .08); }
     :host([dark]) { --bg: #181818; --bg-h: #262626; --fg: #f1f1f1; --muted: #aaa; --line: rgba(255, 255, 255, .1); --line2: rgba(255, 255, 255, .2);
-      --btn: rgba(255, 255, 255, .08); --btn-h: rgba(255, 255, 255, .15); --acc: #3ea6ff; --acc-h: #65b8ff; --on-acc: #0f0f0f; --acc-soft: rgba(62, 166, 255, .14); }
-    @media (prefers-reduced-motion: reduce) { .col, .it.new, .pulse, .drop.hit { transition: none; animation: none; } }`;
+      --btn: rgba(255, 255, 255, .08); --btn-h: rgba(255, 255, 255, .15); --acc: #ff3b5c; --acc-h: #ff2149; --on-acc: #fff; --acc-soft: rgba(255, 59, 92, .14); }
+    @media (prefers-reduced-motion: reduce) { .col, .it.new, .pulse { transition: none; animation: none; } }`;
 
   const QICON = {
     queue: SVG('<path d="M4 6h11"/><path d="M4 12h11"/><path d="M4 18h7"/><path d="M15 15.5v5l4.5-2.5z"/>'),
@@ -605,7 +606,6 @@
           <div class="ttl"><b>Очередь <span class="num">0</span></b><span>Нажимайте на видео — они летят сюда</span></div>
           <button class="x" data-q="off" title="Выйти из режима очереди (Esc)" aria-label="Выйти из режима очереди (Esc)">${ICON.close}</button>
         </div>
-        <div class="drop">Сюда прилетают видео. Ещё раз по видео — убрать из очереди</div>
         <div class="list" role="list"></div>
         <div class="foot"><button class="open" data-q="open">${QICON.open}Открыть очередь</button></div>
       </aside>`;
@@ -637,13 +637,13 @@
       ? rows
           .map(
             (r) => `<div class="it${r.id === newId ? " new" : ""}" role="listitem" title="${escH(r.title)}">
-          <img alt="" loading="lazy" src="https://i.ytimg.com/vi/${escH(r.id)}/mqdefault.jpg">
+          <div class="th" style="background-image:url('https://i.ytimg.com/vi/${escH(r.id)}/mqdefault.jpg')"></div>
           <div class="t"><b>${escH(r.title || "Видео")}</b><span>${escH(r.channel || (r.short ? "Shorts" : ""))}</span></div>
           <button class="rm" data-q="rm" data-id="${escH(r.id)}" title="Убрать из очереди" aria-label="Убрать из очереди">${ICON.close}</button>
         </div>`
           )
           .join("")
-      : `<div class="empty">Очередь пуста</div>`;
+      : `<div class="hint">${QICON.queue}<b>Очередь пуста</b>Нажмите на видео в ленте — оно прилетит сюда. Ещё раз по тому же видео — уберёт из очереди.</div>`;
     if (queueList.length > rows.length) q$(".list").insertAdjacentHTML("beforeend", `<div class="empty">и ещё ${queueList.length - rows.length} видео — в «Открыть очередь»</div>`);
   }
 
@@ -702,6 +702,8 @@
     }
     for (const c of document.querySelectorAll(".ytcs-queued")) if (!seen.has(c)) c.classList.remove("ytcs-queued");
     for (const b of document.querySelectorAll(".ytcs-qbadge")) if (!b.closest(".ytcs-queued")) b.remove();
+    // подсказка над карточкой под указателем: «В очередь» / «Убрать» / галочка — по текущему режиму
+    if (hovered) placeHover();
   }
 
   async function loadQueue() {
@@ -765,13 +767,15 @@
     const img = thumbOf(card)?.querySelector("img");
     return img?.currentSrc || img?.src || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
   };
+  // куда летит обложка: на место верхней строки списка (новые — сверху) или в подсказку пустой очереди
   const dropRect = () => {
-    const d = q$?.(".drop");
-    if (!d) return null;
-    const r = d.getBoundingClientRect();
+    const t = q$?.(".list .it .th") || q$?.(".list .hint") || q$?.(".list");
+    if (!t) return null;
+    const r = t.getBoundingClientRect();
     // зум колонки на больших экранах — getBoundingClientRect уже в пикселях экрана
+    if (t.classList.contains("th")) return { left: r.left, top: r.top, width: r.width, height: r.height };
     const w = Math.min(r.width - 24, 160);
-    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - w * 0.5625) / 2, width: w, height: w * 0.5625 };
+    return { left: r.left + (r.width - w) / 2, top: r.top + Math.max(0, (r.height - w * 0.5625) / 2), width: w, height: w * 0.5625 };
   };
 
   async function queueAdd(card, id) {
@@ -800,10 +804,6 @@
     num.classList.remove("pulse");
     void num.offsetWidth;
     num.classList.add("pulse");
-    const drop = q$(".drop");
-    drop.classList.remove("hit");
-    void drop.offsetWidth;
-    drop.classList.add("hit");
   }
 
   async function queueRemove(id, card) {
