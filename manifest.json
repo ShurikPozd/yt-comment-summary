@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.15.8",
+  "version": "0.15.9",
   "description": "ИИ-сводка комментариев YouTube, поиск по всем плейлистам, очередь вместо сотен вкладок, клипы из видео и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -18,7 +18,8 @@
     "https://m.youtube.com/*",
     "https://i.ytimg.com/*",
     "http://localhost:8080/*",
-    "https://*.onrender.com/*"
+    "https://*.onrender.com/*",
+    "https://sponsor.ajay.app/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -63,6 +64,16 @@
     },
     {
       "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "sponsor.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
         "https://www.youtube.com/embed/*"
       ],
       "js": [
@@ -76,7 +87,8 @@
         "https://www.youtube.com/embed/*"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "sponsor.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
