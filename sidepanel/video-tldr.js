@@ -4,7 +4,7 @@
 // и content.js); если он не отвечает (вкладку открыли до обновления
 // расширения) — тот же запрос делаем прямо из панели.
 // Сам пересказ (map/reduce, стрим, кеш) — общее ядро tldr-core.js: им же
-// пользуется окно «О чём видео» на ленте (hover-tldr.js через фон), кеш общий.
+// пользуется окно «О чём видео» на обложках (video-actions.js через фон), кеш общий.
 // Бюджет лимитов Groq — общий с анализом комментариев (pacer из sidepanel.js).
 
 import { runTldr, parseTldr, loadTldr, tldrCopyText, cancelledError, TLDR_CACHE_PREFIX } from "../tldr-core.js";
