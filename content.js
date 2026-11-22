@@ -1335,6 +1335,7 @@
     if (document.querySelector("#movie_player .ytcs-btn")) return;
     const b = document.createElement("button");
     b.className = "ytp-button ytcs-btn";
+    b.dataset.ytcsVersion = chrome.runtime.getManifest().version; // видно, какая версия работает на странице
     b.setAttribute("aria-label", "Сводка комментариев");
     b.setAttribute("aria-haspopup", "menu");
     b.setAttribute("aria-expanded", "false");

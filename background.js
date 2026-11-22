@@ -34,6 +34,25 @@ async function setupEmbedReferer() {
   }
 }
 
+// ---------- Разработка: само перезагружается при новой версии ----------
+// Расширение установлено из папки («распакованное»). Когда в manifest.json на
+// диске появляется другая версия (её поднимают при каждой правке), оно само
+// перезапускается — не нужно жать «Обновить» на chrome://extensions. Для
+// установленного из магазина ничего не делает.
+async function devAutoReload() {
+  try {
+    const self = await chrome.management.getSelf();
+    if (self.installType !== "development") return;
+    const disk = await (await fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" })).json();
+    if (disk?.version && disk.version !== chrome.runtime.getManifest().version) chrome.runtime.reload();
+  } catch (e) {
+    /* файл в процессе записи — проверим в следующий раз */
+  }
+}
+chrome.alarms?.create("dev-reload", { periodInMinutes: 0.5 });
+chrome.alarms?.onAlarm.addListener((a) => a.name === "dev-reload" && void devAutoReload());
+void devAutoReload(); // и при каждом пробуждении фона (любое действие расширения)
+
 function setup() {
   void cleanupLocalCache();
   void setupEmbedReferer();

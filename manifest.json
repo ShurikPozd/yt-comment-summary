@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "ИИ-сводка комментариев YouTube, поиск по всем плейлистам, очередь вместо сотен вкладок, клипы из видео и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -10,7 +10,8 @@
     "tabs",
     "contextMenus",
     "scripting",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "alarms"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
