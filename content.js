@@ -876,6 +876,8 @@
     .ytcs-item:active { background: rgba(255, 255, 255, .16); }
     .ytcs-item > svg { flex: none; width: 20px; height: 20px; opacity: .9; }
     .ytcs-item .ytcs-label { flex: 1; min-width: 0; position: relative; top: -.075em; } /* оптическая центровка */
+    .ytcs-item[hidden] { display: none; }
+    .ytcs-item .ytcs-ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .ytcs-sep { height: 1px; margin: 6px 0; background: rgba(255, 255, 255, .1); }
     .ytcs-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px;
       background: rgba(255, 255, 255, .25); transition: background-color .2s ease; }
@@ -910,6 +912,8 @@
     bar: SVG('<path d="M3 12h18"/><path d="M3 7h2M3 17h2M19 7h2M19 17h2" opacity=".5"/><path d="M4 4l16 16"/>'),
     // закладка с плюсом — «Сохранить в плейлисты»
     save: SVG('<path d="M6 4h12v16l-6-4-6 4z"/><path d="M12 8v5"/><path d="M9.5 10.5h5"/>'),
+    // закладка с молнией — «Сохранить в «…»» (последний плейлист) одним нажатием
+    quicksave: SVG('<path d="M6 4h12v16l-6-4-6 4z"/><path d="M12.8 7.5l-2.6 3.8h3.4l-2.4 3.7"/>'),
     // часы со стрелкой вниз — «Отложить в очередь»
     defer: SVG('<path d="M20 12a8 8 0 1 1-8-8"/><path d="M12 8v4l2.5 1.5"/><path d="M19 4v5h-5"/>'),
     // стопка плейлистов — «Моя библиотека»
@@ -936,6 +940,7 @@
       <div class="ytcs-head">${UI_ICONS.brand}Сводка комментариев</div>
       <button class="ytcs-item" role="menuitem" data-act="panel">${UI_ICONS.panel}<span class="ytcs-label">Открыть сводку и комментарии</span></button>
       <button class="ytcs-item" role="menuitem" data-act="playlists">${UI_ICONS.save}<span class="ytcs-label">Сохранить в плейлисты</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="quicksave" hidden>${UI_ICONS.quicksave}<span class="ytcs-label ytcs-ellipsis">Сохранить в последний плейлист</span></button>
       <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
       <button class="ytcs-item" role="menuitem" data-act="library">${UI_ICONS.library}<span class="ytcs-label">Моя библиотека</span></button>
       <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
@@ -974,8 +979,25 @@
       document.querySelector("#movie_player .ytcs-btn")?.focus({ preventScroll: true });
     }
     uiMenu.classList.toggle("open", open);
+    if (open) syncQuickSave();
     document.querySelector(".ytcs-btn")?.setAttribute("aria-expanded", String(open));
     if (open) uiMenu.querySelector(".ytcs-item")?.focus({ preventScroll: true });
+  }
+
+  // «Сохранить в «…»» — последний плейлист, куда вы сохраняли в окне
+  function syncQuickSave() {
+    const item = uiMenu?.querySelector('[data-act="quicksave"]');
+    const last = globalThis.__ytcsPlaylists?.last;
+    if (!item || !last) return;
+    last()
+      .then((p) => {
+        item.hidden = !p;
+        if (!p) return;
+        const label = p.title ? `Сохранить в «${p.title}»` : "Сохранить в последний плейлист";
+        item.querySelector(".ytcs-label").textContent = label;
+        item.title = label;
+      })
+      .catch(() => {});
   }
 
   async function onMenuClick(e) {
@@ -1014,6 +1036,13 @@
       openMenu(false);
       if (!globalThis.__ytcsPlaylists?.open) setNote("Обновите страницу видео (F5).");
       else void globalThis.__ytcsPlaylists.open();
+      return;
+    }
+    // в последний плейлист — одним нажатием, итог — сообщением на странице
+    if (act === "quicksave") {
+      openMenu(false);
+      if (!globalThis.__ytcsPlaylists?.quickSave) setNote("Обновите страницу видео (F5).");
+      else void globalThis.__ytcsPlaylists.quickSave();
       return;
     }
     // клип — окно рисует clip.js здесь же, на странице

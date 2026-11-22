@@ -56,7 +56,8 @@
         "content.js",
         "clip.js",
         "playlists.js",
-        "queue.js"
+        "queue.js",
+        "select.js"
       ],
       "run_at": "document_idle"
     }
@@ -106,6 +107,12 @@
         "default": "Alt+Shift+S"
       },
       "description": "Сохранить видео в плейлисты (поиск и несколько сразу)"
+    },
+    "save-to-last-playlist": {
+      "description": "Сохранить видео в последний плейлист (куда сохраняли последним)"
+    },
+    "toggle-queue-mode": {
+      "description": "Вкл/выкл «Режим очереди» на ленте: нажатые видео улетают в очередь"
     },
     "open-library": {
       "description": "Открыть «Мою библиотеку» — поиск по всем плейлистам"

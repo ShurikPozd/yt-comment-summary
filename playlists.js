@@ -7,6 +7,7 @@
 
   const RECENT_KEY = "plRecent"; // id плейлистов, куда сохраняли последними
   const LIB_KEY = "plLibrary"; // обложки и «обновлено…» со страницы библиотеки
+  const NAMES_KEY = "plNames"; // названия недавних плейлистов — для «Сохранить в «…»» в меню плеера
   const LIB_TTL = 6 * 3600 * 1000;
   const ERRORS = {
     loggedout: "Войдите в аккаунт YouTube, чтобы сохранять в плейлисты",
@@ -24,6 +25,7 @@
     search: SVG('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
     plus: SVG('<path d="M12 5v14"/><path d="M5 12h14"/>'),
     check: SVG('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+    dash: SVG('<path d="M6.5 12h11"/>'),
     lock: SVG('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
     link: SVG('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/>'),
     globe: SVG('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>'),
@@ -175,7 +177,12 @@
     .box { flex: none; width: 24px; height: 24px; border-radius: 7px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .35);
       display: grid; place-items: center; color: transparent; transition: background-color .14s ease, box-shadow .14s ease; }
     .box svg { width: 16px; height: 16px; stroke-width: 2.6; }
+    .box .ck2 { display: none; }
     .row[aria-checked="true"] .box { background: #ff3b5c; box-shadow: none; color: #fff; }
+    /* часть выбранных видео уже в плейлисте */
+    .row[aria-checked="mixed"] .box { background: rgba(255, 59, 92, .3); box-shadow: inset 0 0 0 2px #ff3b5c; color: #fff; }
+    .row[aria-checked="mixed"] .box .ck1 { display: none; }
+    .row[aria-checked="mixed"] .box .ck2 { display: block; }
     .row.changed .t::after { content: "•"; margin-left: 6px; color: #ff6b85; }
     .row.create .thumb { background: rgba(255, 59, 92, .16); color: #ff6b85; }
     .empty { padding: 28px 8px; color: #a6a6ad; text-align: center; line-height: 1.5; }
@@ -220,17 +227,21 @@
     el.classList.toggle("err", err);
   }
 
-  // изменения относительно того, что было при открытии
-  const changes = () => ui.items.filter((p) => p.checked !== p.contains);
+  // Отметки плейлистов: has — как было при открытии, want — как отмечено сейчас.
+  // "all" — видео там (все выбранные), "some" — часть выбранных, "none" — нет.
+  const changes = () => ui.items.filter((p) => p.want !== p.has);
+  const ARIA = { all: "true", some: "mixed", none: "false" };
+  const stateOf = (p) => (p.contains ? "all" : "none");
 
   function rowHtml(p, words) {
     const lib = ui.lib.get(p.id);
     const thumb = lib?.thumb ? `style="background-image:url('${esc(lib.thumb)}')"` : "";
     const meta = [PRIVACY[p.privacy] || "", lib?.updated || ""].filter(Boolean).join(" · ");
-    return `<button class="row${p.checked !== p.contains ? " changed" : ""}" role="checkbox" aria-checked="${p.checked}" data-id="${esc(p.id)}">
+    const title = p.has === "some" && p.want === "some" ? ` title="Здесь уже часть выбранных видео"` : "";
+    return `<button class="row${p.want !== p.has ? " changed" : ""}" role="checkbox" aria-checked="${ARIA[p.want]}" data-id="${esc(p.id)}"${title}>
       <span class="thumb" ${thumb}>${thumb ? "" : ICON.list}</span>
       <span class="txt"><div class="t">${mark(p.title, words)}</div><div class="m">${privIcon(p.privacy)}${esc(meta)}</div></span>
-      <span class="box">${ICON.check}</span>
+      <span class="box"><span class="ck1">${ICON.check}</span><span class="ck2">${ICON.dash}</span></span>
     </button>`;
   }
 
@@ -285,26 +296,37 @@
   function renderFoot() {
     if (!ui || ui.loading || ui.error) return;
     const ch = changes();
-    const add = ch.filter((p) => p.checked).length;
+    const add = ch.filter((p) => p.want === "all").length;
     const del = ch.length - add;
-    const inN = ui.items.filter((p) => p.checked).length;
+    const inN = ui.items.filter((p) => p.want === "all").length;
+    const someN = ui.items.filter((p) => p.want === "some").length;
+    const n = ui.videoIds.length;
     const parts = [];
     if (add) parts.push(`+${add}`);
     if (del) parts.push(`−${del}`);
-    setInfo(ch.length ? `Изменения: ${parts.join(", ")} · видео будет в ${inN}` : inN ? `Видео уже в ${inN} ${plural(inN)}` : "Отметьте плейлисты галочками");
+    let info;
+    if (n === 1) info = ch.length ? `Изменения: ${parts.join(", ")} · видео будет в ${inN}` : inN ? `Видео уже в ${inN} ${plural(inN)}` : "Отметьте плейлисты галочками";
+    else if (ch.length) info = `Изменения: ${parts.join(", ")} · для ${n} видео`;
+    else if (inN) info = `Все ${n} видео уже в ${inN} ${plural(inN)}` + (someN ? `, часть — ещё в ${someN}` : "");
+    else if (someN) info = `Часть видео уже в ${someN} ${plural(someN)}`;
+    else info = "Отметьте плейлисты галочками";
+    setInfo(info);
     ui.$(".go").disabled = !ch.length || ui.saving;
   }
   const plural = (n) => (n % 10 === 1 && n % 100 !== 11 ? "плейлисте" : "плейлистах");
 
+  // Клик по плейлисту: есть ↔ нет; если там была часть видео — по кругу
+  // «во всех» → «ни в одном» → «как было».
   function toggle(id) {
     const p = ui.items.find((x) => x.id === id);
     if (!p || ui.saving) return;
-    p.checked = !p.checked;
+    if (p.has === "some") p.want = p.want === "some" ? "all" : p.want === "all" ? "none" : "some";
+    else p.want = p.want === "all" ? "none" : "all";
     const row = ui.root.querySelector(`.row[data-id="${CSS_ESCAPE(id)}"]`);
     // обновляем строку на месте — фокус и прокрутка не прыгают
     if (row) {
-      row.setAttribute("aria-checked", String(p.checked));
-      row.classList.toggle("changed", p.checked !== p.contains);
+      row.setAttribute("aria-checked", ARIA[p.want]);
+      row.classList.toggle("changed", p.want !== p.has);
     }
     renderFoot();
   }
@@ -315,16 +337,19 @@
     const title = ui.query.trim();
     if (!title || ui.saving || ui.loading || ui.error) return;
     const mine = ui;
+    const n = ui.videoIds.length;
     ui.saving = true;
     setInfo(`Создаю «${title}»…`);
     try {
-      const { id } = await call("create", { title, privacy: "PRIVATE", videoIds: [ui.videoId] });
+      const { id } = await call("create", { title, privacy: "PRIVATE", videoIds: ui.videoIds });
+      markSaved(mine.videoIds, true);
       if (ui !== mine) return;
-      ui.items.unshift({ id, title, privacy: "PRIVATE", contains: true, checked: true });
+      ui.items.unshift({ id, title, privacy: "PRIVATE", has: "all", want: "all" });
+      if (ui.per) for (const v of ui.videoIds) ui.per.get(v)?.add(id);
       remember(mine, [id]);
       ui.query = "";
       ui.$("input").value = "";
-      toast(`Создан плейлист «${title}», видео в нём`);
+      toast(n > 1 ? `Создан плейлист «${title}», в нём ${n} видео` : `Создан плейлист «${title}», видео в нём`);
     } catch (e) {
       if (ui === mine) setInfo(ERRORS[e.code] || ERRORS.fail, true);
     } finally {
@@ -338,23 +363,38 @@
   function remember(state, ids) {
     state.recent = [...ids, ...state.recent.filter((x) => !ids.includes(x))].slice(0, 20);
     save(RECENT_KEY, state.recent);
+    void saveNames(state.recent, state.items);
   }
 
-  // Сообщение на странице — когда окно уже закрыто (сохранение доведено без него)
+  // Названия недавних плейлистов — меню плеера показывает «Сохранить в «…»» сразу, без запроса
+  async function saveNames(recent, items) {
+    const old = (await load(NAMES_KEY)) || {};
+    const names = {};
+    for (const id of recent.slice(0, 20)) {
+      const t = items.find((p) => p.id === id)?.title || old[id];
+      if (t) names[id] = t;
+    }
+    save(NAMES_KEY, names);
+  }
+
+  // Сообщение на странице — когда окна нет (сохранение доведено без него, «в последний плейлист»)
   function pageToast(text) {
+    document.getElementById("ytcs-pl-toast")?.remove();
     const t = document.createElement("div");
+    t.id = "ytcs-pl-toast";
     t.textContent = text;
     t.setAttribute("role", "status");
     t.style.cssText =
-      "position:fixed;left:50%;top:72px;z-index:2147483001;transform:translateX(-50%);padding:10px 18px 11px;" +
-      "border-radius:999px;background:rgba(28,28,30,.94);color:#f1f1f1;font:500 14px/1.3 Roboto,Arial,sans-serif;" +
+      "position:fixed;left:50%;top:72px;z-index:2147483001;transform:translateX(-50%);max-width:calc(100vw - 32px);" +
+      "padding:11px 20px 12px;border-radius:999px;background:rgba(28,28,30,.94);color:#f1f1f1;" +
+      "font:500 15px/1.3 Roboto,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" +
       "box-shadow:0 8px 30px rgba(0,0,0,.4);transition:opacity .2s ease;pointer-events:none";
-    document.documentElement.appendChild(t);
+    (document.fullscreenElement || document.documentElement).appendChild(t);
     setTimeout(() => (t.style.opacity = "0"), 2600);
     setTimeout(() => t.remove(), 2900);
   }
 
-  // Сохранить отмеченное: по одному запросу на плейлист, неспешно
+  // Сохранить отмеченное: по одному запросу на плейлист и видео, неспешно.
   // Сохранение доводится до конца, даже если окно закрыли посреди него или
   // автовоспроизведение ушло на другое видео: итог — сообщением на странице.
   async function apply() {
@@ -362,43 +402,69 @@
     const ch = changes();
     if (!ch.length) return;
     const mine = ui;
-    const videoId = ui.videoId;
+    const videoIds = ui.videoIds;
+    const n = videoIds.length;
     mine.saving = true;
     mine.$(".go").disabled = true;
-    let ok = 0;
-    const failed = [];
-    for (const p of ch) {
-      if (ui === mine) setInfo(`Сохраняю… ${ok + failed.length + 1} из ${ch.length}`);
+    // где «часть видео» — какие именно, узнали при открытии (mine.per): лишний раз не добавляем и не убираем
+    const per = mine.per;
+    const isIn = (p, v) => (p.has === "all" ? true : p.has === "none" ? false : per.get(v).has(p.id));
+    const jobs = [];
+    for (const p of ch) for (const v of videoIds) if (isIn(p, v) !== (p.want === "all")) jobs.push({ p, v, add: p.want === "all" });
+    const failed = new Set();
+    let done = 0;
+    for (const j of jobs) {
+      done++;
+      if (ui === mine) setInfo(`Сохраняю… ${done} из ${jobs.length}`);
       try {
-        await call("edit", { playlistId: p.id, videoId, add: p.checked });
-        p.contains = p.checked;
-        ok++;
+        await call("edit", { playlistId: j.p.id, videoId: j.v, add: j.add });
+        if (per) j.add ? per.get(j.v).add(j.p.id) : per.get(j.v).delete(j.p.id);
       } catch (e) {
-        failed.push(p);
+        failed.add(j.p);
         // своя причина от YouTube — покажем её, а не «попробуйте ещё раз»
-        p.why = e.code === "yt" ? e.message.trim().replace(/\.$/, "") : "";
+        j.p.why = e.code === "yt" ? e.message.trim().replace(/\.$/, "") : "";
+      }
+    }
+    for (const p of ch) {
+      if (!failed.has(p)) p.has = p.want;
+      // не всё получилось — пересчитываем по тому, что на самом деле сделано
+      else if (per) {
+        const c = videoIds.filter((v) => per.get(v).has(p.id)).length;
+        p.has = p.want = c === 0 ? "none" : c === n ? "all" : "some";
       }
     }
     mine.saving = false;
-    const added = ch.filter((p) => p.checked && !failed.includes(p));
+    const okList = ch.filter((p) => !failed.has(p));
+    const added = okList.filter((p) => p.want === "all");
     if (added.length) remember(mine, added.map((p) => p.id));
+    // отметка «Сохранено» на кнопке Shorts: одно видео — знаем точно, несколько — спросим заново
+    markSaved(videoIds, n === 1 ? mine.items.some((p) => p.has === "all") : null);
     const a = added.length;
-    const d = ok - a;
+    const d = okList.length - a;
     const parts = [];
     if (a) parts.push(`добавлено в ${a}`);
     if (d) parts.push(`убрано из ${d}`);
     const lc = (s) => s.charAt(0).toLowerCase() + s.slice(1);
-    const fail = failed.length
-      ? `Не получилось: ${failed.map((p) => (p.why ? `«${p.title}» — ${lc(p.why)}` : `«${p.title}»`)).join("; ")}` +
-        (failed.some((p) => !p.why) ? " — попробуйте ещё раз" : "")
+    const failedList = [...failed];
+    const fail = failedList.length
+      ? `Не получилось: ${failedList.map((p) => (p.why ? `«${p.title}» — ${lc(p.why)}` : `«${p.title}»`)).join("; ")}` +
+        (failedList.some((p) => !p.why) ? " — попробуйте ещё раз" : "")
       : "";
+    const okText = `Сохранено${n > 1 ? ` ${n} видео` : ""}: ${parts.join(", ")}`;
+    if (!fail) {
+      try {
+        mine.onSaved?.(videoIds.slice());
+      } catch (e) {
+        /* выбор в ленте — не главное */
+      }
+    }
     if (ui !== mine) {
-      pageToast(fail || `Сохранено: ${parts.join(", ")}`);
+      pageToast(fail || okText);
       return;
     }
     render();
     if (fail) return setInfo(fail, true);
-    toast(`Сохранено: ${parts.join(", ")}`);
+    toast(okText);
     setTimeout(() => ui === mine && close(), 900);
   }
 
@@ -477,9 +543,15 @@
     cur.prevFocus?.focus?.({ preventScroll: true });
   }
 
+  // opts: { videoId, title } — одно видео (по умолчанию — видео этой страницы);
+  // { videos: [{ id, title }], onSaved(ids) } — несколько, из выбора в ленте.
   async function open(opts = {}) {
-    const videoId = opts.videoId || videoIdFromPage();
-    if (!videoId) return false;
+    const videos = (Array.isArray(opts.videos) ? opts.videos : []).filter((v) => /^[A-Za-z0-9_-]{11}$/.test(v?.id || ""));
+    const videoIds = videos.length ? [...new Set(videos.map((v) => v.id))] : [opts.videoId || videoIdFromPage()].filter(Boolean);
+    if (!videoIds.length) return false;
+    const videoId = videoIds[0];
+    const multi = videoIds.length > 1;
+    if (videos.length === 1 && !opts.title) opts = { ...opts, title: videos[0].title || "" };
     close();
     globalThis.__ytcsClip?.close?.(); // одно окно за раз — иначе спорят за клавиши
     const host = document.createElement("div");
@@ -509,7 +581,8 @@
       root,
       wrap,
       $: (s) => root.querySelector(s),
-      videoId,
+      videoIds,
+      onSaved: typeof opts.onSaved === "function" ? opts.onSaved : null,
       items: [],
       lib: new Map(),
       recent: [],
@@ -520,10 +593,18 @@
       prevFocus: document.activeElement,
     };
     const mine = ui;
-    const own = videoId === videoIdFromPage();
-    root.querySelector(".sub").textContent = opts.title || (own ? pageTitle() : "Ролик из ленты");
+    const own = !multi && videoId === videoIdFromPage();
+    const sub = root.querySelector(".sub");
+    if (multi) {
+      const names = videos.map((v) => v.title).filter(Boolean);
+      const shown = names.slice(0, 2).map((t) => `«${t}»`).join(", ");
+      const rest = videoIds.length - Math.min(2, names.length);
+      sub.textContent = `${videoIds.length} видео` + (shown ? `: ${shown}${rest ? ` и ещё ${rest}` : ""}` : "");
+      sub.title = names.join("\n");
+      root.querySelector("h2").textContent = `Сохранить ${videoIds.length} видео в плейлисты`;
+    } else sub.textContent = opts.title || (own ? pageTitle() : "Ролик из ленты");
     // ролик не этой страницы (правый клик по превью) — название берём у YouTube
-    if (!own && !opts.title) {
+    if (!multi && !own && !opts.title) {
       fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -565,9 +646,36 @@
     ui.recent = Array.isArray(recent) ? recent : [];
     for (const it of lib?.items || []) ui.lib.set(it.id, it);
     try {
-      const items = await call("list", { videoIds: [videoId] });
+      // YouTube отвечает про одно видео за запрос — для нескольких спрашиваем
+      // про каждое (по три сразу) и сами считаем: во всех, в части, ни в одном
+      let items;
+      if (!multi) items = (await call("list", { videoIds })).map((p) => ({ ...p, has: stateOf(p) }));
+      else {
+        const per = new Map();
+        let base = null;
+        let k = 0;
+        const queue = videoIds.slice();
+        const worker = async () => {
+          while (queue.length && ui === mine) {
+            const v = queue.shift();
+            const rows = await call("list", { videoIds: [v] });
+            per.set(v, new Set(rows.filter((r) => r.contains).map((r) => r.id)));
+            base ||= rows;
+            if (ui === mine) setInfo(`Смотрю, где уже лежат видео… ${++k} из ${videoIds.length}`);
+          }
+        };
+        await Promise.all([worker(), worker(), worker()]);
+        if (ui !== mine) return true;
+        ui.per = per;
+        items = base.map((p) => {
+          const c = videoIds.filter((v) => per.get(v).has(p.id)).length;
+          return { ...p, has: c === 0 ? "none" : c === videoIds.length ? "all" : "some" };
+        });
+      }
       if (ui !== mine) return true;
-      ui.items = items.map((p) => ({ ...p, checked: p.contains }));
+      ui.items = items.map((p) => ({ ...p, want: p.has }));
+      if (!multi) markSaved(videoIds, ui.items.some((p) => p.has === "all"));
+      void saveNames(ui.recent, ui.items);
       ui.loading = false;
       render();
     } catch (e) {
@@ -615,6 +723,8 @@
     .ytcs-sbtn span { margin-top: 4px; font: 400 12px/18px Roboto, Arial, sans-serif; color: #0f0f0f; }
     html[dark] .ytcs-sbtn span { color: #f1f1f1; }`;
   const SAVE_ICON = SVG('<path d="M6 4h12v16l-6-4-6 4z"/><path d="M12 8v5"/><path d="M9.5 10.5h5"/>');
+  // уже сохранён хоть в один плейлист — закладка закрашена
+  const SAVED_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M6 4h12v16l-6-4-6 4z"/></svg>`;
 
   // Колонка кнопок ролика, который сейчас на экране. Раньше YouTube помечал
   // его [is-active]; в новой раскладке колонка одна на все ролики, без пометки —
@@ -635,28 +745,128 @@
     return best;
   }
 
+  // ---------- «уже сохранено» ----------
+  // id ролика → есть ли он хоть в одном вашем плейлисте. Узнаём лениво —
+  // когда Short оказался на экране, одним запросом; после сохранения — сразу.
+  const savedCache = new Map();
+  let savedAsking = null;
+  // ids: какие видео; saved: true/false — знаем точно, null — забыть и спросить заново
+  function markSaved(ids, saved) {
+    for (const id of ids) saved === null ? savedCache.delete(id) : savedCache.set(id, saved);
+    ensureShortsButton();
+  }
+
+  function paintSaved(box, id, saved) {
+    const key = `${id}:${saved ? 1 : 0}`;
+    if (box.dataset.state === key) return;
+    box.dataset.state = key;
+    const b = box.querySelector("button");
+    b.innerHTML = saved ? SAVED_ICON : SAVE_ICON;
+    b.setAttribute("aria-label", saved ? "Сохранено в плейлистах — изменить" : "Сохранить в плейлисты");
+    b.title = saved ? "Уже в ваших плейлистах — изменить (Alt+Shift+S)" : "Сохранить в плейлисты (Alt+Shift+S)";
+    box.querySelector("span").textContent = saved ? "Сохранено" : "Сохранить";
+    box.classList.toggle("saved", saved);
+  }
+
+  function syncSaved(box) {
+    const id = videoIdFromPage();
+    if (!id) return;
+    if (savedCache.has(id)) return paintSaved(box, id, savedCache.get(id));
+    paintSaved(box, id, false);
+    if (savedAsking) return; // по одному запросу; следующий — на следующем тике
+    savedAsking = id;
+    call("list", { videoIds: [id] }, 15000)
+      .then((rows) => savedCache.set(id, rows.some((r) => r.contains)))
+      .catch(() => {}) // не вошли в аккаунт и т. п. — остаётся «Сохранить»
+      .finally(() => {
+        savedAsking = null;
+        ensureShortsButton();
+      });
+  }
+
   function ensureShortsButton() {
     if (!location.pathname.startsWith("/shorts/") || !alive()) return;
     const bar = shortsBar();
-    if (!bar || bar.querySelector(".ytcs-sbtn")) return;
-    if (!document.getElementById("ytcs-shorts-css")) {
-      const st = document.createElement("style");
-      st.id = "ytcs-shorts-css";
-      st.textContent = SHORTS_CSS;
-      (document.head || document.documentElement).appendChild(st);
+    if (!bar) return;
+    let box = bar.querySelector(".ytcs-sbtn");
+    if (!box) {
+      if (!document.getElementById("ytcs-shorts-css")) {
+        const st = document.createElement("style");
+        st.id = "ytcs-shorts-css";
+        st.textContent = SHORTS_CSS;
+        (document.head || document.documentElement).appendChild(st);
+      }
+      box = document.createElement("div");
+      box.className = "ytcs-sbtn";
+      box.innerHTML = `<button aria-label="Сохранить в плейлисты" title="Сохранить в плейлисты (Alt+Shift+S)">${SAVE_ICON}</button><span>Сохранить</span>`;
+      box.querySelector("button").addEventListener("click", (e) => {
+        e.stopPropagation();
+        void open();
+      });
+      const pivot = bar.querySelector("pivot-button-view-model");
+      if (pivot?.parentNode) pivot.parentNode.insertBefore(box, pivot);
+      else bar.appendChild(box);
     }
-    const box = document.createElement("div");
-    box.className = "ytcs-sbtn";
-    box.innerHTML = `<button aria-label="Сохранить в плейлисты" title="Сохранить в плейлисты (Alt+Shift+S)">${SAVE_ICON}</button><span>Сохранить</span>`;
-    box.querySelector("button").addEventListener("click", (e) => {
-      e.stopPropagation();
-      void open();
-    });
-    const pivot = bar.querySelector("pivot-button-view-model");
-    if (pivot?.parentNode) pivot.parentNode.insertBefore(box, pivot);
-    else bar.appendChild(box);
+    syncSaved(box);
   }
   setInterval(ensureShortsButton, 1000);
 
-  globalThis.__ytcsPlaylists = { open, close };
+  // ---------- «Сохранить в последний плейлист» ----------
+  // Последний — тот, куда вы сохраняли в окне последним (plRecent[0]).
+  async function last() {
+    const [recent, names] = await Promise.all([load(RECENT_KEY), load(NAMES_KEY)]);
+    const id = Array.isArray(recent) ? recent[0] : null;
+    return id ? { id, title: names?.[id] || "" } : null;
+  }
+
+  let quickBusy = false;
+  async function quickSave() {
+    const videoId = videoIdFromPage();
+    if (!videoId) return pageToast("Откройте видео, чтобы сохранить его"), false;
+    if (!alive()) return pageToast(ERRORS.noreply), false;
+    if (quickBusy) return false;
+    const target = await last();
+    // ещё ни разу не сохраняли — обычное окно, после него «последний» появится
+    if (!target) return open();
+    quickBusy = true;
+    try {
+      const rows = await call("list", { videoIds: [videoId] });
+      const p = rows.find((r) => r.id === target.id);
+      if (!p) {
+        pageToast("Последнего плейлиста больше нет — выберите, куда сохранить");
+        return open();
+      }
+      if (p.title && p.title !== target.title) {
+        const names = (await load(NAMES_KEY)) || {};
+        save(NAMES_KEY, { ...names, [p.id]: p.title });
+      }
+      if (p.contains) {
+        pageToast(`Уже в «${p.title}»`);
+        markSaved([videoId], true);
+        return true;
+      }
+      await call("edit", { playlistId: p.id, videoId, add: true });
+      markSaved([videoId], true);
+      pageToast(`Сохранено в «${p.title}»`);
+      return true;
+    } catch (e) {
+      pageToast(e.code === "yt" ? `Не получилось: ${e.message.trim().replace(/\.$/, "")}` : ERRORS[e.code] || ERRORS.fail);
+      return false;
+    } finally {
+      quickBusy = false;
+    }
+  }
+
+  // команда «Сохранить в последний плейлист» (своя клавиша — chrome://extensions/shortcuts)
+  try {
+    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+      if (msg?.type !== "yt:quicksave") return;
+      sendResponse({ ok: true });
+      void quickSave();
+    });
+  } catch (e) {
+    /* расширение обновилось — эта копия скрипта уже не главная */
+  }
+
+  globalThis.__ytcsPlaylists = { open, close, last, quickSave };
 })();

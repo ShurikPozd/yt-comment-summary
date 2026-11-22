@@ -701,6 +701,16 @@ chrome.commands.onCommand.addListener(async (command, cmdTab) => {
     if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\/(watch|shorts\/)/.test(tab.url || "")) chrome.tabs.sendMessage(tab.id, { type: "yt:defer" }).catch(() => {});
     return;
   }
+  if (command === "save-to-last-playlist") {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\//.test(tab.url || "")) chrome.tabs.sendMessage(tab.id, { type: "yt:quicksave" }).catch(() => {});
+    return;
+  }
+  if (command === "toggle-queue-mode") {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id && /^https:\/\/www\.youtube\.com\//.test(tab.url || "")) chrome.tabs.sendMessage(tab.id, { type: "yt:queue-mode" }).catch(() => {});
+    return;
+  }
   if (command === "save-to-playlists") {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\//.test(tab.url || "")) {
