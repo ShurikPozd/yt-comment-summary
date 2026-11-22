@@ -41,13 +41,19 @@
         <span data-icon="search" data-size="16"></span>
         <input id="pl-q" type="search" autocomplete="off" placeholder="Найти плейлист" aria-label="Найти плейлист" />
       </label>
-      <div class="seg" role="radiogroup" aria-label="Длительность" id="dur">
-        <button type="button" id="sem-btn" class="sem-btn lib-only" aria-pressed="false" title="Искать по теме, а не только по словам: «что приготовить утром» найдёт «Шакшука на завтрак»"><span data-icon="sparkles" data-size="16"></span>По смыслу</button>
-        <button type="button" role="radio" data-dur="" aria-checked="true">Любая длина</button>
-        <button type="button" role="radio" data-dur="0-61">Shorts и до 1 мин</button>
-        <button type="button" role="radio" data-dur="61-600">1–10 мин</button>
-        <button type="button" role="radio" data-dur="600-1800">10–30 мин</button>
-        <button type="button" role="radio" data-dur="1800-">Больше 30 мин</button>
+      <!-- две группы: режимы поиска и длительность — не влезают в строку, переносятся целиком -->
+      <div class="seg">
+        <span class="modes lib-only">
+          <button type="button" id="sem-btn" class="sem-btn lib-only" aria-pressed="false" title="Искать по теме, а не только по словам: «что приготовить утром» найдёт «Шакшука на завтрак»"><span data-icon="sparkles" data-size="16"></span>По смыслу</button>
+          <button type="button" id="subs-btn" class="sem-btn lib-only" aria-pressed="false" aria-expanded="false" aria-controls="subs-info" title="Искать и по тому, что говорят в видео, — и открывать с нужного места"><span data-icon="subtitles" data-size="16"></span>В субтитрах<span class="subs-pct" hidden></span></button>
+        </span>
+        <span class="durs" role="radiogroup" aria-label="Длительность" id="dur">
+          <button type="button" role="radio" data-dur="" aria-checked="true">Любая длина</button>
+          <button type="button" role="radio" data-dur="0-61">Shorts и до 1 мин</button>
+          <button type="button" role="radio" data-dur="61-600">1–10 мин</button>
+          <button type="button" role="radio" data-dur="600-1800">10–30 мин</button>
+          <button type="button" role="radio" data-dur="1800-">Больше 30 мин</button>
+        </span>
       </div>
       <label class="sort">
         <span>Порядок</span>
@@ -64,6 +70,7 @@
       <main class="main">
         <section id="cont" class="cont queue-only" hidden aria-label="Продолжить смотреть"></section>
         <div id="sem-info" class="lib-only" hidden></div>
+        <div id="subs-info" class="lib-only" hidden></div>
         <div id="tidy" class="lib-only" hidden></div>
         <div id="backup" hidden></div>
         <div id="summary" class="summary" role="status"></div>
@@ -80,6 +87,8 @@
     <section id="triage" class="triage" hidden aria-label="Разобрать очередь"></section>
 
     <!-- «Превью» и «О чём видео» на обложках — общий модуль с карточками YouTube -->
+    <!-- субтитры видео — для поиска по ним (library/subs.js) -->
+    <script src="../transcript.js"></script>
     <script src="../thumb-preview.js"></script>
     <script src="../video-actions.js"></script>
     <script type="module" src="library.js"></script>

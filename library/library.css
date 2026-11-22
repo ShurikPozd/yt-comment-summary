@@ -344,6 +344,48 @@ button.primary:disabled {
   flex-wrap: wrap;
 }
 
+/* режимы поиска («По смыслу», «В субтитрах») и длительность — две группы:
+   не помещаются в строку — вторая группа целиком уходит на следующую */
+.seg .modes,
+.seg .durs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body[data-view="queue"] .seg .modes {
+  display: none;
+}
+
+/* средняя ширина: в одну строку не влезает — режимы в строке с поиском плейлиста
+   и «Порядком», длительность — второй строкой во всю ширину (ровно, без переносов внутри) */
+@media (min-width: 1101px) and (max-width: 1580px) {
+  body:not([data-view="queue"]) .filters .seg {
+    display: contents;
+  }
+  body:not([data-view="queue"]) .filters .side-search {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  body:not([data-view="queue"]) .filters .modes {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  body:not([data-view="queue"]) .filters .sort {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  body:not([data-view="queue"]) .filters .durs {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+  /* под «Найти плейлист» вторая строка пустая — список плейлистов поднимается
+     на её высоту (строка длительности 2.3rem + промежуток 12px): без пустоты */
+  body:not([data-view="queue"]) .side {
+    margin-top: calc(-2.3rem - 12px);
+  }
+}
+
 .seg button,
 .chip {
   height: 2.3rem;
@@ -841,6 +883,11 @@ mark {
   }
   .filters {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .filters .seg .modes,
+  .filters .seg .durs {
+    flex: none;
+    flex-wrap: nowrap;
   }
   .filters .seg {
     grid-row: auto;
@@ -2195,6 +2242,94 @@ body[data-triage] .watch {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* ---------- поиск по субтитрам ---------- */
+#subs-info .tidy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#subs-info .td-top {
+  margin-bottom: 0;
+}
+
+/* «12 %» в кнопке, пока читаются субтитры */
+.subs-pct {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.6em;
+  height: 1.5rem;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.subs-pct[hidden] {
+  display: none;
+}
+
+/* «1 234 из 3 950 видео» и проценты — над полосой */
+.subs-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--fg-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* фрагмент из субтитров на карточке: таймкод + цитата, щелчок — с этого места */
+.snip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--fg-2);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.snip:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+
+.snip-t {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1.45rem;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  /* по центру первой строки цитаты */
+  margin-top: calc((1.4em - 1.45rem) / 2);
+}
+
+.snip-q {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- очередь: пустая и в узком окне ---------- */

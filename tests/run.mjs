@@ -6,9 +6,10 @@
 // Запускается из check-syntax.sh перед коммитом.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { buildIndex, search, highlight, stem, swapLayout } from "../library/search.js";
+import { buildIndex, search, highlight, stem, swapLayout, tokens } from "../library/search.js";
 import { parseTldr, pickEven, runTldr, splitParts } from "../tldr-core.js";
 import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs } from "../groq.js";
+import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
 let passed = 0;
@@ -46,6 +47,45 @@ ok(search(ix, "   ").results === null, "пустой запрос");
 const hl = highlight("Как построить дом в Майнкрафте", search(ix, "майнкрафт").results[0].hits);
 ok(hl.some((p) => p.hit && p.t === "Майнкрафте"), "подсветка исходного слова");
 ok(highlight("Ёлка ёжик", new Set(["елка"])).some((p) => p.hit && p.t === "Ёлка"), "подсветка с ё");
+
+// ---------- поиск по субтитрам (library/subs-core.js) ----------
+{
+  const segs = (list) => list.map(([t, text]) => ({ t, text }));
+  const b1 = chunkSegments(segs([[0, "привет  друзья"], [3, "сегодня соберём"], [9, "компьютер"], [26, "сначала ставим"], [30, "блок питания"], [61, "потом видеокарту"]]));
+  ok(b1.length === 3 && b1[0].t === 0 && b1[0].text === "привет друзья сегодня соберём компьютер" && b1[1].t === 26 && b1[2].t === 61, "субтитры режутся на блоки ~25 с");
+  ok(chunkSegments(segs([[0, "  "], [1, "x"]])).length === 1 && chunkSegments([]).length === 0, "пустые кусочки пропускаются");
+  const huge = chunkSegments(Array.from({ length: SHIFT * 2 }, (_, i) => ({ t: i * 30, text: "слово" })));
+  ok(huge.length < SHIFT, "очень длинное видео — блоки крупнее, номер помещается");
+  ok(JSON.stringify(decodeBlocks(encodeBlocks([{ t: 5, text: "a\tb\nc" }]))) === JSON.stringify([{ t: 5, text: "a b c" }]), "упаковка блоков: табуляции и переводы строк");
+  const z = await pack(b1);
+  ok(JSON.stringify(await unpack(z)) === JSON.stringify(b1) && z.byteLength < encodeBlocks(b1).length * 2, "сжатие и обратно");
+
+  const ix = createIndex();
+  addDoc(ix, "pc", b1);
+  addDoc(ix, "cook", chunkSegments(segs([[0, "разбиваем яйца на сковороду"], [12, "добавляем помидоры и перец"], [40, "шакшука готова"], [70, "про блок рекламы"], [100, "питания хватит надолго"]])));
+  addDoc(ix, "mc", chunkSegments(segs([[0, "строим дом в майнкрафте"], [30, "крыша из блоков и блокнот"]])));
+  const ids = (q) => searchSubs(ix, q).results.map((r) => r.id);
+  const first = (q) => searchSubs(ix, q).results[0];
+  ok(first("блок питания")?.id === "pc" && first("блок питания").t === 26, "фраза в одном блоке — первой, со своим таймкодом");
+  ok(ids("блок питания").join() === "pc,cook", "слова врозь в одном видео — ниже");
+  ok(first("яйца помидоры")?.id === "cook" && first("яйца помидоры").t === 0, "слова в соседних блоках — таймкод первого");
+  ok(first("видеокарта")?.id === "pc" && first("видеокарта").t === 61, "другая форма слова");
+  ok(ids("майнкр").join() === "mc", "недописанное слово");
+  ok(JSON.stringify(searchSubs(ix, "блок").terms) === JSON.stringify([["блок"]]) && JSON.stringify(searchSubs(ix, "блокн").terms) === JSON.stringify([["блокнот"]]), "дописанное слово не тянет похожие («блок» ≠ «блокнот»)");
+  ok(ids("блок -реклама").join() === "pc,mc", "минус-слово исключает видео");
+  ok(searchSubs(ix, "   ").results.length === 0 && searchSubs(ix, "квазар").results.length === 0, "пусто и не найдено");
+  ok(first("блок питания").score > first("блок питания").score - 1 && first("блок питания").score <= 1, "оценка 0..1");
+  addDoc(ix, "pc", chunkSegments(segs([[0, "обновлённое видео про корпус"]])));
+  ok(!ids("видеокарта").includes("pc") && ids("корпус").join() === "pc", "видео перечитано — старые субтитры не ищутся");
+
+  const long = chunkSegments(segs([[0, "раз два три четыре пять шесть семь восемь девять десять одиннадцать двенадцать тринадцать четырнадцать пятнадцать шестнадцать"], [10, "семнадцать восемнадцать девятнадцать двадцать двадцать один двадцать два"], [20, "блок питания на 750 ватт хватит для видеокарты"], [26, "дальше охлаждение"]]));
+  const r = searchSubs((() => { const x = createIndex(); addDoc(x, "a", long); return x; })(), "питания видеокарты");
+  const sn = snippet(long, r.results[0].b, r.terms);
+  ok(sn.text.startsWith("…") && sn.text.includes("блок питания на 750 ватт") && sn.hits.includes("питания") && sn.hits.includes("видеокарты"), "фрагмент вокруг найденного, слова для подсветки");
+  ok(highlight(sn.text, new Set(sn.hits)).filter((p) => p.hit).length === 2, "подсветка фрагмента");
+  const same = (t) => words(t).join() === tokens(t).filter((w) => w.length > 1).join();
+  ok(["Ёлка и ЁЖИК, 100% OK!", "Café naïve — résumé", "Привет, мир: «блок» питания"].every(same), "быстрый разбор слов = обычному (ё, диакритика)");
+}
 
 // ---------- разбор ответов YouTube (playlists-main.js) ----------
 // Скрипт живёт в мире страницы и общается событиями; запускаем его в песочнице

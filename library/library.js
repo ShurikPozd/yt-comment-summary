@@ -107,6 +107,12 @@ $("#pl-list").addEventListener("click", (e) => {
 $("#cont").addEventListener("click", onQueueGridClick);
 $("#grid").addEventListener("click", (e) => {
   if (state.view === "queue") return onQueueGridClick(e);
+  // фрагмент из субтитров — открыть с этого места (в своём плеере или на YouTube по ссылке с &t=)
+  const snip = e.target.closest("a.snip");
+  if (snip && watchHere() && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+    e.preventDefault();
+    return openWatch(snip.closest(".card")?.dataset.vid, "lib", Number(snip.dataset.t) || 0);
+  }
   const link = e.target.closest("a.thumb, a.title");
   if (link && watchHere() && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
     e.preventDefault();
