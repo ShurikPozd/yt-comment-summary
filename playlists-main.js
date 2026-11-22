@@ -228,7 +228,32 @@
       }
       for (const k in o) walk(o[k]);
     })(j);
-    return { items, next };
+    return token ? { items, next } : { items, next, head: head(j) };
+  }
+
+  // «5 000 видео» → 5000 (числа без «видео» не берём: просмотры и т. п.)
+  const COUNT = /^\s*([\d\s.,]+?)\s*(?:видео|videos?)\s*$/i;
+  const countOf = (s) => {
+    const d = (String(s || "").match(COUNT)?.[1] || "").replace(/\D/g, "");
+    return d ? Number(d) : null;
+  };
+
+  // Шапка плейлиста на первой странице: сколько в нём видео и «Обновлено …».
+  // Старый вид — playlistHeaderRenderer (numVideosText, byline), новый —
+  // pageHeaderViewModel (metadataParts), а «Обновлено» тогда лежит в sidebar.
+  function head(j) {
+    let count = null;
+    let updated = "";
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      const t = typeof o.content === "string" ? o.content : o.simpleText ?? (Array.isArray(o.runs) ? o.runs.map((x) => x.text || "").join("") : null);
+      if (typeof t === "string") {
+        if (count == null) count = countOf(t);
+        if (!updated && /обновл|updated/i.test(t) && t.length < 80) updated = t;
+      }
+      for (const k in o) walk(o[k]);
+    })({ h: j?.header, s: j?.sidebar });
+    return { count, updated };
   }
 
   // Токен «загрузить ещё» внутри continuationItemRenderer (или нового
@@ -247,7 +272,7 @@
     return token;
   }
 
-  // Обложки и «обновлено…» со страницы «Плейлисты» вашей библиотеки
+  // Обложки, число видео и «обновлено…» со страницы «Плейлисты» вашей библиотеки
   async function library() {
     const out = [];
     let j = await post("browse", { browseId: "FEplaylist_aggregation" });
@@ -260,7 +285,13 @@
           const s = JSON.stringify(l);
           const thumb = (s.match(/https:\/\/i\.ytimg\.com\/[^"]+?\.(?:jpg|webp)/) || [])[0] || "";
           const lines = [...s.matchAll(/"content":"([^"]{1,60})"/g)].map((m) => m[1]);
-          out.push({ id: l.contentId, thumb, updated: lines.find((x) => /обновлен|updated/i.test(x)) || "" });
+          let count = null; // «683 видео» на обложке
+          (function badge(o) {
+            if (count != null || !o || typeof o !== "object") return;
+            if (typeof o.thumbnailBadgeViewModel?.text === "string") count = countOf(o.thumbnailBadgeViewModel.text);
+            for (const k in o) badge(o[k]);
+          })(l.contentImage);
+          out.push({ id: l.contentId, thumb, count, updated: lines.find((x) => /обновлен|updated/i.test(x)) || "" });
           return;
         }
         const cont = o.continuationItemRenderer || o.continuationItemViewModel;
