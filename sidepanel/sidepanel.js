@@ -3410,6 +3410,8 @@ async function main() {
     // пропуск рекламных вставок ведёт sponsor-settings.js — только не затираем
     for (const key of ["sponsorSkip", "sponsorCats"]) state.settings[key] = nv[key];
     state.settings.channelSpeed = nv.channelSpeed; // скорость по каналам — channel-speed.js
+    // «Без отвлечений» ведёт focus-settings.js — тоже только не затираем
+    for (const key of Object.keys(nv)) if (key.startsWith("focus")) state.settings[key] = nv[key];
     $("set-no-autoplay").checked = Boolean(nv.noAutoplay);
     $("set-hide-progress").checked = Boolean(nv.hideProgress);
   });

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Сводка комментариев YouTube",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "description": "ИИ-сводка комментариев YouTube, поиск по всем плейлистам, очередь вместо сотен вкладок, клипы из видео и удобные режимы плеера.",
   "permissions": [
     "storage",
@@ -32,7 +32,8 @@
         "https://m.youtube.com/*"
       ],
       "js": [
-        "early.js"
+        "early.js",
+        "focus.js"
       ],
       "run_at": "document_start"
     },
@@ -81,7 +82,8 @@
         "https://www.youtube.com/embed/*"
       ],
       "js": [
-        "early.js"
+        "early.js",
+        "focus.js"
       ],
       "run_at": "document_start",
       "all_frames": true
@@ -184,6 +186,9 @@
     },
     "defer-video": {
       "description": "Отложить это видео в очередь (и закрыть вкладку)"
+    },
+    "toggle-focus": {
+      "description": "Вкл/выкл «Без отвлечений»: без Shorts, рекомендаций и заставок в конце"
     }
   },
   "content_security_policy": {

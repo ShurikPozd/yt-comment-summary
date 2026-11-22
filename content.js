@@ -949,7 +949,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -960,6 +960,7 @@
     playerPrefs.hideProgress = Boolean(settings?.hideProgress);
     playerPrefs.sponsorSkip = settings?.sponsorSkip !== false; // пропуск вставок — sponsor.js, по умолчанию вкл.
     playerPrefs.channelSpeed = settings?.channelSpeed !== false; // скорость по каналам — speed.js, по умолчанию вкл.
+    playerPrefs.focusMode = Boolean(settings?.focusMode); // «Без отвлечений» — focus.js
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -974,6 +975,8 @@
         showPageToast(playerPrefs.sponsorSkip ? "Рекламные вставки будут пропускаться" : "Рекламные вставки — как обычно", UI_ICONS.skip);
       } else if (before.channelSpeed !== playerPrefs.channelSpeed) {
         showPageToast(playerPrefs.channelSpeed ? "Скорость будет запоминаться для каждого канала" : "Скорость больше не запоминается по каналам", UI_ICONS.speed);
+      } else if (before.focusMode !== playerPrefs.focusMode) {
+        showPageToast(playerPrefs.focusMode ? "Режим без отвлечений включён" : "Режим без отвлечений выключен", UI_ICONS.focus);
       }
     }
   }
@@ -1086,6 +1089,8 @@
     speed: SVG('<path d="M4.2 18.5a9 9 0 1 1 15.6 0"/><path d="M12 14.5l4.2-4.6"/><circle cx="12" cy="14.5" r="1.4"/><path d="M12 6.2v1.6M6.3 9l1.2 1M17.7 9l-1.2 1" opacity=".6"/>'),
     // стрелка назад — «Скорость для канала: … · Сбросить»
     speedreset: SVG('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/>'),
+    // видоискатель с точкой — «Без отвлечений» (тот же знак на карточках focus.js)
+    focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
   let uiMenu = null;
@@ -1119,6 +1124,7 @@
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>
       <button class="ytcs-item" role="menuitem" data-act="speedreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить скорость канала</span><span class="ytcs-aside">1×</span></button>
+      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());

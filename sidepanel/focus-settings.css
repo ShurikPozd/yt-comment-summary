@@ -1,0 +1,20 @@
+/* «Без отвлечений»: что прятать. Пока режим выключен, пункты приглушены, но
+   нажимаются — набор можно выбрать заранее. */
+.focus-opts {
+  transition: opacity var(--t-fast) ease;
+}
+
+.focus-opts.off {
+  opacity: 0.55;
+}
+
+.focus-opts.off:hover,
+.focus-opts.off:focus-within {
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-opts {
+    transition: none;
+  }
+}
