@@ -11,6 +11,8 @@ import { yt } from "./youtube.js";
 import "./tidy.js";
 import { embedQuery, sem, semanticScores } from "./semantic.js";
 import "./sem-ui.js";
+import { subsResults } from "./subs.js";
+import "./subs-ui.js";
 import "./backup.js";
 
 // ---------- поиск и фильтры ----------
@@ -25,6 +27,9 @@ export function inPl(v, pl) {
   return v.in.some(([id]) => id === pl);
 }
 
+let byId = new Map(); // id видео → номер в каталоге (для найденного в субтитрах)
+let idsOf = null;
+
 export function compute() {
   const vids = state.cat.videos;
   const allowBase = (d) => durOk(vids[d], state.dur);
@@ -36,6 +41,7 @@ export function compute() {
     // счётчики у плейлистов слева — сколько найдено в каждом (без фильтра по плейлисту)
     const wide = search(state.index, state.q, allowBase);
     meta = wide;
+    const lexPartial = wide.partial;
     // по смыслу: к совпадениям по словам добавляем близкие по теме
     const sc = sem.on && sem.status === "ready" ? semanticScores(state.q, allowBase) : null;
     if (sem.on && sem.status === "ready" && !sc) void embedQuery(state.q).then(() => update({ keep: true }));
@@ -48,6 +54,31 @@ export function compute() {
       wide.partial = false;
       wide.swapped = lex.size ? wide.swapped : null;
       meta = { ...wide, semantic: true };
+    }
+    // по субтитрам: что говорят в видео — ниже совпадений в названии, выше похожих
+    const sr = subsResults(wide.swapped || state.q);
+    if (sr === null) meta = { ...meta, subsPending: true };
+    if (sr?.length && wide.results) {
+      if (idsOf !== state.cat) {
+        idsOf = state.cat;
+        byId = new Map(state.cat.videos.map((v, d) => [v.id, d]));
+      }
+      const found = new Map();
+      for (const r of sr) {
+        const d = byId.get(r.id);
+        if (d != null && allowBase(d) && !wide.banned?.has(d)) found.set(d, r);
+      }
+      if (found.size) {
+        const res = wide.results.map((r) => ({ ...r, subs: found.get(r.d) || null }));
+        const have = new Set(res.map((r) => r.d));
+        for (const [d, r] of found) if (!have.has(d)) res.push({ d, hits: null, subs: r });
+        // ступени: 0 — название (целиком), 1 — субтитры, 2 — частичные и «по смыслу»
+        const tier = (r) => (r.hits && !lexPartial ? 0 : r.subs ? 1 : 2);
+        const pos = new Map(res.map((r, i) => [r, i]));
+        res.sort((a, b) => tier(a) - tier(b) || (tier(a) === 1 ? b.subs.score - a.subs.score : 0) || pos.get(a) - pos.get(b));
+        wide.results = res;
+        meta = { ...meta, results: res, partial: false, subs: true };
+      }
     }
     if (wide.results) {
       perPl = new Map();
@@ -95,7 +126,8 @@ export function update({ keep = false } = {}) {
   renderSummary();
   if (keep) {
     // перерисовать столько же карточек и вернуть прокрутку на место
-    while (state.shown < Math.min(was, list.length)) more();
+    // (не меньше страницы: результаты могли прийти позже — субтитры, «по смыслу» — когда было пусто)
+    while (state.shown < Math.min(Math.max(was, PAGE), list.length)) more();
     window.scrollTo({ top: y });
   } else {
     window.scrollTo({ top: 0 });
@@ -117,7 +149,17 @@ export const mark = (text, hits) =>
     .map((p) => (p.hit ? `<mark>${esc(p.t)}</mark>` : esc(p.t)))
     .join("");
 
-export function cardHtml({ d, hits }) {
+// фрагмент субтитров: «…цитата…» с таймкодом — открывает видео с этого места
+export function snipHtml(v, s) {
+  const t = Math.max(0, Math.floor(s.t || 0));
+  const href = `https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}&t=${t}s`;
+  return `<a class="snip" href="${href}" target="_blank" rel="noreferrer" data-t="${t}" title="Открыть с ${fmtLen(t) || "0:00"}">
+      <span class="snip-t">${icon("play", { size: 12 })}${fmtLen(t) || "0:00"}</span>
+      <span class="snip-q">${s.snip ? mark(s.snip, new Set(s.hits || [])) : "Найдено в субтитрах"}</span>
+    </a>`;
+}
+
+export function cardHtml({ d, hits, subs: s }) {
   const v = state.cat.videos[d];
   const list = state.pl && inPl(v, state.pl) ? `&list=${encodeURIComponent(state.pl)}` : "";
   const href = v.short ? `https://www.youtube.com/shorts/${encodeURIComponent(v.id)}` : `https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}${list}`;
@@ -134,6 +176,7 @@ export function cardHtml({ d, hits }) {
     </a>
     <a class="title" href="${href}" target="_blank" rel="noreferrer" title="${esc(v.title)}">${hits ? mark(v.title, hits) : esc(v.title)}</a>
     <div class="sub" title="${esc(sub)}">${v.channel ? (hits ? mark(v.channel, hits) : esc(v.channel)) : v.short ? "Shorts" : ""}${info ? `${v.channel || v.short ? " · " : ""}${esc(info)}` : ""}</div>
+    ${s ? snipHtml(v, s) : ""}
     <div class="pls">${shown
       .map((p) => `<button type="button" class="chip" data-pl="${esc(p.id)}" title="Показать плейлист «${esc(p.title)}»">${hits ? mark(p.title, hits) : esc(p.title)}</button>`)
       .join("")}${rest > 0 ? `<button type="button" class="chip more-pl" data-more="${d}" title="${esc(pls.slice(3).map((p) => p.title).join(", "))}">+${rest}</button>` : ""}</div>
@@ -154,6 +197,12 @@ export function renderSummary() {
   const n = state.list.length;
   const pl = state.pl ? state.plById.get(state.pl) : null;
   const where = pl ? ` в «${esc(pl.title)}»` : "";
+  if (!n && state.meta?.subsPending) {
+    // по названиям ничего, а субтитры ещё ищутся — не пугаем «ничего не нашлось»
+    el.innerHTML = `<span class="swap">Ищу в субтитрах…</span>`;
+    empty.hidden = true;
+    return;
+  }
   if (!n) {
     el.innerHTML = "";
     empty.hidden = false;
@@ -173,6 +222,10 @@ export function renderSummary() {
   empty.hidden = true;
   let text = state.q.trim() ? `Найдено <b>${videosWord(n)}</b>${where}` : `<b>${videosWord(n)}</b>${where}`;
   if (state.meta?.semantic) text += ` · <span class="swap">с похожими по смыслу</span>`;
+  if (state.meta?.subs) {
+    const k = state.list.filter((r) => r.subs && !r.hits).length; // нашлись только по субтитрам
+    if (k) text += ` · <span class="swap">${k === n ? "все" : nf.format(k)} — по словам из субтитров</span>`;
+  }
   if (state.meta?.swapped) text += ` · <span class="swap">запрос понят как «${esc(state.meta.swapped)}»</span>`;
   if (state.meta?.partial) text += ` · <span class="swap">точных совпадений нет — показаны похожие</span>`;
   el.innerHTML = text;
