@@ -29,11 +29,11 @@ export function watchRec(id = watch.id) {
   return (watch.source === "queue" ? state.queue : state.cat?.videos || []).find((x) => x.id === id) || watch.rec || null;
 }
 
-export function openWatch(id, source) {
+export function openWatch(id, source, at = null) {
   const rec = (source === "queue" ? state.queue : state.cat?.videos || []).find((x) => x.id === id);
   if (!rec) return;
   saveWatchPos();
-  Object.assign(watch, { on: true, id, source, rec, t: source === "queue" ? state.qpos[id] || 0 : 0, len: rec.len || 0, heard: false, saved: -1, ended: false });
+  Object.assign(watch, { on: true, id, source, rec, t: at != null ? at : source === "queue" ? state.qpos[id] || 0 : 0, len: rec.len || 0, heard: false, saved: -1, ended: false });
   document.body.dataset.watch = "1";
   $("#watch").hidden = false;
   renderWatch();

@@ -4,10 +4,13 @@
 // досмотрено. Решение — клавишей или кнопкой: ← убрать, → оставить, ↑ первым
 // в очереди, Enter — смотреть сейчас, Ctrl+Z — отменить последнее. Сверху —
 // прогресс; порядок разбора — старые / новые / длинные / короткие / вперемешку.
+// Рядом с видео — «О чём видео» (triage-tldr.js): готовый пересказ сразу, нет —
+// кнопка «Пересказать» или Пробел; клик по пункту — смотреть с этого места.
 
 import { icon } from "../sidepanel/icons.js";
 import { fmtHours, loadQueue, qLeft, qmsg } from "./queue-view.js";
 import { $, esc, nf, state, videosWord } from "./state.js";
+import { tldrKey, tldrPanelHtml, tldrPreload, tldrShow, tldrStop } from "./triage-tldr.js";
 import { ago, fmtLen } from "./view-lib.js";
 import { openWatch, watchHere } from "./watch.js";
 
@@ -40,11 +43,13 @@ export function openTriage(order = tri.order) {
   Object.assign(tri, { on: true, order, list: ordered(order), i: 0, removed: 0, kept: 0, topped: 0, undo: [] });
   document.body.dataset.triage = "1";
   $("#triage").hidden = false;
+  void tldrPreload(tri.list);
   render();
 }
 
 function closeTriage() {
   tri.on = false;
+  tldrStop();
   delete document.body.dataset.triage;
   $("#triage").hidden = true;
   $("#triage").innerHTML = "";
@@ -64,6 +69,7 @@ function render(dir = "") {
     </div>
     <div class="t-progress"><div style="width:${total ? Math.round((tri.i / total) * 100) : 100}%"></div></div>`;
   if (!r) {
+    tldrShow(null, null);
     $("#triage").innerHTML = `${head}<div class="t-done">
         <div class="empty-icon">${icon("check", { size: 30 })}</div>
         <div class="empty-title">Очередь разобрана</div>
@@ -91,6 +97,7 @@ function render(dir = "") {
           <div class="t-facts">${facts.map(esc).join(" · ")}</div>
         </div>
       </article>
+      ${tldrPanelHtml()}
       <div class="t-acts main">
         <button type="button" class="t-btn del" data-t="del" title="Убрать из очереди — ←">${icon("close", { size: 22 })}<span>Убрать</span><kbd>←</kbd></button>
         <button type="button" class="t-btn top" data-t="top" title="Первым в очереди — ↑">${icon("chevron", { size: 22 }).replace("<svg", '<svg style="transform:rotate(-90deg)"')}<span>Наверх</span><kbd>↑</kbd></button>
@@ -100,6 +107,15 @@ function render(dir = "") {
       ${tri.undo.length ? `<button type="button" class="link-btn t-undo" data-t="undo">${icon("history", { size: 14 })}Отменить последнее · Ctrl+Z</button>` : ""}
       ${next.length ? `<div class="t-next"><span>Дальше:</span>${next.map((x) => `<img alt="" title="${esc(x.title)}" src="https://i.ytimg.com/vi/${esc(x.id)}/mqdefault.jpg" />`).join("")}</div>` : ""}
     </div>`;
+  // пункты пересказа: в своём плеере с этого места (если он включён), иначе — YouTube
+  tldrShow(r, next[0], {
+    linkFor: watchHere()
+      ? (vid, t) => {
+          closeTriage();
+          openWatch(vid, "queue", t);
+        }
+      : null,
+  });
 }
 
 async function act(kind) {
@@ -181,6 +197,10 @@ document.addEventListener(
       return void undo();
     }
     if (e.ctrlKey) return;
+    if (k === " " && !e.shiftKey && !e.repeat) {
+      if (tldrKey()) e.preventDefault();
+      return;
+    }
     const map = { ArrowLeft: "del", Delete: "del", Backspace: "del", ArrowRight: "keep", ArrowUp: "top", Enter: "watch", Escape: "close" };
     const kind = map[k];
     if (!kind) return;
