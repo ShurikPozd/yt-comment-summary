@@ -21,13 +21,22 @@ async function cleanupLocalCache() {
 async function setupEmbedReferer() {
   try {
     await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [1],
+      removeRuleIds: [1, 2],
       addRules: [
         {
           id: 1,
           priority: 1,
           action: { type: "modifyHeaders", requestHeaders: [{ header: "referer", operation: "set", value: `https://${chrome.runtime.id}.chromiumapp.org/` }] },
           condition: { urlFilter: "||youtube.com/embed/", resourceTypes: ["sub_frame"], initiatorDomains: [chrome.runtime.id] },
+        },
+        {
+          // Субтитры (панель расшифровки) из фона и страниц расширения: на запрос с
+          // Origin chrome-extension://… YouTube отвечает 403, с youtube.com — отдаёт.
+          // Пересказ «О чём видео» работает и без открытых вкладок YouTube.
+          id: 2,
+          priority: 1,
+          action: { type: "modifyHeaders", requestHeaders: [{ header: "origin", operation: "set", value: "https://www.youtube.com" }] },
+          condition: { urlFilter: "||www.youtube.com/youtubei/v1/get_panel", resourceTypes: ["xmlhttprequest", "other"], initiatorDomains: [chrome.runtime.id] },
         },
       ],
     });

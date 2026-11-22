@@ -72,9 +72,16 @@ function send(job, msg) {
 
 // Задача заводится сразу (до первого await) — второй «start» на то же видео
 // подписывается на неё, а не запускает параллельный пересказ.
-// Субтитры берёт вкладка YouTube (запрос со страницы YouTube, как у «О видео»):
-// из фонового скрипта YouTube отвечает расширению отказом. Нет вкладки — пробуем сами.
+// Субтитры: сами (правило в background.js подставляет Origin youtube.com — иначе 403);
+// не вышло — через открытую вкладку YouTube, запросом со страницы.
 async function transcriptFor(vid, tabId, signal) {
+  let firstErr = null;
+  try {
+    return await globalThis.__ytcsTranscript.fetchTranscript(vid, { signal });
+  } catch (e) {
+    if (signal.aborted || String(e?.message) === "cancelled") throw e;
+    firstErr = e;
+  }
   const tabs = [];
   if (tabId != null) tabs.push(tabId);
   try {
@@ -96,11 +103,7 @@ async function transcriptFor(vid, tabId, signal) {
       /* во вкладке нет нашего скрипта (открыта до обновления) — следующая */
     }
   }
-  try {
-    return await globalThis.__ytcsTranscript.fetchTranscript(vid, { signal });
-  } catch (e) {
-    throw lastErr && /^transcript:/.test(lastErr.message) ? lastErr : e;
-  }
+  throw lastErr && /^transcript:/.test(lastErr.message) ? lastErr : firstErr;
 }
 
 function start(vid, { title, duration }, port) {
