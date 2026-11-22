@@ -99,6 +99,9 @@
       "all_frames": true
     }
   ],
+  "omnibox": {
+    "keyword": "yt"
+  },
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"
   },
