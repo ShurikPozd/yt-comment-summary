@@ -321,3 +321,117 @@ export class GroqProxy {
     }
   }
 }
+
+// ---------------- Лимиты бесплатного Groq: виды ошибок и бюджет ----------------
+// Общие для панели (анализ комментариев, «О видео») и фона (пересказ из
+// всплывающего окна на ленте).
+//
+// Groq различает лимиты токенов, и лечатся они по-разному:
+//  - ITPM / «input tokens» / 413 — запрос велик, помогает ДРОБЛЕНИЕ порции;
+//  - OTPM / «output tokens» — велик ответ, дробление входа НЕ помогает
+//    (наоборот, добавляет запросов и усугубляет OTPM), помогает только пауза.
+const limitText = (e) => String(e?.message || e || "");
+
+/** Сколько Groq велит ждать: «try again in 20.4s» / «try again in 1.5s». */
+export function retryAfterMs(e, fallbackMs) {
+  const m = limitText(e).match(/try again in\s*([\d.]+)\s*s/i);
+  const fallback = fallbackMs || 6000;
+  if (!m) return fallback;
+  const sec = parseFloat(m[1]);
+  if (!Number.isFinite(sec) || sec <= 0) return fallback;
+  return Math.min(Math.max(2000, (sec + 1) * 1000), 120000);
+}
+
+export function isOutputLimitError(e) {
+  return /OTPM|output tokens per minute|reduce max_tokens/i.test(limitText(e));
+}
+
+export function isInputLimitError(e) {
+  if (isOutputLimitError(e)) return false;
+  // \b вокруг ITPM обязателен: без него голое "ITPM" матчилось даже внутри
+  // имён вида ITPM_BUDGET_PER_MIN, и любая обычная JS-ошибка про отсутствие
+  // переменной превращалась в «превышен лимит входных токенов».
+  return /\b413\b|\bITPM\b|input tokens per minute|Request too large|reduce your message size|context length|maximum context/i.test(limitText(e));
+}
+
+// Ошибка РАЗМЕРА запроса, а не минутного лимита: вход не влезает в контекст
+// модели — ждать минутное окно бесполезно, надо уменьшить порцию.
+export function isSizeLimitError(e) {
+  if (isOutputLimitError(e)) return false;
+  return /context length|maximum context|Request too large|reduce your message size|\b413\b/i.test(limitText(e));
+}
+
+/** Общий «Groq меня не пустил» без разбора вида лимита. */
+export function isRateLimitError(e) {
+  return /429|rate.?limit|tokens per minute|\bITPM\b|\bOTPM\b|Request too large/i.test(limitText(e));
+}
+
+/**
+ * Скользящий минутный бюджет: учитываем и входные (ITPM), и выходные (OTPM) токены.
+ * pace() ждёт, пока запрос влезет в окно, и возвращает «слот» выходных токенов;
+ * settle() после ответа меняет резерв на фактический размер;
+ * pushAfterOutputError() отмечает окно занятым после 429 по OTPM.
+ */
+export function createPacer({ itpm = 6000, otpm = 900, gapMs = 1500, maxOut = 800 } = {}) {
+  const logIn = []; // { t: Date.now(), n: входные }
+  const logOut = []; // { t: Date.now(), n: выходные }
+  let lastAt = 0;
+
+  // Журнал держим отсортированным и чистим по времени: запись после ошибки
+  // OTPM добавляется «задним числом», и чистка с начала её пропускала.
+  const prune = (log, now) => {
+    for (let i = log.length - 1; i >= 0; i--) if (now - log[i].t >= 60000) log.splice(i, 1);
+    log.sort((a, b) => a.t - b.t);
+  };
+  // Через сколько мс в скользящем окне освободится место под need токенов.
+  const freeAt = (log, used, need, budget, now) => {
+    if (used + need <= budget) return 0;
+    let freed = 0;
+    for (const x of log) {
+      freed += x.n;
+      if (used - freed + need <= budget) return Math.max(0, x.t + 60000 - now);
+    }
+    return log.length ? Math.max(0, log[log.length - 1].t + 60000 - now) : 0;
+  };
+
+  return {
+    // onWait(сек) зовётся, когда приходится ждать окно дольше пары секунд —
+    // чтобы пользователь видел причину паузы, а не «зависание».
+    async pace(estIn, estOut = maxOut, onWait = null) {
+      const outEst = Math.min(estOut, maxOut);
+      for (;;) {
+        const now = Date.now();
+        prune(logIn, now);
+        prune(logOut, now);
+        const usedIn = logIn.reduce((a, x) => a + x.n, 0);
+        const usedOut = logOut.reduce((a, x) => a + x.n, 0);
+        if (usedIn + estIn <= itpm && usedOut + outEst <= otpm && now - lastAt >= gapMs) {
+          const slot = { t: now, n: outEst };
+          logIn.push({ t: now, n: estIn });
+          logOut.push(slot);
+          lastAt = now;
+          return slot;
+        }
+        // ждём, пока освободится столько, сколько нужно именно этому запросу
+        const w1 = freeAt(logIn, usedIn, estIn, itpm, now);
+        const w2 = freeAt(logOut, usedOut, outEst, otpm, now);
+        const waitMs = Math.max(1500, w1, w2, gapMs - (now - lastAt));
+        if (onWait && waitMs > 2500) onWait(Math.ceil(waitMs / 1000));
+        // короткими шагами, чтобы обратный отсчёт тикал
+        await sleep(Math.min(waitMs, onWait ? 5000 : 60000));
+      }
+    },
+    // Резерв делается «с запасом» до ответа; после — меняем на факт
+    // (у бота reasoning_effort=none, скрытых токенов нет). ~2.5 символа на токен.
+    settle(slot, text) {
+      if (slot) slot.n = Math.max(40, Math.ceil(String(text || "").length / 2.5));
+    },
+    // После 429 по OTPM окно уже занято — без отметки бюджет через 1.5 с
+    // двинул бы следующий запрос и упёрся в тот же лимит.
+    pushAfterOutputError(waitMs) {
+      const t = Date.now();
+      logOut.push({ t: t - 60000 + waitMs, n: Math.max(maxOut, otpm) });
+      lastAt = t;
+    },
+  };
+}

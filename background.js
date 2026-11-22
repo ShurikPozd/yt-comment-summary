@@ -1,5 +1,6 @@
 // Service worker: открытие боковой панели и контекстное меню.
 import { sanitizeFilename } from "./groq.js";
+import "./tldr-bg.js"; // окно «О чём видео» на ленте: пересказ через порт
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
