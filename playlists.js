@@ -50,7 +50,7 @@
         reject(Object.assign(new Error("noreply"), { code: "noreply" }));
       }, timeout);
       waiting.set(id, { resolve, reject, timer });
-      document.dispatchEvent(new CustomEvent("ytcs-pl", { detail: JSON.stringify({ op, id, ...args }) }));
+      document.dispatchEvent(new CustomEvent("ytcs-pl:2", { detail: JSON.stringify({ op, id, ...args }) })); // имя — как в playlists-main.js
     });
   }
 

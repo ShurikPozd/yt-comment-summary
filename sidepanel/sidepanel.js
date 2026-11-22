@@ -3010,6 +3010,45 @@ function bindEvents() {
     setTab("settings");
   });
   $("btn-settings-back").addEventListener("click", () => setTab("summary"));
+  $("btn-open-library").addEventListener("click", async () => {
+    const { libraryWhere } = await chrome.storage.local.get("libraryWhere");
+    if (libraryWhere === "panel") return showLibraryPane({});
+    await chrome.runtime.sendMessage({ type: "lib:open" }).catch(() => {});
+    // библиотека — во всю вкладку; панель справа больше не нужна и не занимает место
+    window.close();
+  });
+  // библиотеку попросили показать здесь (меню плеера, правый клик, клавиша)
+  chrome.storage.session.get("panelLibrary").then(({ panelLibrary }) => {
+    if (panelLibrary && Date.now() - panelLibrary.at < 15000) showLibraryPane(panelLibrary);
+  });
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area === "session" && ch.panelLibrary?.newValue) showLibraryPane(ch.panelLibrary.newValue);
+  });
+  // из библиотеки: «Назад» — вернуться к сводке, «Во вкладку» — закрыть панель
+  window.addEventListener("message", (e) => {
+    if (e.origin !== location.origin || !e.data?.ytcsLib) return;
+    if (e.data.ytcsLib === "back") hideLibraryPane();
+    if (e.data.ytcsLib === "tab") window.close();
+  });
+  function showLibraryPane({ q = "", view = "" } = {}) {
+    const pane = $("lib-pane");
+    const h = new URLSearchParams();
+    if (view) h.set("v", view);
+    if (q) h.set("q", q);
+    const src = `../library/library.html?panel=1${String(h) ? `#${h}` : ""}`;
+    let frame = pane.querySelector("iframe");
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.title = "Моя библиотека";
+      frame.src = src;
+      pane.appendChild(frame);
+    } else if (String(h)) frame.contentWindow.location.hash = String(h);
+    pane.hidden = false;
+    chrome.storage.session.remove("panelLibrary").catch(() => {});
+  }
+  function hideLibraryPane() {
+    $("lib-pane").hidden = true;
+  }
   $("btn-open-settings").addEventListener("click", () => {
     fillSettingsFields();
     setTab("settings");

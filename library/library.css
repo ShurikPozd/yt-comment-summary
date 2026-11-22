@@ -1,0 +1,1282 @@
+/* =====================================================================
+   «Моя библиотека» — поиск по всем вашим плейлистам.
+   Та же система, что у панели: поверхности --bg → --bg-2 → --bg-3, акцент —
+   только на главном. Страница во всю ширину окна: на большом мониторе
+   крупнее шрифт и карточки, на узком — плейлисты уходят в ленту сверху.
+   ===================================================================== */
+
+:root {
+  --bg: #0e0e10;
+  --bg-2: #17171a;
+  --bg-3: #212125;
+  --bg-hover: #2a2a2f;
+  --fg: #f4f4f5;
+  --fg-2: #d0d0d6;
+  --muted: #94949c;
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --accent: #ff3b5c;
+  --accent-hover: #ff2149;
+  --accent-soft: rgba(255, 59, 92, 0.14);
+  --accent-ink: #ff6b85;
+  --mark: rgba(255, 200, 0, 0.3);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 0.14s;
+  --t: 0.24s;
+  --side: 300px;
+  --gap: 20px;
+  --pad: 28px;
+  color-scheme: dark;
+  /* крупнее на больших экранах: 15px на ноутбуке → 18px на 2K/4K */
+  font-size: clamp(15px, 0.35vw + 9.5px, 19px);
+}
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-2: #f6f6f8;
+  --bg-3: #ececf0;
+  --bg-hover: #e3e3e8;
+  --fg: #141416;
+  --fg-2: #3c3c43;
+  --muted: #66666e;
+  --border: rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.13);
+  --accent: #e8002d;
+  --accent-hover: #c80027;
+  --accent-soft: rgba(232, 0, 45, 0.08);
+  --accent-ink: #d1002a;
+  --mark: rgba(255, 196, 0, 0.42);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #ffffff;
+    --bg-2: #f6f6f8;
+    --bg-3: #ececf0;
+    --bg-hover: #e3e3e8;
+    --fg: #141416;
+    --fg-2: #3c3c43;
+    --muted: #66666e;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-strong: rgba(0, 0, 0, 0.13);
+    --accent: #e8002d;
+    --accent-hover: #c80027;
+    --accent-soft: rgba(232, 0, 45, 0.08);
+    --accent-ink: #d1002a;
+    --mark: rgba(255, 196, 0, 0.42);
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    color-scheme: light;
+  }
+}
+
+@media (min-width: 1800px) {
+  :root {
+    --side: 340px;
+    --gap: 24px;
+    --pad: 36px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Segoe UI Variable Text", "Segoe UI", Roboto, system-ui, -apple-system, sans-serif;
+  font-size: 1rem;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  display: block;
+  flex: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- шапка ---------- */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  /* разделы · поиск · обновить/собрать · «в панель» */
+  grid-template-columns: var(--side) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--gap);
+  padding: 16px var(--pad);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.brand-icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: var(--r-m);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.brand-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 3.2rem;
+  padding: 0 14px 0 18px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+  background: var(--bg-2);
+}
+
+.search-icon {
+  color: var(--muted);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 1.08rem;
+}
+
+.search input::placeholder {
+  color: var(--muted);
+}
+
+.search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.hint {
+  display: grid;
+  place-items: center;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  font: 500 0.85rem/1 "Segoe UI", Roboto, sans-serif;
+}
+
+.search:focus-within .hint {
+  display: none;
+}
+
+.sync {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: end;
+  min-width: 0;
+}
+
+.sync-text {
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+button.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 2.6rem;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  cursor: pointer;
+  font-weight: 550;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, transform 0.1s ease-out;
+}
+
+button.ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+button.ghost:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button.ghost:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button.ghost.spin svg {
+  animation: spin 0.9s linear infinite;
+}
+
+button.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 2.9rem;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button.primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width var(--t) var(--ease);
+}
+
+/* ---------- фильтры ---------- */
+/* строка под шапкой: слева — поиск плейлиста (над их списком), справа — фильтры */
+.filters {
+  display: grid;
+  grid-template-columns: var(--side) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px var(--gap);
+  padding: 16px var(--pad) 0;
+}
+
+.seg {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.seg button,
+.chip {
+  height: 2.3rem;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  font-size: 0.92rem;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.seg button:hover,
+.chip:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.seg button[aria-checked="true"] {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: transparent;
+}
+
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* Список — как в настройках панели: своя стрелка с отступом от края,
+   а в Chrome 135+ и само выпадающее меню в стиле страницы */
+.sort select {
+  height: 2.3rem;
+  padding: 0 2.6rem 0 14px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: 0.92rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%2394949c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5l3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  transition: border-color var(--t-fast) ease;
+}
+
+.sort select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+@supports (appearance: base-select) {
+  .sort select,
+  .sort select::picker(select) {
+    appearance: base-select;
+  }
+  .sort select {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-image: none;
+    padding-right: 14px;
+  }
+  .sort select::picker-icon {
+    content: "";
+    width: 12px;
+    height: 12px;
+    margin-left: auto;
+    background: var(--muted);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5l3-3'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: rotate var(--t-fast) var(--ease);
+  }
+  .sort select:open::picker-icon {
+    rotate: 180deg;
+  }
+  .sort select::picker(select) {
+    margin-top: 4px;
+    padding: 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-m);
+    background: var(--bg-2);
+    color: var(--fg);
+    box-shadow: var(--shadow);
+    opacity: 1;
+    scale: 1;
+    transform-origin: top center;
+    transition: opacity 0.16s ease-out, scale 0.16s var(--ease), overlay 0.16s allow-discrete, display 0.16s allow-discrete;
+  }
+  @starting-style {
+    .sort select:open::picker(select) {
+      opacity: 0;
+      scale: 0.97;
+    }
+  }
+  .sort select:not(:open)::picker(select) {
+    opacity: 0;
+    scale: 0.97;
+  }
+  .sort option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 2.3rem;
+    padding: 0 12px 0.15em;
+    border-radius: var(--r-s);
+    font-size: 0.92rem;
+    cursor: pointer;
+  }
+  .sort option:hover,
+  .sort option:focus-visible {
+    outline: none;
+    background: var(--bg-hover);
+  }
+  .sort option::checkmark {
+    order: 1;
+    margin-left: auto;
+    content: "";
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2.5 6.2 2.3 2.3 4.7-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  .sort option:checked {
+    font-weight: 600;
+  }
+}
+
+/* ---------- тело: плейлисты слева, видео справа ---------- */
+.body {
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr);
+  gap: var(--gap);
+  padding: 16px var(--pad) 40px;
+  align-items: start;
+}
+
+.side {
+  position: sticky;
+  top: calc(3.2rem + 33px + 16px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 3.2rem - 33px - 32px);
+  min-height: 0;
+}
+
+.side-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 2.6rem;
+  padding: 0 12px;
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.side-search:focus-within {
+  border-color: var(--border-strong);
+}
+
+.side-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+}
+
+.pl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0 -6px;
+  padding: 0 6px 8px;
+  scrollbar-width: thin;
+}
+
+.pl {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 10px 7px 7px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.pl:hover {
+  background: var(--bg-2);
+}
+
+.pl[aria-current="true"] {
+  background: var(--accent-soft);
+}
+
+.pl[aria-current="true"] .pl-name {
+  color: var(--accent-ink);
+}
+
+.pl-thumb {
+  width: 3.6rem;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  background: var(--bg-3) center / cover no-repeat;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.pl-name {
+  font-weight: 560;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-sep {
+  margin: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- результаты ---------- */
+.main {
+  min-width: 0;
+}
+
+.summary {
+  min-height: 1.6rem;
+  margin: 2px 0 14px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.summary b {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.summary .swap {
+  color: var(--fg-2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(230px, 15vw, 400px), 1fr));
+  gap: 26px var(--gap);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  background: var(--bg-3);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--t) var(--ease);
+}
+
+.thumb:hover img {
+  transform: scale(1.03);
+}
+
+.dur {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.title:hover {
+  color: var(--accent-ink);
+}
+
+mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.sub {
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  height: 1.75rem;
+  max-width: 100%;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip.more-pl {
+  background: transparent;
+}
+
+.more {
+  height: 1px;
+}
+
+/* ---------- пусто / первая сборка ---------- */
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 14px;
+  min-height: 52vh;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 34rem;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 4.2rem;
+  height: 4.2rem;
+  border-radius: 50%;
+  background: var(--bg-2);
+  color: var(--muted);
+}
+
+.empty-title {
+  font-size: 1.3rem;
+  font-weight: 650;
+}
+
+.empty-text {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.empty .bar {
+  width: min(28rem, 80vw);
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.empty .bar > div {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width var(--t) var(--ease);
+}
+
+/* ---------- узкое окно: плейлисты — лентой над результатами ---------- */
+@media (min-width: 641px) {
+  body:not(.embed) .where {
+    display: flex;
+  }
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --pad: 18px;
+    --gap: 16px;
+  }
+  .top {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .brand-name {
+    display: none;
+  }
+  .filters {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .filters .seg {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .side {
+    position: static;
+    max-height: none;
+  }
+  .pl-list {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 6px;
+  }
+  .pl {
+    grid-template-columns: auto auto;
+    width: auto;
+    padding: 0 14px;
+    height: 2.4rem;
+    border-radius: 999px;
+    background: var(--bg-3);
+    flex: none;
+  }
+  .pl-thumb,
+  .pl-sep {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .sync-text {
+    display: none;
+  }
+  /* на телефоне и в боковой панели плейлисты — лента чипов, отдельный поиск по ним лишний */
+  .filters .side-search {
+    display: none;
+  }
+  .filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .filters .seg {
+    grid-row: auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 calc(var(--pad) * -1);
+    padding: 0 var(--pad);
+  }
+  .sort {
+    justify-self: stretch;
+  }
+  .sort select {
+    flex: 1;
+    width: 100%;
+  }
+  body[data-view="queue"] .filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "play sort" "seg seg";
+  }
+  body[data-view="queue"] #q-play {
+    grid-area: play;
+    width: 100%;
+    white-space: nowrap;
+  }
+  body[data-view="queue"] .filters .sort {
+    grid-area: sort;
+  }
+  body[data-view="queue"] .filters .seg {
+    grid-area: seg;
+  }
+  /* очередь в узком окне: статистика — строкой над видео, подсказка клавиш не нужна */
+  .q-side .q-stats {
+    display: none;
+  }
+  .sync .label {
+    display: none;
+  }
+  .sort span {
+    display: none;
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  }
+}
+
+
+/* ---------- «в панели» / «во вкладке» ---------- */
+.where {
+  display: none;
+  order: 5; /* в шапке — справа, после «Обновить» */
+}
+
+button.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+button.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+#where-back svg {
+  transform: rotate(180deg);
+}
+
+body:not(.embed) .embed-only {
+  display: none;
+}
+
+/* в боковой панели: узко — шапка в две строки, всё по ширине */
+body.embed {
+  --pad: 12px;
+  --gap: 10px;
+  font-size: 15px;
+}
+
+body.embed .top {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "views where" "search search";
+  row-gap: 10px;
+  padding: 10px 12px;
+}
+
+body.embed .views {
+  grid-area: views;
+}
+
+body.embed .where {
+  grid-area: where;
+  display: flex;
+  gap: 6px;
+}
+
+body.embed .search {
+  grid-area: search;
+  height: 2.8rem;
+}
+
+body.embed .sync,
+body.embed .hint,
+body.embed .views .brand-icon {
+  display: none !important;
+}
+
+body.embed .views button {
+  height: 2.3rem;
+  padding: 0 12px;
+  font-size: 0.98rem;
+}
+
+/* ---------- разделы: «Плейлисты» и «Очередь» ---------- */
+body[data-view="queue"] .lib-only,
+body:not([data-view="queue"]) .queue-only {
+  display: none !important;
+}
+
+.views {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.views .brand-icon {
+  margin-right: 6px;
+  flex: none;
+}
+
+.views button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 2.6rem;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.views button:hover {
+  color: var(--fg);
+  background: var(--bg-2);
+}
+
+.views button[aria-selected="true"] {
+  color: var(--fg);
+  background: var(--bg-3);
+}
+
+.badge {
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge:empty {
+  display: none;
+}
+
+#q-play {
+  width: 100%;
+  justify-content: center;
+  height: 2.6rem;
+}
+
+/* ---------- колонка очереди ---------- */
+.q-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+.q-card {
+  padding: 16px;
+  border-radius: var(--r-l);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.q-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+}
+
+.q-num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.q-lbl {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+details.q-set > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+}
+
+details.q-set > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.q-set > summary::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+details.q-set[open] > summary::after {
+  transform: rotate(-135deg) translate(-2px, -2px);
+}
+
+details.q-set:not([open]) > summary {
+  margin: 0;
+}
+
+.q-h {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.q-undo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.q-undo b {
+  font-weight: 650;
+}
+
+.q-undo .row {
+  display: flex;
+  gap: 8px;
+}
+
+.q-undo .row button {
+  flex: 1;
+  justify-content: center;
+}
+
+.switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 0;
+  cursor: pointer;
+}
+
+.switch + .switch {
+  border-top: 1px solid var(--border);
+}
+
+.switch small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.switch input {
+  appearance: none;
+  position: relative;
+  width: 2.5rem;
+  height: 1.45rem;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.switch input::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(1.45rem - 6px);
+  height: calc(1.45rem - 6px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.switch input:checked {
+  background: var(--accent);
+}
+
+.switch input:checked::after {
+  transform: translateX(1.05rem);
+}
+
+.q-offer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--border);
+}
+
+.q-offer small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.q-offer-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.q-offer select {
+  height: 2.3rem;
+  padding: 0 2.2rem 0 12px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--border-strong);
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%2394949c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5l3-3'/%3E%3C/svg%3E") no-repeat right 12px center;
+  color: var(--fg);
+  font-size: 0.88rem;
+  cursor: pointer;
+  appearance: none;
+  min-width: 0;
+}
+
+.q-offer select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--fg-2);
+}
+
+.keys kbd {
+  justify-self: start;
+  min-width: 1.8rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-3);
+  font: 600 0.82rem/1.2 "Segoe UI", Roboto, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+
+button.ghost.danger {
+  color: var(--accent-ink);
+  justify-content: center;
+}
+
+/* карточка очереди: полоска «досмотрено» и действия */
+.prog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.prog > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.chip.act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip.act svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 1100px) {
+  .views .brand-icon {
+    display: none;
+  }
+  .q-side {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: start;
+  }
+  /* на узком окне подсказка по клавишам и счётчик вкладок — лишние */
+  .q-side .keys,
+  #tabs-text,
+  #sync-text {
+    display: none;
+  }
+  #q-play {
+    width: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .views button {
+    padding: 0 12px;
+    font-size: 0.98rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

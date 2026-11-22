@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Моя библиотека — плейлисты YouTube</title>
+    <link rel="icon" href="../icons/icon32.png" />
+    <link rel="stylesheet" href="library.css" />
+    <script src="../sidepanel/theme-boot.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <nav class="views" role="tablist" aria-label="Разделы библиотеки">
+        <span class="brand-icon" data-icon="library" data-size="22" title="Моя библиотека"></span>
+        <button type="button" role="tab" data-view="lib" aria-selected="true">Плейлисты</button>
+        <button type="button" role="tab" data-view="queue" aria-selected="false">Очередь<span id="q-badge" class="badge"></span></button>
+      </nav>
+      <label class="search">
+        <span class="search-icon" data-icon="search" data-size="20"></span>
+        <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Поиск по плейлистам" aria-label="Поиск по видео в ваших плейлистах" />
+        <kbd class="hint" title="Поиск — клавиша /">/</kbd>
+      </label>
+      <div class="where">
+        <button id="where-back" type="button" class="icon-btn embed-only" title="Назад к сводке" aria-label="Назад к сводке"><span data-icon="chevron" data-size="18"></span></button>
+        <button id="where" type="button" class="icon-btn" title="" aria-label=""><span data-icon="external" data-size="18"></span></button>
+      </div>
+      <div class="sync lib-only">
+        <span id="sync-text" class="sync-text" role="status"></span>
+        <button id="sync" class="ghost" type="button"><span data-icon="refresh" data-size="16"></span><span class="label">Обновить</span></button>
+      </div>
+      <div class="sync queue-only">
+        <span id="tabs-text" class="sync-text"></span>
+        <button id="collect" class="ghost" type="button" title="Все вкладки с видео YouTube — в очередь, вкладки закрыть (текущая и закреплённые останутся)"><span data-icon="download" data-size="16"></span><span class="label">Собрать вкладки</span></button>
+      </div>
+      <div id="progress" class="progress" hidden><div class="progress-fill"></div></div>
+    </header>
+
+    <div class="filters" role="toolbar" aria-label="Фильтры">
+      <button id="q-play" type="button" class="primary queue-only" title="Открыть первое видео в отдельной вкладке очереди"><span data-icon="play" data-size="16"></span>Смотреть очередь</button>
+      <label class="side-search lib-only">
+        <span data-icon="search" data-size="16"></span>
+        <input id="pl-q" type="search" autocomplete="off" placeholder="Найти плейлист" aria-label="Найти плейлист" />
+      </label>
+      <div class="seg" role="radiogroup" aria-label="Длительность" id="dur">
+        <button type="button" role="radio" data-dur="" aria-checked="true">Любая длина</button>
+        <button type="button" role="radio" data-dur="0-61">Shorts и до 1 мин</button>
+        <button type="button" role="radio" data-dur="61-600">1–10 мин</button>
+        <button type="button" role="radio" data-dur="600-1800">10–30 мин</button>
+        <button type="button" role="radio" data-dur="1800-">Больше 30 мин</button>
+      </div>
+      <label class="sort">
+        <span>Порядок</span>
+        <select id="sort"></select>
+      </label>
+    </div>
+
+    <div class="body">
+      <aside class="side" aria-label="Плейлисты">
+        <nav id="pl-list" class="pl-list lib-only"></nav>
+        <div id="q-side" class="q-side queue-only"></div>
+      </aside>
+
+      <main class="main">
+        <div id="summary" class="summary" role="status"></div>
+        <div id="grid" class="grid"></div>
+        <div id="more" class="more" aria-hidden="true"></div>
+        <div id="empty" class="empty" hidden></div>
+      </main>
+    </div>
+
+    <script type="module" src="library.js"></script>
+  </body>
+</html>

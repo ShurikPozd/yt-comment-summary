@@ -7,6 +7,8 @@
     <script src="theme-boot.js"></script>
   </head>
   <body>
+    <!-- «Моя библиотека» прямо в панели (если так выбрано) — поверх всего -->
+    <div id="lib-pane" class="lib-pane" hidden></div>
     <div id="app">
       <div id="bg-run" class="bg-run hidden" role="status"></div>
       <header id="video-header" class="hidden">
@@ -34,6 +36,7 @@
       </div>
       <div id="empty-actions" class="empty-actions">
         <button id="btn-refresh-tab" class="ghost" title="Переискать вкладку с видео"><span data-icon="search" data-size="14"></span>Найти вкладку с видео</button>
+        <button id="btn-open-library" class="ghost" title="Поиск по всем видео в ваших плейлистах"><span data-icon="library" data-size="14"></span>Моя библиотека</button>
         <button id="btn-open-settings" class="ghost" title="Настройки"><span data-icon="settings" data-size="14"></span>Настройки</button>
       </div>
 

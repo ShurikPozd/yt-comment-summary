@@ -26,6 +26,10 @@ const P = {
   // ножницы — «Вырезать клип»
   clip: '<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>',
   close: '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
+  // боковая панель — окно с полосой справа
+  panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+  // «Моя библиотека» — стопка плейлистов с кнопкой воспроизведения
+  library: '<rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   chevron: '<path d="M9 6l6 6-6 6"/>',

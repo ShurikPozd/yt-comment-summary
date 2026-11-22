@@ -3,11 +3,15 @@
 // Скрипт живёт в мире страницы (world: MAIN): только здесь виден ytcfg с
 // настройками клиента и вашего аккаунта (в том числе канала-бренда), а
 // запросы уходят ровно так же, как у самого YouTube.
-// Управление — событие "ytcs-pl" на document (JSON в detail), ответы —
+// Управление — событие "ytcs-pl:2" на document (JSON в detail), ответы —
 // window.postMessage({ __ytcsPl: id, ok, data | error }).
+// Номер в имени события — версия: после обновления расширения во вкладке
+// остаётся старая копия скрипта, и она не должна отвечать на новые запросы
+// (иначе, например, видео добавилось бы в плейлист дважды).
 (() => {
-  if (window.__ytcsPlMain) return;
-  window.__ytcsPlMain = true;
+  const EV = "ytcs-pl:2";
+  if (window[`__ytcsPlMain:${EV}`]) return;
+  window[`__ytcsPlMain:${EV}`] = true;
 
   const cfg = (k) => window.ytcfg?.get?.(k);
   const cookie = (name) => {
@@ -107,6 +111,108 @@
     return { id: j.playlistId };
   }
 
+  // ---------- каталог для «Моей библиотеки» ----------
+  // Все плейлисты без привязки к видео. Пустой список видео YouTube отклоняет —
+  // спрашиваем про любой ролик, отметка «уже там» здесь не нужна.
+  async function playlists() {
+    const rows = await list(["dQw4w9WgXcQ"]);
+    return rows.map(({ id, title, privacy }) => ({ id, title, privacy }));
+  }
+
+  const SEC = (s) => String(s || "").split(":").reduce((a, x) => a * 60 + (Number(x) || 0), 0);
+
+  // Видео в старом формате (playlistVideoRenderer) — «Смотреть позже» и плейлисты
+  function fromRenderer(v, n) {
+    const by = v.shortBylineText?.runs?.[0];
+    return {
+      short: Boolean(v.navigationEndpoint?.reelWatchEndpoint),
+      id: v.videoId,
+      title: text(v.title),
+      channel: text(v.shortBylineText),
+      channelId: by?.navigationEndpoint?.browseEndpoint?.browseId || "",
+      len: Number(v.lengthSeconds) || SEC(text(v.lengthText)),
+      info: text(v.videoInfo),
+      setId: v.setVideoId || "",
+      pos: Number(text(v.index)) || n,
+    };
+  }
+
+  // Видео в новом формате (lockupViewModel) — так приходят «Понравившиеся»
+  function fromLockup(l, n) {
+    const meta = l.metadata?.lockupMetadataViewModel || {};
+    const parts = (meta.metadata?.contentMetadataViewModel?.metadataRows || []).map((r) => (r.metadataParts || []).map((p) => p.text?.content || "").filter(Boolean));
+    let badge = "";
+    (function walk(o) {
+      if (badge || !o || typeof o !== "object") return;
+      if (typeof o.thumbnailBadgeViewModel?.text === "string") badge = o.thumbnailBadgeViewModel.text;
+      else for (const k in o) walk(o[k]);
+    })(l.contentImage);
+    const s = JSON.stringify(meta);
+    return {
+      id: l.contentId,
+      title: meta.title?.content || "",
+      channel: parts[0]?.[0] || "",
+      channelId: (s.match(/"browseId":"(UC[\w-]{22})"/) || [])[1] || "",
+      len: /^\d+(:\d+)+$/.test(badge) ? SEC(badge) : 0,
+      info: (parts[1] || []).join(" • "),
+      setId: "",
+      pos: n,
+    };
+  }
+
+  // Shorts плиткой (shortsLockupViewModel) — плейлисты, где одни Shorts.
+  // Канала и длительности в плитке нет.
+  function fromShorts(s, n) {
+    const id = s.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId || (s.entityId || "").replace(/^shorts-shelf-item-/, "");
+    return {
+      id,
+      title: s.overlayMetadata?.primaryText?.content || "",
+      channel: "",
+      channelId: "",
+      len: 0,
+      short: true,
+      info: s.overlayMetadata?.secondaryText?.content || "",
+      setId: "",
+      pos: n,
+    };
+  }
+
+  // Одна «страница» плейлиста (до 100 видео) и токен следующей
+  async function page(playlistId, token, from = 0) {
+    const j = token ? await post("browse", { continuation: token }) : await post("browse", { browseId: "VL" + playlistId });
+    const items = [];
+    let next = null;
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      if (o.playlistVideoRenderer?.videoId) return void items.push(fromRenderer(o.playlistVideoRenderer, from + items.length + 1));
+      if (o.lockupViewModel?.contentId && /VIDEO/.test(o.lockupViewModel.contentType || "VIDEO")) return void items.push(fromLockup(o.lockupViewModel, from + items.length + 1));
+      if (o.shortsLockupViewModel?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId) return void items.push(fromShorts(o.shortsLockupViewModel, from + items.length + 1));
+      const cont = o.continuationItemRenderer || o.continuationItemViewModel;
+      if (cont) {
+        next ||= contToken(cont);
+        return;
+      }
+      for (const k in o) walk(o[k]);
+    })(j);
+    return { items, next };
+  }
+
+  // Токен «загрузить ещё» внутри continuationItemRenderer (или нового
+  // continuationItemViewModel). Он то лежит прямо в continuationEndpoint, то в
+  // commandExecutorCommand.commands[], то в innertubeCommand — ищем в глубину.
+  function contToken(node) {
+    let token = null;
+    (function walk(o) {
+      if (token || !o || typeof o !== "object") return;
+      if (typeof o.continuationCommand?.token === "string") {
+        token = o.continuationCommand.token;
+        return;
+      }
+      for (const k in o) walk(o[k]);
+    })(node);
+    return token;
+  }
+
   // Обложки и «обновлено…» со страницы «Плейлисты» вашей библиотеки
   async function library() {
     const out = [];
@@ -123,7 +229,11 @@
           out.push({ id: l.contentId, thumb, updated: lines.find((x) => /обновлен|updated/i.test(x)) || "" });
           return;
         }
-        if (o.continuationItemRenderer) next ||= o.continuationItemRenderer.continuationEndpoint?.continuationCommand?.token || null;
+        const cont = o.continuationItemRenderer || o.continuationItemViewModel;
+        if (cont) {
+          next ||= contToken(cont);
+          return;
+        }
         for (const k in o) walk(o[k]);
       })(j);
       j = next ? await post("browse", { continuation: next }) : null;
@@ -136,9 +246,11 @@
     edit: (r) => edit(r.playlistId, r.videoId, r.add),
     create: (r) => create(r.title, r.privacy, r.videoIds),
     library: () => library(),
+    playlists: () => playlists(),
+    page: (r) => page(r.playlistId, r.token || null, Number(r.from) || 0),
   };
 
-  document.addEventListener("ytcs-pl", (e) => {
+  document.addEventListener(EV, (e) => {
     let req;
     try {
       req = JSON.parse(e.detail);

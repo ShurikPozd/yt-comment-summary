@@ -910,6 +910,10 @@
     bar: SVG('<path d="M3 12h18"/><path d="M3 7h2M3 17h2M19 7h2M19 17h2" opacity=".5"/><path d="M4 4l16 16"/>'),
     // закладка с плюсом — «Сохранить в плейлисты»
     save: SVG('<path d="M6 4h12v16l-6-4-6 4z"/><path d="M12 8v5"/><path d="M9.5 10.5h5"/>'),
+    // часы со стрелкой вниз — «Отложить в очередь»
+    defer: SVG('<path d="M20 12a8 8 0 1 1-8-8"/><path d="M12 8v4l2.5 1.5"/><path d="M19 4v5h-5"/>'),
+    // стопка плейлистов — «Моя библиотека»
+    library: SVG('<rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/>'),
     // ножницы — «Вырезать клип»
     clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
   };
@@ -932,6 +936,8 @@
       <div class="ytcs-head">${UI_ICONS.brand}Сводка комментариев</div>
       <button class="ytcs-item" role="menuitem" data-act="panel">${UI_ICONS.panel}<span class="ytcs-label">Открыть сводку и комментарии</span></button>
       <button class="ytcs-item" role="menuitem" data-act="playlists">${UI_ICONS.save}<span class="ytcs-label">Сохранить в плейлисты</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="library">${UI_ICONS.library}<span class="ytcs-label">Моя библиотека</span></button>
       <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
       <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
       <button class="ytcs-item" role="menuitem" data-act="download">${UI_ICONS.download}<span class="ytcs-label">Скачать превью</span></button>
@@ -986,6 +992,23 @@
       return;
     }
     const act = item.dataset.act;
+    // отложить — в очередь с местом, где остановились, и закрыть вкладку
+    if (act === "defer") {
+      openMenu(false);
+      if (!globalThis.__ytcsQueue?.defer) setNote("Обновите страницу видео (F5).");
+      else void globalThis.__ytcsQueue.defer();
+      return;
+    }
+    // библиотека — отдельная вкладка расширения
+    if (act === "library") {
+      openMenu(false);
+      if (!alive()) return setNote("Обновите страницу видео (F5).");
+      chrome.storage.local
+        .get("libraryWhere")
+        .then(({ libraryWhere }) => chrome.runtime.sendMessage({ type: "lib:open", where: libraryWhere === "panel" ? "panel" : "tab" }))
+        .catch(() => setNote("Обновите страницу видео (F5)."));
+      return;
+    }
     // плейлисты — окно рисует playlists.js здесь же, на странице
     if (act === "playlists") {
       openMenu(false);
@@ -1350,6 +1373,12 @@
         sendResponse({ ok: Boolean(globalThis.__ytcsClip) && isWatchPage() && !other });
         if (!isWatchPage()) showPageToast("Откройте видео, чтобы вырезать из него клип", UI_ICONS.clip);
         else if (!other) void globalThis.__ytcsClip?.open(Number.isFinite(msg.start) ? { start: msg.start, end: msg.end } : null);
+        return;
+      }
+      case "yt:defer": {
+        const ok = Boolean(globalThis.__ytcsQueue?.defer);
+        sendResponse({ ok });
+        if (ok) void globalThis.__ytcsQueue.defer();
         return;
       }
       case "yt:playlists": {
