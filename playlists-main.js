@@ -104,6 +104,17 @@
     return true;
   }
 
+  // Много видео одним запросом (пачку собирает вызывающий: YouTube принимает
+  // несколько действий в одном edit_playlist — проверено, добавление и удаление)
+  async function editMany(playlistId, videoIds, add) {
+    const ids = (videoIds || []).filter((x) => /^[A-Za-z0-9_-]{11}$/.test(x)).slice(0, 100);
+    if (!ids.length) return 0;
+    const actions = ids.map((v) => (add ? { action: "ACTION_ADD_VIDEO", addedVideoId: v } : { action: "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", removedVideoId: v }));
+    const j = await post("browse/edit_playlist", { playlistId, actions });
+    if (j?.status && j.status !== "STATUS_SUCCEEDED") throw Object.assign(new Error(j.status), { code: "edit" });
+    return ids.length;
+  }
+
   // Новый плейлист сразу с этим видео
   async function create(title, privacy, videoIds) {
     const j = await post("playlist/create", { title, privacyStatus: privacy || "PRIVATE", videoIds });
@@ -244,6 +255,7 @@
   const ops = {
     list: (r) => list(r.videoIds),
     edit: (r) => edit(r.playlistId, r.videoId, r.add),
+    editMany: (r) => editMany(r.playlistId, r.videoIds, r.add),
     create: (r) => create(r.title, r.privacy, r.videoIds),
     library: () => library(),
     playlists: () => playlists(),

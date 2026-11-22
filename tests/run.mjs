@@ -150,5 +150,16 @@ ok(sh.data.items.length === 2 && sh.data.items[0].short && sh.data.items[0].titl
 const pls = await call("playlists");
 ok(pls.ok && pls.data[0].id === "PL1" && pls.data[0].title === "Мой" && !("contains" in pls.data[0]), "список плейлистов");
 
+let sentActions = null;
+const call2 = loadMain((url, body) => {
+  if (url.includes("edit_playlist")) {
+    sentActions = body.actions;
+    return { status: "STATUS_SUCCEEDED" };
+  }
+  return {};
+});
+const em = await call2("editMany", { playlistId: "WL", videoIds: ["aaaaaaaaaaa", "bbbbbbbbbbb", "плохой id"], add: false });
+ok(em.ok && em.data === 2 && sentActions.length === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", "много видео одним запросом (плохие id отброшены)");
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

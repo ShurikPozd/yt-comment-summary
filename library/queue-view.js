@@ -6,6 +6,7 @@ import { buildIndex, search } from "./search.js";
 import { $, esc, nf, plural, state, videosWord } from "./state.js";
 import { ago, durOk, fmtLen, mark, more, update } from "./view-lib.js";
 import { openWatch, refreshWatchSide, watch, watchHere } from "./watch.js";
+import { wlCardHtml } from "./wl.js";
 
 // ---------- очередь «посмотреть потом» ----------
 export const qmsg = (msg) => chrome.runtime.sendMessage(msg).catch(() => null);
@@ -188,6 +189,7 @@ export function renderQueueSide() {
   const fresh = undo && (state.justCollected || Date.now() - undo.at < 2 * 60 * 1000);
   const sw = (key, title, hint) => `<label class="switch"><span>${title}<small>${hint}</small></span><input type="checkbox" data-opt="${key}" ${state.qopts[key] ? "checked" : ""} /></label>`;
   $("#q-side").innerHTML = `
+    ${wlCardHtml()}
     ${
       undo
         ? `<div class="q-card q-undo" role="status">

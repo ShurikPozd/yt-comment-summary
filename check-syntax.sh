@@ -11,7 +11,7 @@ node check-exports.mjs . && echo "= экспорты на месте ="
 echo "== константы верхнего регистра =="
 cstmp=$(mktemp)
 cfail=0
-for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/icons.js sidepanel/card.js groq.js prompts.js config.js library/library.js library/search.js library/state.js library/store.js library/youtube.js library/catalog.js library/view-lib.js library/queue-view.js library/watch.js; do
+for f in sidepanel/sidepanel.js sidepanel/insights.js sidepanel/icons.js sidepanel/card.js groq.js prompts.js config.js library/library.js library/search.js library/state.js library/store.js library/youtube.js library/catalog.js library/view-lib.js library/queue-view.js library/watch.js library/wl.js; do
   [ -f "$f" ] || continue
   if out=$(node check-consts.mjs "$f") && ! printf '%s' "$out" | grep -q 'НЕ ОБЪЯВЛЕНЫ'; then
     echo "OK   $f"
