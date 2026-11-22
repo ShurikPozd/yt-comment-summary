@@ -2044,6 +2044,61 @@ body[data-triage] .watch {
   color: var(--fg-2);
 }
 
+/* ---------- резервная копия ---------- */
+.bk-pick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 2.6rem;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.bk-pick:hover {
+  background: var(--bg-hover);
+}
+
+.bk-file {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bk-file .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bk-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.bk-check input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.td-msg.ok {
+  margin: 12px 0 0;
+  color: var(--fg-2);
+}
+
+#backup .tidy {
+  margin-bottom: 22px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

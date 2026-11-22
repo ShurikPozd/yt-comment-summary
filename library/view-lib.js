@@ -9,6 +9,7 @@ import { $, PAGE, SPECIAL, esc, nf, plWord, plural, state, videosWord } from "./
 import { watch } from "./watch.js";
 import { yt } from "./youtube.js";
 import "./tidy.js";
+import "./backup.js";
 
 // ---------- поиск и фильтры ----------
 export function durOk(v, dur) {
@@ -194,7 +195,9 @@ export function renderSide() {
   html += special.map(row).join("");
   if (rest.length) html += `<div class="pl-sep">Плейлисты · ${nf.format(rest.length)}</div>` + rest.map(row).join("");
   if (!items.length) html += `<div class="pl-sep">Плейлист не найден</div>`;
-  if (!q) html += `<button type="button" class="ghost td-open" data-td="open" title="Удалённые видео, повторы, видео во многих плейлистах">${icon("settings", { size: 16 })}Порядок в плейлистах</button>`;
+  if (!q)
+    html += `<button type="button" class="ghost td-open" data-td="open" title="Удалённые видео, повторы, видео во многих плейлистах">${icon("settings", { size: 16 })}Порядок в плейлистах</button>
+      <button type="button" class="ghost td-open" data-bk="open" title="Очередь, настройки и список плейлистов — в файл и обратно">${icon("file", { size: 16 })}Резервная копия</button>`;
   box.innerHTML = html;
 }
 

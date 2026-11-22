@@ -236,6 +236,7 @@ export function renderQueueSide() {
       <kbd>[</kbd><span>предыдущее</span>
       <kbd>Shift + ]</kbd><span>досмотрел — убрать и дальше</span>
     </div>
+    <button type="button" class="ghost q-triage" data-bk="open" title="Очередь, настройки и список плейлистов — в файл и обратно">${icon("file", { size: 16 })}Резервная копия</button>
     ${q.length ? `<button type="button" class="ghost danger" data-act="qclear">${icon("close", { size: 16 })}Очистить очередь</button>` : ""}`;
 }
 
