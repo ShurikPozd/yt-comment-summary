@@ -76,3 +76,25 @@ export const state = {
   syncNote: null, // { text, at } — итог последнего обновления для строки статуса
   error: "",
 };
+
+// Подсказка в поле поиска — самая подробная из вариантов, что помещается целиком
+// (в узком окне и в боковой панели — короче, а не обрезанная на полуслове).
+let hintCanvas = null;
+function fitSearchHint(input) {
+  const variants = input.__hints;
+  if (!variants?.length) return;
+  const cs = getComputedStyle(input);
+  const room = input.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 4;
+  hintCanvas ||= document.createElement("canvas").getContext("2d");
+  hintCanvas.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  input.placeholder = variants.find((v) => hintCanvas.measureText(v).width <= room) || variants[variants.length - 1];
+}
+export function setSearchHint(input, ...variants) {
+  if (!input) return;
+  input.__hints = variants.filter(Boolean);
+  if (!input.__hintRo) {
+    input.__hintRo = new ResizeObserver(() => fitSearchHint(input));
+    input.__hintRo.observe(input);
+  }
+  fitSearchHint(input);
+}

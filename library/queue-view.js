@@ -3,7 +3,7 @@
 import { icon } from "../sidepanel/icons.js";
 import { saveHash } from "./library.js";
 import { buildIndex, search } from "./search.js";
-import { $, esc, nf, plural, state, videosWord } from "./state.js";
+import { $, esc, nf, plural, setSearchHint, state, videosWord } from "./state.js";
 import { ago, durOk, fmtLen, mark, more, update } from "./view-lib.js";
 import { openWatch, refreshWatchSide, watch, watchHere } from "./watch.js";
 import { wlCardHtml } from "./wl.js";
@@ -116,7 +116,7 @@ export function updateQueue({ keep = false } = {}) {
     window.scrollTo({ top: 0 });
     more();
   }
-  $("#q").placeholder = state.queue.length ? `Поиск в очереди: ${videosWord(state.queue.length)}` : "Поиск в очереди";
+  setSearchHint($("#q"), state.queue.length ? `Поиск в очереди: ${videosWord(state.queue.length)}` : "", "Поиск в очереди", "Поиск");
   $("#q-play").disabled = !list.length;
   // очередь пуста — без кнопки «Смотреть», порядка и фильтров длины: выбирать не из чего
   document.body.classList.toggle("q-none", !state.queue.length);
