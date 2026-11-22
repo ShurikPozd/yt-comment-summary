@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.argv[2] || ".";
-const files = ["sidepanel/sidepanel.js", "sidepanel/video-tldr.js", "content.js", "background.js", "tldr-bg.js", "tldr-core.js"].filter((f) =>
+const files = ["sidepanel/sidepanel.js", "sidepanel/video-tldr.js", "content.js", "background.js", "tldr-bg.js", "tldr-core.js", "archive-bg.js"].filter((f) =>
   fs.existsSync(path.join(root, f))
 );
 

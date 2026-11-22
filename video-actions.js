@@ -1,6 +1,7 @@
-// Действия с обложкой видео: «О чём видео» (пересказ по субтитрам) и «Превью»
-// (обложка крупно, скачать в максимальном качестве). Общий модуль для любой
-// обложки:
+// Действия с обложкой видео: «О чём видео» (пересказ по субтитрам), «Превью»
+// (обложка крупно, скачать в максимальном качестве) и «В архив Telegram» (видео —
+// в личный бот-архив; кнопка есть, только когда бот настроен). Общий модуль для
+// любой обложки:
 //  - на youtube.com сам подключается к карточкам ленты (главная, подписки,
 //    поиск, рекомендации справа, плейлисты, каналы, Shorts);
 //  - свои интерфейсы расширения вешают те же кнопки на свои обложки через API
@@ -25,6 +26,7 @@
 //   attach(thumbEl, { videoId, title, channel, len, getInfo, card, right, top, actions }) → detach()
 //   openTldr(anchorEl, { videoId, title, channel, len }, { card })
 //   openPreview({ videoId, title, channel })
+//   archive({ videoId, title, channel, len }) → итог фона (archive-bg.js)
 //   close(), setTheme("dark" | "light" | null), refresh()
 (() => {
   if (globalThis.__ytcsVideoActions) return;
@@ -157,6 +159,11 @@
     alert: SVG('<path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/>'),
     plug: SVG('<path d="M9 3v5"/><path d="M15 3v5"/><path d="M6.5 8h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 16.5V21"/>'),
     stop: SVG('<rect x="6" y="6" width="12" height="12" rx="2.5"/>'),
+    // бумажный самолётик Telegram — «В архив Telegram» (как в меню плеера, content.js)
+    archive: SVG('<path d="M20.4 4.3L3.7 10.8c-.9.35-.85 1.6.06 1.88l4.04 1.25 1.6 5.03c.25.8 1.25 1 1.83.4l2.2-2.25 4.3 3.17c.7.5 1.7.12 1.88-.72l2.73-12.6c.2-.92-.7-1.67-1.58-1.33z"/><path d="M7.8 13.93l9.7-6.43-6.6 7.4-.5 4.4"/>', 1.8),
+    done: SVG('<path d="M5.5 12.5l4.2 4.2L18.5 7.8"/>', 2.2),
+    spin: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".3"/><path d="M12 4a8 8 0 0 1 8 8"/></svg>',
+    ok: SVG('<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16.2 9.5"/>', 1.8),
   };
 
   const UI_CSS = `
@@ -182,6 +189,20 @@
     .vb:active { transform: scale(.92); }
     .vb:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .vb.on { background: var(--acc); box-shadow: 0 1px 6px rgba(0, 0, 0, .4); }
+    .vb.busy { cursor: progress; }
+    .spin { animation: va-spin .9s linear infinite; }
+    @keyframes va-spin { to { transform: rotate(360deg); } }
+    /* своя плашка — только на страницах расширения: внизу по центру, не закрывает шапку и обложки */
+    .toast { position: fixed; bottom: 24px; left: 50%; z-index: 5; display: flex; align-items: center; gap: 10px;
+      width: max-content; max-width: calc(100vw - 32px); padding: 10px 18px 11px 14px; border-radius: 999px;
+      background: rgba(28, 28, 30, .9); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
+      color: #f1f1f1; font: 500 14px/1.3 Roboto, "YouTube Sans", Arial, sans-serif;
+      opacity: 0; transform: translate(-50%, 8px) scale(.97); pointer-events: none;
+      transition: opacity .18s ease, transform .26s cubic-bezier(.22, 1, .36, 1); }
+    .toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    .toast svg { width: 18px; height: 18px; flex: none; color: #ff6b85; }
+    .toast span { min-width: 0; text-wrap: balance; }
     .tip { position: fixed; z-index: 4; display: none; height: 28px; padding: 0 11px; border-radius: 8px; align-items: center;
       background: rgba(15, 15, 15, .92); color: #fff; font: 600 13.5px/1 Roboto, "YouTube Sans", Arial, sans-serif; white-space: nowrap;
       box-shadow: 0 4px 14px rgba(0, 0, 0, .35); pointer-events: none; }
@@ -260,7 +281,8 @@
     .empty kbd { font: 600 13px/1 Roboto, Arial, sans-serif; padding: 3px 6px; border-radius: 6px; background: var(--bg-3); }
 
     @media (prefers-reduced-motion: reduce) {
-      .vb, .pop, .pop[hidden], .bar i { transition: none; }
+      .vb, .pop, .pop[hidden], .bar i, .toast { transition: none; }
+      .spin { animation-duration: 2.4s; }
       .skel i, .live .about::after { animation: none; }
     }`;
 
@@ -268,6 +290,7 @@
   const BTN = {
     preview: { icon: () => ICON.eye, label: "Превью обложки", hint: "Превью: обложка крупно и скачать" },
     tldr: { icon: () => ICON.tldr, label: "О чём видео", hint: "О чём видео: краткий пересказ по субтитрам" },
+    archive: { icon: () => ICON.archive, label: "В архив Telegram", hint: "В архив Telegram: сохранить видео в бот-архив" },
   };
   let host = null;
   let $ = null;
@@ -282,6 +305,7 @@
     root.innerHTML = `<style>${UI_CSS}</style>
       <div class="va" role="group" aria-label="Действия с видео"></div>
       <div class="tip" aria-hidden="true"></div>
+      <div class="toast" role="status" aria-live="polite"></div>
       <div class="pop" role="dialog" aria-label="О чём видео" tabindex="-1" hidden>
         <div class="head">
           <div class="kicker">${ICON.tldr}О чём видео</div>
@@ -303,6 +327,7 @@
       if (!info.videoId) return;
       hideTip();
       if (act === "preview") return void openPreview(info);
+      if (act === "archive") return void archive(info);
       if (cur && cur.vid === info.videoId && !$(".pop").hidden) return close();
       openTldr(target.el, info, { card: target.card });
     });
@@ -320,7 +345,7 @@
   function showTip(btn) {
     if (!btn || !$) return hideTip();
     const tip = $(".tip");
-    tip.textContent = BTN[btn.dataset.va]?.label || "";
+    tip.textContent = labelOf(btn.dataset.va);
     tip.style.zoom = btnZoom; // на 2K/4K — вместе с кнопками
     tip.classList.add("show");
     const g = $(".va").getBoundingClientRect();
@@ -409,12 +434,17 @@
       hideTip();
       return;
     }
-    const actions = (Array.isArray(target.actions) && target.actions.length ? target.actions : ["preview", "tldr"]).filter((a) => BTN[a]);
+    let actions = (Array.isArray(target.actions) && target.actions.length ? target.actions : defaultActions()).filter((a) => BTN[a]);
     const small = r.width < 220; // справа на странице видео, Shorts, узкие колонки
     // на 2K/4K обложки крупнее — и кнопки чуть крупнее (размеры ниже — экранные)
     const bz = small ? 1 : Math.min(zoomLevel(), 1.25);
     const s = (small ? 28 : 32) * bz;
     const g = (small ? 5 : 6) * bz;
+    // на узкой обложке три кнопки не влезают — «В архив» уступает место (есть в меню)
+    const room = r.width - (target.auto ? 44 + (small ? 6 : 8) : (target.right ?? (small ? 6 : 8)) + 4);
+    if (actions.length > 1 && actions.includes("archive") && actions.length * s + (actions.length - 1) * g > room) {
+      actions = actions.filter((a) => a !== "archive");
+    }
     const w = actions.length * s + (actions.length - 1) * g;
     const key = actions.join();
     if (va.dataset.key !== key) {
@@ -428,6 +458,7 @@
     va.style.setProperty("--s", `${s / bz}px`);
     va.style.setProperty("--g", `${g / bz}px`);
     va.querySelector('[data-va="tldr"]')?.classList.toggle("on", Boolean(cur && cur.vid === info.videoId && !$(".pop").hidden));
+    paintArchive(va.querySelector('[data-va="archive"]'), info.videoId);
     host.style.zIndex = String(target.zIndex || 2019);
     let off;
     const pad = target.top ?? (small ? 6 : 8);
@@ -467,6 +498,7 @@
     if (t) {
       ensureHost();
       host.toggleAttribute("dark", isDark());
+      void loadMark(t.info().videoId);
       if (t.auto) {
         // живое превью YouTube и кнопка «Пересказать» появляются не сразу — сверяем место ещё пару раз
         let n = 0;
@@ -827,6 +859,126 @@
     return true;
   }
 
+  // ---------- «В архив Telegram» ----------
+  // Запрос к боту делает фон (archive-bg.js). Кнопка видна, только когда бот
+  // настроен (есть секрет); пока ждём ответа — кольцо, после — галочка на акценте.
+  // tgarch:<id> в storage.local — отметка «уже в архиве» (подсказка на кнопке).
+  const MARK = "tgarch:";
+  let archiveReady = false;
+  const archiveState = new Map(); // videoId → "wait" | "done"
+  const marks = new Map(); // videoId → категория (или "" — не в архиве)
+
+  function checkArchiveReady() {
+    if (!alive()) return;
+    chrome.runtime
+      .sendMessage({ type: "archive:ready" })
+      .then((r) => {
+        if (archiveReady === Boolean(r?.ok)) return;
+        archiveReady = Boolean(r?.ok);
+        placeButtons();
+      })
+      .catch(() => {});
+  }
+  checkArchiveReady();
+  try {
+    chrome.storage.onChanged.addListener((ch, area) => {
+      if (area !== "local") return;
+      if (ch.settings) checkArchiveReady(); // секрет ввели или стёрли в настройках панели
+      for (const k of Object.keys(ch)) if (k.startsWith(MARK)) marks.set(k.slice(MARK.length), ch[k].newValue?.cat ?? "");
+    });
+  } catch (e) {
+    /* расширение обновилось */
+  }
+
+  // «В архив» — слева: «Превью» и «О чём видео» остаются на привычных местах в углу.
+  const defaultActions = () => (archiveReady ? ["archive", "preview", "tldr"] : ["preview", "tldr"]);
+
+  function labelOf(act) {
+    if (act !== "archive") return BTN[act]?.label || "";
+    const vid = target?.info().videoId;
+    if (archiveState.get(vid) === "wait") return "Отправляю в архив…";
+    const cat = marks.get(vid);
+    return cat ? `В архиве — «${cat}»` : BTN.archive.label;
+  }
+
+  function paintArchive(btn, vid) {
+    if (!btn) return;
+    const st = archiveState.get(vid) || (marks.get(vid) ? "done" : "");
+    if (btn.dataset.st === st) return;
+    btn.dataset.st = st;
+    btn.innerHTML = st === "wait" ? ICON.spin : st === "done" ? ICON.done : ICON.archive;
+    btn.classList.toggle("busy", st === "wait");
+    btn.classList.toggle("on", st === "done");
+  }
+
+  async function loadMark(vid) {
+    if (!vid || marks.has(vid) || !alive()) return;
+    try {
+      const v = (await chrome.storage.local.get(MARK + vid))[MARK + vid];
+      marks.set(vid, v?.cat || "");
+      if (v?.cat && target?.info().videoId === vid) placeButtons();
+    } catch (e) {
+      /* без отметки */
+    }
+  }
+
+  // Плашка итога: на YouTube — общая с меню плеера (content.js, в плеере видна и во
+  // весь экран), на страницах расширения — своя такая же.
+  let toastTimer = 0;
+  function toast(text, kind = "", ms = 2600) {
+    const page = globalThis.__ytcsPageToast;
+    if (typeof page === "function") return page(text, kind, ms);
+    ensureHost();
+    const t = $(".toast");
+    t.innerHTML = `${kind === "wait" ? ICON.spin : kind === "ok" ? ICON.ok : kind === "err" ? ICON.alert : ICON.archive}<span></span>`;
+    t.querySelector("span").textContent = text;
+    void t.offsetHeight;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    if (ms > 0) toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+
+  async function archive(info) {
+    const vid = String(info?.videoId || "");
+    if (!VID_RE.test(vid)) return null;
+    if (archiveState.get(vid) === "wait") return null; // уже отправляем
+    if (!alive()) {
+      toast("Расширение обновилось — обновите страницу (F5)", "err", 4200);
+      return null;
+    }
+    archiveState.set(vid, "wait");
+    placeButtons();
+    toast("Отправляю в архив Telegram…", "wait", 0);
+    let r = null;
+    try {
+      r = await chrome.runtime.sendMessage({
+        type: "archive:save",
+        info: { videoId: vid, title: info.title || "", channel: info.channel || "", len: info.len || 0 },
+      });
+    } catch (e) {
+      r = { ok: false, text: "Расширение обновилось — обновите страницу (F5)" };
+    }
+    archiveState.delete(vid);
+    if (r?.ok) marks.set(vid, r.category || "Видео");
+    placeButtons();
+    toast(r?.text || "Не получилось сохранить в архив", r?.ok ? "ok" : "err", r?.ok ? 2600 : 4200);
+    return r;
+  }
+
+  // итог пункта правого клика по вкладке без контент-скрипта (библиотека) — в видимой странице
+  if (!ON_YT) {
+    try {
+      chrome.runtime.onMessage.addListener((msg) => {
+        if (msg?.type !== "archive:result" || document.visibilityState !== "visible") return;
+        const r = msg.result || {};
+        if (r.ok) marks.set(String(msg.videoId || ""), r.category || "Видео");
+        toast(r.text || "Не получилось сохранить в архив", r.ok ? "ok" : "err", r.ok ? 2600 : 4200);
+      });
+    } catch (e) {
+      /* стенд без chrome.runtime */
+    }
+  }
+
   // Превью: адреса качеств и имя файла (шаблон из настроек) — у фона, окно — thumb-preview.js.
   let previewSeq = 0;
   async function openPreview(info) {
@@ -912,7 +1064,8 @@
      *       (для карточек, которые переиспользуются под другие видео);
      *       card — рядом с чем ставить окно пересказа (по умолчанию обложка);
      *       right/top — отступы кнопок от правого верхнего угла обложки (8 px);
-     *       actions — ["preview", "tldr"] по умолчанию; zIndex — слоя (2019).
+     *       actions — по умолчанию ["archive", "preview", "tldr"] (без "archive",
+     *       если бот не настроен); zIndex — слоя (2019).
      * Возвращает detach().
      */
     attach(thumbEl, opts = {}) {
@@ -926,6 +1079,8 @@
     },
     openTldr,
     openPreview,
+    /** Видео в бот-архив Telegram с плашками «Отправляю…» → «Сохранено в «…»». */
+    archive,
     close,
     /** Тема окон: "dark" / "light", null — авто (YouTube: html[dark]; страницы расширения: data-theme / система). */
     setTheme(t) {

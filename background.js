@@ -2,6 +2,7 @@
 import { sanitizeFilename } from "./groq.js";
 import "./tldr-bg.js"; // окно «О чём видео» на ленте: пересказ через порт
 import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адресной строке — поиск по библиотеке
+import { saveVideo } from "./archive-bg.js"; // «В архив Telegram»: видео в бот-архив
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
@@ -130,6 +131,7 @@ async function buildMenus() {
   mk("playlists@action", "Сохранить в плейлисты…", A, {}, { parentId: "video@action" });
   mk("quicksave@action", "Сохранить в последний плейлист", A, {}, { parentId: "video@action" });
   mk("defer@action", "Отложить в очередь", A, {}, { parentId: "video@action" });
+  mk("archive@action", "В архив Telegram", A, {}, { parentId: "video@action" });
   chrome.contextMenus.create({ id: "sepv@action", type: "separator", contexts: A, parentId: "video@action" });
   mk("clip@action", "Вырезать клип", A, {}, { parentId: "video@action" });
   mk("preview@action", "Открыть превью", A, {}, { parentId: "video@action" });
@@ -148,6 +150,7 @@ async function buildMenus() {
   chrome.contextMenus.create({ id: "sep0@page", type: "separator", contexts: P, ...onYT });
   mk("playlists@page", "Сохранить в плейлисты…", P, onYT);
   mk("quicksave@page", "Сохранить в последний плейлист", ["page", "video"], { documentUrlPatterns: ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*"] });
+  mk("archive@page", "В архив Telegram", P, onYT);
   mk("clip@page", "Вырезать клип", P, onYT);
   mk("preview@page", "Открыть превью", P, onYT);
   mk("download@page", "Скачать превью", P, onYT);
@@ -338,7 +341,20 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
   if (action === "preview") await openPreview(tab, id);
   if (action === "download") await downloadThumb(tab, id);
+  if (action === "archive") await archiveFromMenu(tab, id);
 });
+
+// «В архив Telegram» из правого клика: плашки рисует страница YouTube (content.js);
+// вкладка без контент-скрипта (библиотека, старая страница) — сохраняем сами, итог
+// получат открытые страницы расширения (video-actions.js покажет плашку в видимой).
+async function archiveFromMenu(tab, id) {
+  if (tab?.id) {
+    const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:archive", videoId: id }).catch(() => null);
+    if (r?.ok) return;
+  }
+  const res = await saveVideo({ videoId: id });
+  chrome.runtime.sendMessage({ type: "archive:result", videoId: id, result: res }).catch(() => {});
+}
 
 // Превью — поверх страницы YouTube (окно рисует content.js). Если вкладка не
 // отвечает (страницу открыли до установки расширения) — отдельная вкладка.

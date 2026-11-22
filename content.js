@@ -1000,6 +1000,8 @@
     .ytcs-menu {
       position: absolute; right: 12px; bottom: 64px; z-index: 75;
       width: 300px; max-width: calc(100% - 24px); padding: 8px 0;
+      max-height: calc(100% - 76px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, .25) transparent;
       background: rgba(28, 28, 30, .86);
       -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
@@ -1013,7 +1015,7 @@
     .ytcs-head { display: flex; align-items: center; gap: 8px; padding: 6px 16px 10px; font-size: 12px; font-weight: 600;
       letter-spacing: .02em; color: rgba(255, 255, 255, .6); }
     .ytcs-head svg { width: 16px; height: 16px; color: #ff4e6a; }
-    .ytcs-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 40px; padding: 0 16px;
+    .ytcs-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: var(--ytcs-ih, 40px); padding: 0 16px;
       background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
       transition: background-color .12s ease; }
     .ytcs-item:hover, .ytcs-item:focus-visible { background: rgba(255, 255, 255, .1); outline: none; }
@@ -1036,12 +1038,17 @@
       -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       box-shadow: 0 8px 30px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
       color: #f1f1f1; font: 500 14px/1.3 "YouTube Noto", Roboto, Arial, sans-serif; white-space: nowrap;
+      width: max-content; max-width: calc(100% - 32px); box-sizing: border-box;
       opacity: 0; transform: translate(-50%, -8px) scale(.97); pointer-events: none;
       transition: opacity .18s ease, transform .26s cubic-bezier(.22, 1, .36, 1); }
     .ytcs-toast.page { position: fixed; top: 72px; z-index: 9999; }
     .ytcs-toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
     .ytcs-toast svg { width: 18px; height: 18px; flex: none; color: #ff6b85; }
-    @media (prefers-reduced-motion: reduce) { .ytcs-menu, .ytcs-switch, .ytcs-switch::after, .ytcs-toast { transition: none; } }`;
+    /* длинная плашка («Сохранено в «…»») в узком плеере переносится, а не обрезается */
+    .ytcs-toast span { min-width: 0; white-space: normal; text-wrap: balance; }
+    .ytcs-toast .ytcs-spin { animation: ytcs-spin .9s linear infinite; }
+    @keyframes ytcs-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .ytcs-menu, .ytcs-switch, .ytcs-switch::after, .ytcs-toast { transition: none; } .ytcs-toast .ytcs-spin { animation-duration: 2.4s; } }`;
 
   const SVG = (paths) =>
     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -1066,6 +1073,12 @@
     skip: SVG('<path d="M3 19h3M18 19h3"/><path d="M8.5 19h7" stroke-dasharray="1 2.5" opacity=".6"/><path d="M4.5 15.5c1.8-6.5 13.2-6.5 15 0"/><path d="M19.5 11.5v4h-4"/>'),
     // ножницы — «Вырезать клип»
     clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
+    // бумажный самолётик Telegram — «В архив Telegram» (бот @SaveandSort_bot)
+    archive: SVG('<path d="M20.4 4.3L3.7 10.8c-.9.35-.85 1.6.06 1.88l4.04 1.25 1.6 5.03c.25.8 1.25 1 1.83.4l2.2-2.25 4.3 3.17c.7.5 1.7.12 1.88-.72l2.73-12.6c.2-.92-.7-1.67-1.58-1.33z"/><path d="M7.8 13.93l9.7-6.43-6.6 7.4-.5 4.4"/>'),
+    // итог «В архив»: галочка / предупреждение; ожидание — кольцо
+    done: SVG('<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16.2 9.5"/>'),
+    alert: SVG('<path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/>'),
+    spin: '<svg class="ytcs-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" opacity=".25"/><path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5"/></svg>',
   };
 
   let uiMenu = null;
@@ -1088,6 +1101,7 @@
       <button class="ytcs-item" role="menuitem" data-act="playlists">${UI_ICONS.save}<span class="ytcs-label">Сохранить в плейлисты</span></button>
       <button class="ytcs-item" role="menuitem" data-act="quicksave" hidden>${UI_ICONS.quicksave}<span class="ytcs-label ytcs-ellipsis">Сохранить в последний плейлист</span></button>
       <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
+      <button class="ytcs-item" role="menuitem" data-act="archive" hidden>${UI_ICONS.archive}<span class="ytcs-label">В архив Telegram</span></button>
       <button class="ytcs-item" role="menuitem" data-act="library">${UI_ICONS.library}<span class="ytcs-label">Моя библиотека</span></button>
       <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
       <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
@@ -1103,7 +1117,8 @@
     player.appendChild(m);
     // во встроенном плеере библиотеки: «отложить» закрыло бы саму библиотеку,
     // а окна плейлистов и клипа там пока не работают
-    if (OUR_EMBED) for (const act of ["defer", "library", "playlists", "clip"]) m.querySelector(`[data-act="${act}"]`)?.remove();
+    // (в архив — с карточки библиотеки, своя кнопка на обложке)
+    if (OUR_EMBED) for (const act of ["defer", "library", "playlists", "clip", "archive"]) m.querySelector(`[data-act="${act}"]`)?.remove();
     return m;
   }
 
@@ -1129,9 +1144,23 @@
       document.querySelector("#movie_player .ytcs-btn")?.focus({ preventScroll: true });
     }
     uiMenu.classList.toggle("open", open);
+    if (open) fitMenu();
     if (open) syncQuickSave();
+    if (open) syncArchiveItem();
     document.querySelector(".ytcs-btn")?.setAttribute("aria-expanded", String(open));
     if (open) uiMenu.querySelector(".ytcs-item")?.focus({ preventScroll: true });
+  }
+
+  // Невысокий плеер (854×480, окно сбоку): пункты становятся ниже (до 32 px), чтобы
+  // меню поместилось целиком; не хватает и этого — прокрутка внутри меню.
+  function fitMenu() {
+    if (!uiMenu) return;
+    uiMenu.style.removeProperty("--ytcs-ih");
+    const player = uiMenu.parentElement;
+    const avail = (player?.clientHeight || 0) - 76;
+    const extra = uiMenu.scrollHeight - avail;
+    const items = uiMenu.querySelectorAll(".ytcs-item:not([hidden])").length;
+    if (avail > 0 && extra > 0 && items) uiMenu.style.setProperty("--ytcs-ih", `${Math.max(32, 40 - Math.ceil(extra / items))}px`);
   }
 
   // «Сохранить в «…»» — последний плейлист, куда вы сохраняли в окне
@@ -1146,8 +1175,53 @@
         const label = p.title ? `Сохранить в «${p.title}»` : "Сохранить в последний плейлист";
         item.querySelector(".ytcs-label").textContent = label;
         item.title = label;
+        fitMenu();
       })
       .catch(() => {});
+  }
+
+  // ---- «В архив Telegram» (бот-архив @SaveandSort_bot; запрос — фон, archive-bg.js) ----
+  // Пункт виден, только когда бот настроен (есть секрет).
+  function syncArchiveItem() {
+    const item = uiMenu?.querySelector('[data-act="archive"]');
+    if (!item || !alive()) return;
+    chrome.runtime
+      .sendMessage({ type: "archive:ready" })
+      .then((r) => {
+        item.hidden = !r?.ok;
+        fitMenu();
+      })
+      .catch(() => {});
+  }
+
+  function currentArchiveInfo(videoId = null) {
+    const own = videoIdFromUrl();
+    const id = videoId || own;
+    if (!id || id !== own) return { videoId: id };
+    const meta = extractMeta() || {};
+    const v = document.querySelector("#movie_player video");
+    const len = Number.isFinite(v?.duration) ? Math.round(v.duration) : 0;
+    return { videoId: id, title: meta.title || "", channel: meta.channelName || "", len };
+  }
+
+  // Плашки: «Отправляю…» висит до ответа (бот на Render может просыпаться ~50 с).
+  const archiveIcon = (kind) =>
+    ({ wait: UI_ICONS.spin, ok: UI_ICONS.done, err: UI_ICONS.alert })[kind] || UI_ICONS.archive;
+  const archiveToast = (text, kind, ms) => showPageToast(text, archiveIcon(kind), ms);
+  // общая плашка для кнопок на обложках (video-actions.js, тот же мир скриптов)
+  globalThis.__ytcsPageToast = archiveToast;
+
+  async function archiveVideo(info) {
+    if (!info?.videoId) return archiveToast("Откройте видео или щёлкните по его превью", "err");
+    if (!alive()) return archiveToast("Расширение обновилось — обновите страницу (F5)", "err");
+    archiveToast("Отправляю в архив Telegram…", "wait", 0);
+    let r = null;
+    try {
+      r = await chrome.runtime.sendMessage({ type: "archive:save", info });
+    } catch (e) {
+      r = { ok: false, text: "Расширение обновилось — обновите страницу (F5)" };
+    }
+    archiveToast(r?.text || "Не получилось сохранить в архив", r?.ok ? "ok" : "err", r?.ok ? 2600 : 4200);
   }
 
   async function onMenuClick(e) {
@@ -1195,6 +1269,12 @@
       else void globalThis.__ytcsPlaylists.quickSave();
       return;
     }
+    // в архив Telegram — запрос к боту делает фон, итог — плашкой в плеере
+    if (act === "archive") {
+      openMenu(false);
+      void archiveVideo(currentArchiveInfo());
+      return;
+    }
     // клип — окно рисует clip.js здесь же, на странице
     if (act === "clip") {
       openMenu(false);
@@ -1219,7 +1299,8 @@
   // Плашка-подтверждение в стиле плеера: в плеере — сверху по центру,
   // вне просмотра — вверху страницы.
   let toastTimer = null;
-  function showPageToast(text, iconSvg = "") {
+  // ms — сколько показывать (0 — пока не сменит следующая плашка).
+  function showPageToast(text, iconSvg = "", ms = 1800) {
     ensureUiStyle();
     let t = document.getElementById("ytcs-toast");
     const host = (isWatchPage() && document.querySelector("#movie_player")) || document.body;
@@ -1235,7 +1316,7 @@
     void t.offsetHeight; // перезапуск появления
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+    if (ms > 0) toastTimer = setTimeout(() => t.classList.remove("show"), ms);
   }
 
   // ---------------- Превью поверх страницы ----------------
@@ -1334,6 +1415,12 @@
         }
         return;
       }
+      case "yt:archive":
+        // пункт «В архив Telegram» правого клика: видео страницы или ролик по ссылке
+        if (OUR_EMBED) return;
+        sendResponse({ ok: true });
+        void archiveVideo(currentArchiveInfo(msg.videoId || null));
+        return;
       case "yt:toast":
         showPageToast(String(msg.text || ""));
         sendResponse({ ok: true });
