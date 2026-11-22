@@ -949,7 +949,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -959,6 +959,7 @@
     playerPrefs.noAutoplay = Boolean(settings?.noAutoplay);
     playerPrefs.hideProgress = Boolean(settings?.hideProgress);
     playerPrefs.sponsorSkip = settings?.sponsorSkip !== false; // пропуск вставок — sponsor.js, по умолчанию вкл.
+    playerPrefs.channelSpeed = settings?.channelSpeed !== false; // скорость по каналам — speed.js, по умолчанию вкл.
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -971,6 +972,8 @@
         showPageToast(playerPrefs.hideProgress ? "Полоса прогресса скрыта" : "Полоса прогресса видна", UI_ICONS.bar);
       } else if (before.sponsorSkip !== playerPrefs.sponsorSkip) {
         showPageToast(playerPrefs.sponsorSkip ? "Рекламные вставки будут пропускаться" : "Рекламные вставки — как обычно", UI_ICONS.skip);
+      } else if (before.channelSpeed !== playerPrefs.channelSpeed) {
+        showPageToast(playerPrefs.channelSpeed ? "Скорость будет запоминаться для каждого канала" : "Скорость больше не запоминается по каналам", UI_ICONS.speed);
       }
     }
   }
@@ -1000,6 +1003,7 @@
     .ytcs-menu {
       position: absolute; right: 12px; bottom: 64px; z-index: 75;
       width: 300px; max-width: calc(100% - 24px); padding: 8px 0;
+      box-sizing: border-box; max-height: calc(100% - 76px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent; /* маленький плеер — меню прокручивается, а не обрезается */
       background: rgba(28, 28, 30, .86);
       -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
@@ -1022,6 +1026,7 @@
     .ytcs-item .ytcs-label { flex: 1; min-width: 0; position: relative; top: -.075em; } /* оптическая центровка */
     .ytcs-item[hidden] { display: none; }
     .ytcs-item .ytcs-ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .ytcs-item .ytcs-aside { flex: none; color: #ff6b85; font-weight: 600; font-variant-numeric: tabular-nums; position: relative; top: -.075em; }
     .ytcs-sep { height: 1px; margin: 6px 0; background: rgba(255, 255, 255, .1); }
     .ytcs-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px;
       background: rgba(255, 255, 255, .25); transition: background-color .2s ease; }
@@ -1066,6 +1071,10 @@
     skip: SVG('<path d="M3 19h3M18 19h3"/><path d="M8.5 19h7" stroke-dasharray="1 2.5" opacity=".6"/><path d="M4.5 15.5c1.8-6.5 13.2-6.5 15 0"/><path d="M19.5 11.5v4h-4"/>'),
     // ножницы — «Вырезать клип»
     clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
+    // спидометр — «Скорость по каналам» (speed.js)
+    speed: SVG('<path d="M4.2 18.5a9 9 0 1 1 15.6 0"/><path d="M12 14.5l4.2-4.6"/><circle cx="12" cy="14.5" r="1.4"/><path d="M12 6.2v1.6M6.3 9l1.2 1M17.7 9l-1.2 1" opacity=".6"/>'),
+    // стрелка назад — «Скорость для канала: … · Сбросить»
+    speedreset: SVG('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/>'),
   };
 
   let uiMenu = null;
@@ -1096,6 +1105,8 @@
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="noAutoplay">${UI_ICONS.pause}<span class="ytcs-label">Не запускать видео само</span><span class="ytcs-switch"></span></button>
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
       <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
+      <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>
+      <button class="ytcs-item" role="menuitem" data-act="speedreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить скорость канала</span><span class="ytcs-aside">1×</span></button>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());
@@ -1112,6 +1123,7 @@
     uiMenu.querySelectorAll("[data-toggle]").forEach((b) => {
       b.setAttribute("aria-checked", String(Boolean(playerPrefs[b.dataset.toggle])));
     });
+    syncSpeedItem();
   }
 
   function setNote(text) {
@@ -1148,6 +1160,17 @@
         item.title = label;
       })
       .catch(() => {});
+  }
+
+  // «Сбросить скорость канала · 1,5×» — когда у канала видео она запомнена (speed.js)
+  function syncSpeedItem() {
+    const item = uiMenu?.querySelector('[data-act="speedreset"]');
+    if (!item) return;
+    const sp = playerPrefs.channelSpeed ? globalThis.__ytcsSpeed?.current?.() : null;
+    item.hidden = !sp;
+    if (!sp) return;
+    item.querySelector(".ytcs-aside").textContent = sp.label;
+    item.title = sp.name ? `Сбросить скорость канала «${sp.name}» — вернуть 1×` : "Сбросить скорость канала — вернуть 1×";
   }
 
   async function onMenuClick(e) {
@@ -1193,6 +1216,12 @@
       openMenu(false);
       if (!globalThis.__ytcsPlaylists?.quickSave) setNote("Обновите страницу видео (F5).");
       else void globalThis.__ytcsPlaylists.quickSave();
+      return;
+    }
+    // скорость канала — забыть и вернуть 1× (speed.js покажет плашку)
+    if (act === "speedreset") {
+      openMenu(false);
+      void globalThis.__ytcsSpeed?.reset?.();
       return;
     }
     // клип — окно рисует clip.js здесь же, на странице

@@ -97,6 +97,28 @@
       ],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "speed-main.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "speed-core.js",
+        "speed.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "side_panel": {
