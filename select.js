@@ -493,8 +493,8 @@
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const Q_PAGE_CSS = `
-    html.ytcs-qmode { --ytcs-qw: min(clamp(300px, 24vw, 400px), 46vw); }
-    @media (min-width: 2200px) { html.ytcs-qmode { --ytcs-qw: clamp(400px, 20vw, 520px); } }
+    html.ytcs-qmode { --ytcs-qw: min(clamp(320px, 27vw, 460px), 46vw); }
+    @media (min-width: 2200px) { html.ytcs-qmode { --ytcs-qw: clamp(460px, 22vw, 600px); } }
     html.ytcs-qmode ytd-page-manager#page-manager { margin-right: var(--ytcs-qw) !important; }
     /* уже в очереди: превью притушено слоем (плашка на нём остаётся чёткой), текст бледнее */
     .ytcs-qbadge { position: absolute; inset: 0; z-index: 6; pointer-events: none; display: grid; place-items: center;
@@ -516,7 +516,7 @@
     * { box-sizing: border-box; }
     .col { --z: 1; zoom: var(--z); position: fixed; right: 0; top: var(--top, 56px); bottom: 0;
       width: calc(var(--qw, 340px) / var(--z)); height: calc((100vh - var(--top, 56px)) / var(--z));
-      display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 16px;
+      display: flex; flex-direction: column; gap: 16px; padding: 18px 20px 20px;
       background: var(--bg); color: var(--fg); border-left: 1px solid var(--line);
       font: 400 14px/1.35 Roboto, "YouTube Sans", "Segoe UI", system-ui, sans-serif;
       transform: translateX(0); transition: transform .3s cubic-bezier(.23, 1, .32, 1); }
@@ -527,7 +527,7 @@
     .ttl b { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; line-height: 1.2; }
     .num { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px;
       background: var(--acc); color: var(--on-acc); font-size: 14px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-    .ttl > span { display: block; margin-top: 4px; color: var(--muted); font-size: 14px; }
+    .num[hidden] { display: none; }
     button { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
       gap: 8px; height: 40px; padding: 0 16px 1px; border-radius: 12px; font: inherit; font-weight: 600; white-space: nowrap;
       color: var(--fg); background: var(--btn); transition: background-color .14s ease, transform .1s ease-out; }
@@ -536,19 +536,21 @@
     button:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
     button svg { width: 20px; height: 20px; flex: none; }
     .x { width: 40px; padding: 0; border-radius: 50%; }
-    .list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; margin: 0 -8px; padding: 0 8px;
-      display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; }
-    .it { position: relative; display: flex; gap: 10px; align-items: center; padding: 6px; border-radius: 12px; }
+    .list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; margin: 0 -6px; padding: 0 6px;
+      display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; }
+    /* галерея: обложка во всю ширину, под ней название — читается и в узкой колонке */
+    .it { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 6px 6px 10px; border-radius: 14px; }
     .it:hover { background: var(--btn); }
     /* обложка — фоном, а не <img>: иначе к ней цепляются панельки чужих расширений-просмотрщиков */
-    .it .th { flex: none; width: 128px; aspect-ratio: 16 / 9; border-radius: 8px; background: var(--btn) center / cover no-repeat; }
-    .it .t { flex: 1; min-width: 0; }
+    .it .th { flex: none; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: var(--btn) center / cover no-repeat; }
+    .it .t { min-width: 0; padding: 0 4px; }
     .it b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 15px; font-weight: 600; line-height: 1.3; }
     .it span { display: block; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 13.5px; }
-    .it .rm { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; padding: 0; border-radius: 50%;
-      background: var(--bg); box-shadow: 0 1px 4px rgba(0, 0, 0, .3); opacity: 0; }
+    .it .rm { position: absolute; right: 14px; top: 14px; width: 34px; height: 34px; padding: 0; border-radius: 50%;
+      background: rgba(15, 15, 15, .78); color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); opacity: 0; }
+    .it .rm:hover { background: var(--acc); color: var(--on-acc); }
     .it:hover .rm, .it .rm:focus-visible { opacity: 1; }
-    .it .rm svg { width: 16px; height: 16px; }
+    .it .rm svg { width: 18px; height: 18px; }
     .it.new { animation: land .45s cubic-bezier(.23, 1, .32, 1); }
     @keyframes land { from { transform: scale(.92); background: var(--acc-soft); } }
     .empty { padding: 20px 8px; color: var(--muted); text-align: center; line-height: 1.5; font-size: 14px; }
@@ -559,9 +561,7 @@
     .hint b { color: var(--fg); font-size: 17px; }
     /* узкое окно: колонка узкая — обложка над названием */
     @media (max-width: 760px) {
-      .col { padding: 12px 10px; }
-      .it { flex-direction: column; align-items: stretch; gap: 6px; }
-      .it .th { width: 100%; }
+      .col { padding: 14px 12px 14px; gap: 12px; }
       .foot .open { padding: 0 10px; }
     }
     .foot { display: flex; gap: 8px; }
@@ -603,7 +603,7 @@
       <button class="tog" data-q="on" hidden title="Режим очереди: нажимайте на видео — они улетают в очередь">${QICON.queue}<span class="lbl">Режим очереди</span></button>
       <aside class="col off" aria-label="Очередь" hidden>
         <div class="head">
-          <div class="ttl"><b>Очередь <span class="num">0</span></b><span>Нажимайте на видео — они летят сюда</span></div>
+          <div class="ttl"><b>Очередь <span class="num">0</span></b></div>
           <button class="x" data-q="off" title="Выйти из режима очереди (Esc)" aria-label="Выйти из режима очереди (Esc)">${ICON.close}</button>
         </div>
         <div class="list" role="list"></div>
@@ -631,6 +631,7 @@
     col.style.setProperty("--qw", getComputedStyle(document.documentElement).getPropertyValue("--ytcs-qw") || "340px");
     q$(".tog").hidden = qmode || !isFeed() || picked.size > 0;
     q$(".num").textContent = String(queueList.length);
+    q$(".num").hidden = !queueList.length; // пустая — без «0», об этом и так говорит подсказка
     if (!qmode) return;
     const rows = queueList.slice().reverse().slice(0, 60); // новые сверху
     q$(".list").innerHTML = rows.length
