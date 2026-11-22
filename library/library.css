@@ -1851,32 +1851,35 @@ body[data-triage] .watch {
   flex-wrap: wrap;
 }
 
-.t-btn {
+/* кнопки решений: значок, подпись и клавиша — одной строкой ровно по центру,
+   все одной ширины и высоты */
+.t-acts.main {
   display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: auto auto;
-  column-gap: 8px;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 12px;
+}
+
+.t-btn {
+  display: inline-flex;
   align-items: center;
-  justify-items: start;
-  min-width: 9.5rem;
-  padding: 12px 18px;
+  justify-content: center;
+  gap: 10px;
+  height: 3.6rem;
+  padding: 0 20px;
   border-radius: var(--r-l);
   border: 1px solid var(--border-strong);
   background: var(--bg-2);
   color: var(--fg);
   font-size: 1.05rem;
   font-weight: 650;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color var(--t-fast) ease, transform 0.1s ease-out, border-color var(--t-fast) ease;
 }
 
-.t-btn svg {
-  grid-row: 1 / 3;
-}
-
-.t-btn kbd {
-  color: var(--muted);
-  font: 500 0.8rem "Segoe UI", Roboto, sans-serif;
+.t-btn > span {
+  line-height: 1;
 }
 
 .t-btn:hover {
@@ -1898,12 +1901,57 @@ body[data-triage] .watch {
   color: #fff;
 }
 
-.t-btn.keep kbd {
-  color: rgba(255, 255, 255, 0.8);
-}
-
 .t-btn.keep:hover {
   background: var(--accent-hover);
+}
+
+/* подсказка клавиши — плашкой «клавиши»: рамка, толщина снизу, одна высота
+   у стрелок и Enter */
+.key {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 1.85rem;
+  height: 1.85rem;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 3px;
+  background: var(--bg-3);
+  color: var(--fg-2);
+  font: 650 0.8rem/1 "Segoe UI", "Segoe UI Symbol", Roboto, sans-serif;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.t-btn .key {
+  margin-left: 2px;
+}
+
+.t-btn:hover .key {
+  background: var(--bg-2);
+}
+
+/* на красной кнопке — светлая полупрозрачная */
+.t-btn.keep .key,
+button.primary .key {
+  border-color: rgba(255, 255, 255, 0.4);
+  border-bottom-color: rgba(0, 0, 0, 0.22);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.t-btn.keep:hover .key,
+button.primary:hover .key {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.t-undo .key {
+  min-width: 0;
+  height: 1.45rem;
+  padding: 0 6px;
+  border-bottom-width: 2px;
+  font-size: 0.75rem;
 }
 
 .t-undo {
@@ -2205,13 +2253,8 @@ body[data-triage] .watch {
   margin-top: 18px;
 }
 
-.tt-go kbd {
-  margin-left: 4px;
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  font: 600 0.8rem "Segoe UI", Roboto, sans-serif;
+.tt-go .key {
+  margin-left: 2px;
 }
 
 /* широкое окно: пересказ справа, той же высоты, что видео с названием */
@@ -2293,13 +2336,29 @@ body[data-triage] .watch {
   .t-ttl {
     flex-basis: 100%;
   }
-  .t-btn {
-    min-width: 0;
-    flex: 1 1 40%;
-  }
   .t-next {
     display: none;
   }
+}
+
+/* узкое окно и боковая панель: кнопки 2×2 во всю ширину */
+@media (max-width: 640px) {
+  .t-acts.main {
+    grid-auto-flow: row;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .t-btn {
+    min-width: 0;
+    padding: 0 12px;
+    gap: 8px;
+  }
+}
+
+body.embed .t-acts.main {
+  grid-auto-flow: row;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
 }
 
 /* ---------- «Порядок в плейлистах» ---------- */

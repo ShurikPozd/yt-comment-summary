@@ -22,6 +22,10 @@ const ORDERS = [
   ["shuffle", "Вперемешку"],
 ];
 
+// клавиша-стрелка на плашке: значок вместо символа «←» — чётче и одного размера с «Enter»
+const arrowKey = (deg, name) =>
+  `<kbd class="key" aria-label="${name}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${deg ? ` style="transform:rotate(${deg}deg)"` : ""}><path d="M19 12H5M11 6l-6 6 6 6"/></svg></kbd>`;
+
 const tri = { on: false, list: [], i: 0, removed: 0, kept: 0, topped: 0, undo: [], order: "old", busy: false };
 
 function ordered(order) {
@@ -99,12 +103,12 @@ function render(dir = "") {
       </article>
       ${tldrPanelHtml()}
       <div class="t-acts main">
-        <button type="button" class="t-btn del" data-t="del" title="Убрать из очереди — ←">${icon("close", { size: 22 })}<span>Убрать</span><kbd>←</kbd></button>
-        <button type="button" class="t-btn top" data-t="top" title="Первым в очереди — ↑">${icon("chevron", { size: 22 }).replace("<svg", '<svg style="transform:rotate(-90deg)"')}<span>Наверх</span><kbd>↑</kbd></button>
-        <button type="button" class="t-btn t-watch" data-t="watch" title="Смотреть сейчас — Enter">${icon("play", { size: 22 })}<span>Смотреть</span><kbd>Enter</kbd></button>
-        <button type="button" class="t-btn keep" data-t="keep" title="Оставить в очереди — →">${icon("check", { size: 22 })}<span>Оставить</span><kbd>→</kbd></button>
+        <button type="button" class="t-btn del" data-t="del" title="Убрать из очереди — ←">${icon("close", { size: 22 })}<span>Убрать</span>${arrowKey(0, "Стрелка влево")}</button>
+        <button type="button" class="t-btn top" data-t="top" title="Первым в очереди — ↑">${icon("chevron", { size: 22 }).replace("<svg", '<svg style="transform:rotate(-90deg)"')}<span>Наверх</span>${arrowKey(90, "Стрелка вверх")}</button>
+        <button type="button" class="t-btn t-watch" data-t="watch" title="Смотреть сейчас — Enter">${icon("play", { size: 22 })}<span>Смотреть</span><kbd class="key">Enter</kbd></button>
+        <button type="button" class="t-btn keep" data-t="keep" title="Оставить в очереди — →">${icon("check", { size: 22 })}<span>Оставить</span>${arrowKey(180, "Стрелка вправо")}</button>
       </div>
-      ${tri.undo.length ? `<button type="button" class="link-btn t-undo" data-t="undo">${icon("history", { size: 14 })}Отменить последнее · Ctrl+Z</button>` : ""}
+      ${tri.undo.length ? `<button type="button" class="link-btn t-undo" data-t="undo">${icon("history", { size: 14 })}Отменить последнее<kbd class="key">Ctrl+Z</kbd></button>` : ""}
       ${next.length ? `<div class="t-next"><span>Дальше:</span>${next.map((x) => `<img alt="" title="${esc(x.title)}" src="https://i.ytimg.com/vi/${esc(x.id)}/mqdefault.jpg" />`).join("")}</div>` : ""}
     </div>`;
   // пункты пересказа: в своём плеере с этого места (если он включён), иначе — YouTube
