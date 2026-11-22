@@ -9,6 +9,8 @@ import { $, PAGE, SPECIAL, esc, nf, plWord, plural, state, videosWord } from "./
 import { watch } from "./watch.js";
 import { yt } from "./youtube.js";
 import "./tidy.js";
+import { embedQuery, sem, semanticScores } from "./semantic.js";
+import "./sem-ui.js";
 import "./backup.js";
 
 // ---------- поиск и фильтры ----------
@@ -34,6 +36,19 @@ export function compute() {
     // счётчики у плейлистов слева — сколько найдено в каждом (без фильтра по плейлисту)
     const wide = search(state.index, state.q, allowBase);
     meta = wide;
+    // по смыслу: к совпадениям по словам добавляем близкие по теме
+    const sc = sem.on && sem.status === "ready" ? semanticScores(state.q, allowBase) : null;
+    if (sem.on && sem.status === "ready" && !sc) void embedQuery(state.q).then(() => update({ keep: true }));
+    if (sc) {
+      const lex = new Map((wide.results || []).filter(() => !wide.partial).map((r) => [r.d, r]));
+      const all = new Set([...sc.keys(), ...lex.keys()]);
+      wide.results = [...all]
+        .map((d) => ({ d, hits: lex.get(d)?.hits || null, score: (sc.get(d) || 0) + (lex.has(d) ? 0.3 : 0) }))
+        .sort((a, b) => b.score - a.score);
+      wide.partial = false;
+      wide.swapped = lex.size ? wide.swapped : null;
+      meta = { ...wide, semantic: true };
+    }
     if (wide.results) {
       perPl = new Map();
       for (const r of wide.results) for (const [id] of vids[r.d].in) perPl.set(id, (perPl.get(id) || 0) + 1);
@@ -157,6 +172,7 @@ export function renderSummary() {
   }
   empty.hidden = true;
   let text = state.q.trim() ? `Найдено <b>${videosWord(n)}</b>${where}` : `<b>${videosWord(n)}</b>${where}`;
+  if (state.meta?.semantic) text += ` · <span class="swap">с похожими по смыслу</span>`;
   if (state.meta?.swapped) text += ` · <span class="swap">запрос понят как «${esc(state.meta.swapped)}»</span>`;
   if (state.meta?.partial) text += ` · <span class="swap">точных совпадений нет — показаны похожие</span>`;
   el.innerHTML = text;

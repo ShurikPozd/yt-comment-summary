@@ -17,3 +17,9 @@ __pycache__/
 
 # логи
 *.log_metadata/
+
+# Поиск по смыслу: библиотека и движок моделей (~28 МБ) собираются из npm —
+# node vendor/build-transformers.mjs <node_modules> (лицензии лежат рядом и в репозитории)
+vendor/transformers/*.js
+vendor/transformers/*.mjs
+vendor/transformers/*.wasm

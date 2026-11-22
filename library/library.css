@@ -1942,6 +1942,9 @@ body[data-triage] .watch {
 }
 
 .td-top b {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1.2rem;
 }
 
@@ -2097,6 +2100,60 @@ body[data-triage] .watch {
 
 #backup .tidy {
   margin-bottom: 22px;
+}
+
+/* ---------- поиск по смыслу ---------- */
+.sem-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 2.3rem;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.sem-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.sem-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+
+.sem-btn.busy svg {
+  animation: spin 1.2s linear infinite;
+}
+
+#sem-info .tidy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#sem-info .td-top {
+  margin-bottom: 0;
+}
+
+.sem-text {
+  color: var(--fg-2);
+  max-width: 60rem;
+}
+
+.sem-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
