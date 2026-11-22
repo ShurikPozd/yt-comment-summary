@@ -1734,16 +1734,40 @@ body[data-triage] .watch {
 }
 
 .t-stage {
+  /* видео, под ним кнопки; на широком экране справа от видео — «О чём видео» */
+  --tw: clamp(16rem, calc((100vh - 3.2rem - 33px - 330px) * 16 / 9), 1100px);
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, var(--tw));
+  grid-template-areas: "card" "acts" "tldr" "undo" "next";
   justify-content: center;
+  align-content: center;
+  justify-items: center;
   gap: 18px;
 }
 
+.t-stage > .t-card {
+  grid-area: card;
+}
+
+.t-stage > .t-tldr {
+  grid-area: tldr;
+}
+
+.t-stage > .t-acts {
+  grid-area: acts;
+}
+
+.t-stage > .t-undo {
+  grid-area: undo;
+}
+
+.t-stage > .t-next {
+  grid-area: next;
+}
+
 .t-card {
-  width: min(100%, calc((100vh - 3.2rem - 33px - 330px) * 16 / 9), 1100px);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1911,6 +1935,328 @@ body[data-triage] .watch {
   object-fit: cover;
   border-radius: 6px;
   opacity: 0.75;
+}
+
+/* «О чём видео» рядом с видео: на узком — под кнопками (кнопки не прыгают,
+   когда приходит текст), на широком — справа, ровно в высоту видео с названием;
+   длинный пересказ листается внутри */
+.t-tldr {
+  width: 100%;
+  min-height: 15rem;
+  display: flex;
+  border-radius: var(--r-l);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  text-align: left;
+}
+
+.tt-in {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 20px;
+}
+
+.tt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 2.1rem;
+  margin-bottom: 12px;
+}
+
+.tt-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tt-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 2.1rem;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.tt-mini:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.tt-body {
+  min-height: 0;
+}
+
+.tt-phase {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.tt-bar {
+  height: 5px;
+  margin: 10px 0 16px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.tt-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.4s ease-out;
+}
+
+.tt-about {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.tt-about:empty {
+  display: none;
+}
+
+.live .tt-about:not(:empty)::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -2px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: tt-blink 1s steps(2, start) infinite;
+}
+
+@keyframes tt-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.tt-skel {
+  display: grid;
+  gap: 12px;
+}
+
+.tt-skel i {
+  display: block;
+  height: 0.95rem;
+  border-radius: 999px;
+  background: var(--bg-3);
+  animation: tt-pulse 1.4s ease-in-out infinite;
+}
+
+.tt-skel i:nth-child(2) {
+  width: 92%;
+}
+
+.tt-skel i:nth-child(3) {
+  width: 64%;
+}
+
+@keyframes tt-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.tt-sub {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 8px;
+  color: var(--fg);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.tt-sub span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+  text-align: right;
+}
+
+.tt-pts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -10px;
+}
+
+.tt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: var(--r-m);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--t-fast) ease;
+}
+
+.tt-row:hover {
+  background: var(--bg-hover);
+}
+
+.tt-tc {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: var(--tc-w, 0);
+  height: 1.8rem;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.88rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.tt-row:hover .tt-tc {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tt-tx {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0.2rem;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.tt-note {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* кнопка, нет субтитров, ошибки — ровно по центру панели */
+.tt-empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 30rem;
+  text-align: center;
+}
+
+.tt-ic {
+  display: grid;
+  place-items: center;
+  width: 3.3rem;
+  height: 3.3rem;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.tt-empty b {
+  font-size: 1.2rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.tt-empty p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.tt-empty kbd {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--bg-3);
+  color: var(--fg);
+  font: 600 0.85rem "Segoe UI", Roboto, sans-serif;
+}
+
+.tt-go {
+  margin-top: 18px;
+}
+
+.tt-go kbd {
+  margin-left: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font: 600 0.8rem "Segoe UI", Roboto, sans-serif;
+}
+
+/* широкое окно: пересказ справа, той же высоты, что видео с названием */
+@media (min-width: 1000px) {
+  body:not(.embed) .t-stage {
+    grid-template-columns: minmax(0, var(--tw)) clamp(22rem, 30vw, 34rem);
+    grid-template-areas: "card tldr" "acts acts" "undo undo" "next next";
+    column-gap: var(--gap);
+  }
+  body:not(.embed) .t-tldr {
+    position: relative;
+    min-height: 0;
+    align-self: stretch;
+  }
+  body:not(.embed) .tt-in {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: inherit;
+  }
+  /* длинный пересказ: снизу затухание, пока есть что листать */
+  body:not(.embed) .t-tldr::after {
+    content: "";
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+    height: 56px;
+    border-radius: 0 0 var(--r-l) var(--r-l);
+    background: linear-gradient(to bottom, transparent, var(--bg-2));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--t-fast) ease;
+  }
+  body:not(.embed) .t-tldr.tt-more::after {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tt-skel i,
+  .live .tt-about::after {
+    animation: none;
+  }
 }
 
 .t-done {
