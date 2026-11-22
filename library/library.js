@@ -137,7 +137,8 @@ $("#sort").addEventListener("change", (e) => {
   state.sort = e.target.value;
   update();
 });
-$("#sync").addEventListener("click", () => sync());
+// «Обновить» — только изменившиеся плейлисты; с Shift — перечитать все
+$("#sync").addEventListener("click", (e) => sync({ full: e.shiftKey }));
 document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-act]");
   if (!a) return;

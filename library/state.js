@@ -61,7 +61,7 @@ export const state = {
   qindex: null,
   qundo: null,
   tabsOpen: null,
-  cat: null, // { syncedAt, playlists: [{ id, title, privacy, count, thumb }], videos: [...] }
+  cat: null, // { syncedAt, fullAt, playlists: [{ id, title, privacy, count, thumb, head, upd, checked }], videos: [...], gone: [...] }
   index: null,
   plById: new Map(),
   q: "",
@@ -72,6 +72,7 @@ export const state = {
   list: [], // [{ d, hits }] — текущий результат
   shown: 0,
   syncing: false,
-  progress: null,
+  progress: null, // { done, total, videos, changed, full } — пока идёт обновление
+  syncNote: null, // { text, at } — итог последнего обновления для строки статуса
   error: "",
 };

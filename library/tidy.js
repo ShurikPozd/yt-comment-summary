@@ -12,6 +12,7 @@ import { icon } from "../sidepanel/icons.js";
 import { useCatalog } from "./catalog.js";
 import { $, esc, inPlWord, nf, state, videosWord } from "./state.js";
 import { kv } from "./store.js";
+import { shrink } from "./sync-plan.js";
 import { update } from "./view-lib.js";
 import { releaseTab, yt } from "./youtube.js";
 
@@ -140,7 +141,7 @@ async function cleanGone() {
   const key = (g) => `${g.pid}|${g.setId || g.id}`;
   const removed = new Set(done.map(key));
   state.cat.gone = gone.filter((g) => !removed.has(key(g)));
-  for (const p of state.cat.playlists) p.count = Math.max(0, (p.count || 0) - done.filter((g) => g.pid === p.id).length);
+  for (const p of state.cat.playlists) shrink(p, done.filter((g) => g.pid === p.id).length);
   if (!tidy.msg) tidy.msg = `Готово: убрано ${videosWord(done.length)}.`;
   await saveCat();
 }
@@ -150,7 +151,7 @@ async function cleanDups() {
   const done = await removeItems(dups, "Убираю повторы…");
   const gone = new Set(done.map((d) => d.setId));
   for (const v of state.cat.videos) v.in = v.in.filter(([, , setId]) => !setId || !gone.has(setId));
-  for (const p of state.cat.playlists) p.count = Math.max(0, (p.count || 0) - done.filter((d) => d.pid === p.id).length);
+  for (const p of state.cat.playlists) shrink(p, done.filter((d) => d.pid === p.id).length);
   if (!tidy.msg) tidy.msg = `Готово: убрано повторов — ${nf.format(done.length)}.`;
   await saveCat();
 }

@@ -13,6 +13,7 @@ import { useCatalog } from "./catalog.js";
 import { loadQueue, qmsg, renderQueueSide } from "./queue-view.js";
 import { $, esc, nf, state, videosWord } from "./state.js";
 import { kv } from "./store.js";
+import { shrink } from "./sync-plan.js";
 import { ago } from "./view-lib.js";
 import { releaseTab, yt } from "./youtube.js";
 
@@ -112,9 +113,14 @@ async function wlClear() {
   const removed = new Set(await editMany(ids, false, "Убираю из «Смотреть позже»…"));
   // каталог: этих видео в «Смотреть позже» больше нет
   if (removed.size && state.cat) {
-    for (const v of state.cat.videos) if (removed.has(v.id)) v.in = v.in.filter(([id]) => id !== "WL");
-    const pl = state.cat.playlists.find((p) => p.id === "WL");
-    if (pl) pl.count = Math.max(0, (pl.count || 0) - removed.size);
+    let n = 0;
+    for (const v of state.cat.videos)
+      if (removed.has(v.id)) {
+        const was = v.in.length;
+        v.in = v.in.filter(([id]) => id !== "WL");
+        n += was - v.in.length;
+      }
+    shrink(state.cat.playlists.find((p) => p.id === "WL"), n);
     await kv("catalog", state.cat);
     useCatalog(state.cat, { keep: true });
   }

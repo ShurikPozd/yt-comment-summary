@@ -249,6 +249,33 @@ svg {
   white-space: nowrap;
 }
 
+/* статус обновления — две строки: «Проверяю плейлисты: 12 из 40» и под ней «изменились 3»;
+   шапку не раздвигает (лишнее — многоточием, целиком в подсказке) */
+#sync-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  max-width: clamp(14rem, 22vw, 26rem);
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+#sync-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#sync-text.two .st-main {
+  color: var(--fg-2);
+  font-weight: 550;
+}
+
+#sync-text .st-sub {
+  font-size: 0.85rem;
+}
+
 button.ghost {
   display: inline-flex;
   align-items: center;

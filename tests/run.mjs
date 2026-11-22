@@ -2,13 +2,15 @@
 //   - поиск «Моей библиотеки» (опечатки, основы слов, раскладка, исключения, подсветка);
 //   - разбор ответов YouTube в playlists-main.js на маленьких образцах — по одному на
 //     каждый формат, который YouTube уже успел поменять (старый и новый вид видео,
-//     Shorts плиткой, токены продолжения в разных местах).
+//     Shorts плиткой, токены продолжения в разных местах, шапка плейлиста);
+//   - быстрое обновление библиотеки: что изменилось в плейлисте (library/sync-plan.js).
 // Запускается из check-syntax.sh перед коммитом.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { buildIndex, search, highlight, stem, swapLayout } from "../library/search.js";
 import { parseTldr, pickEven, runTldr, splitParts } from "../tldr-core.js";
 import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs } from "../groq.js";
+import { countOf, dayOf, fullDue, listsOf, readPlaylist, sameList, splice, syncSummary, updDay } from "../library/sync-plan.js";
 
 let failed = 0;
 let passed = 0;
@@ -168,6 +170,133 @@ ok(em2.ok && em2.data === 2 && sentActions[0].action === "ACTION_ADD_VIDEO" && s
 const ri = await call2("removeItems", { playlistId: "PL1", items: [{ setId: "ABCDEF123456" }, { videoId: "aaaaaaaaaaa" }, { setId: "плохо" }] });
 ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && sentActions[0].setVideoId === "ABCDEF123456" && sentActions[1].removedVideoId === "aaaaaaaaaaa", "убрать конкретные записи (повторы) и все копии");
 
+
+// ---------- шапка плейлиста и число видео (playlists-main.js) ----------
+{
+  const headOld = {
+    header: {
+      playlistHeaderRenderer: {
+        numVideosText: { runs: [{ text: "5 000" }, { text: " видео" }] },
+        viewCountText: { simpleText: "0 просмотров" },
+        byline: [{ playlistBylineRenderer: { text: { runs: [{ text: "5 000" }, { text: " видео" }] } } }, { playlistBylineRenderer: { text: { runs: [{ text: "Обновлено вчера" }] } } }],
+      },
+    },
+    contents: [renderer("aaaaaaaaaaa", 1), contOld],
+  };
+  const headNew = {
+    header: { pageHeaderRenderer: { content: { pageHeaderViewModel: { metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: "Плейлист" } }, { text: { content: "46 видео" } }, { text: { content: "6 просмотров" } }] }] } } } } } },
+    sidebar: { playlistSidebarRenderer: { items: [{ playlistSidebarPrimaryInfoRenderer: { stats: [{ runs: [{ text: "Обновлено 3 дня назад" }] }] } }] } },
+    contents: [renderer("bbbbbbbbbbb", 1)],
+  };
+  const libPage = {
+    contents: [
+      { lockupViewModel: { contentId: "PL1", contentImage: { collectionThumbnailViewModel: { primaryThumbnail: { thumbnailViewModel: { overlays: [{ thumbnailOverlayBadgeViewModel: { thumbnailBadges: [{ thumbnailBadgeViewModel: { text: "683 видео" } }] } }] } } } }, metadata: { lockupMetadataViewModel: { metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: "Обновлено сегодня" } }] }] } } } } } },
+    ],
+  };
+  const callH = loadMain((url, body) => ({ VLWL: headOld, VLPLnew: headNew, FEplaylist_aggregation: libPage })[body.browseId] || pages[body.continuation] || {});
+  const h1 = await callH("page", { playlistId: "WL" });
+  ok(h1.data.head?.count === 5000 && h1.data.head.updated === "Обновлено вчера", "шапка старого вида: «5 000 видео», «Обновлено вчера»");
+  const h2 = await callH("page", { playlistId: "PLnew" });
+  ok(h2.data.head?.count === 46 && h2.data.head.updated === "Обновлено 3 дня назад", "шапка нового вида: число в metadataParts, «Обновлено» в sidebar");
+  const h3 = await callH("page", { playlistId: "WL", token: "T-OLD", from: 1 });
+  ok(!("head" in h3.data), "у продолжения шапки нет");
+  const lb = await callH("library");
+  ok(lb.data[0].count === 683 && lb.data[0].updated === "Обновлено сегодня", "страница «Плейлисты»: число видео на обложке");
+}
+
+// ---------- быстрое обновление: что изменилось (library/sync-plan.js) ----------
+{
+  const DAY = 864e5;
+  const NOW = new Date(2026, 10, 23, 15, 0).getTime();
+  ok(countOf("5 000 видео") === 5000 && countOf("1,234 videos") === 1234 && countOf("0 просмотров") === null && countOf("Нет видео") === null, "число видео из текста");
+  ok(updDay("Обновлено сегодня", NOW) === dayOf(NOW) && updDay("Обновлено вчера", NOW) === dayOf(NOW) - 1 && updDay("Обновлено 3 дня назад", NOW) === dayOf(NOW) - 3, "«Обновлено» относительное");
+  ok(updDay("Обновлено 12 окт. 2026 г.", NOW) === dayOf(new Date(2026, 9, 12).getTime()) && updDay("Updated Oct 12, 2026", NOW) === dayOf(new Date(2026, 9, 12).getTime()) && updDay("5 000 видео", NOW) === null, "«Обновлено» датой");
+  ok(fullDue(null) && fullDue({ fullAt: NOW - 25 * 3600e3 }, NOW) && !fullDue({ fullAt: NOW - 3600e3 }, NOW), "полное обновление — раз в сутки");
+
+  // поддельный плейлист: страницы по 100, токен — смещение
+  const mk = (i) => ({ id: `v${String(i).padStart(10, "0")}`, setId: `S${i}`, title: `Видео ${i}`, channel: "Канал", len: 60, pos: 0 });
+  const range = (a, b) => Array.from({ length: b - a }, (_, i) => mk(a + i));
+  const yt = (list, count = list.length, updated = "") => {
+    const calls = { n: 0 };
+    const page = async (token) => {
+      calls.n++;
+      const from = Number(token || 0);
+      const items = list.slice(from, from + 100).map((v, i) => ({ ...v, pos: from + i + 1 }));
+      return { items, next: from + 100 < list.length ? String(from + 100) : null, ...(token ? {} : { head: { count, updated } }) };
+    };
+    return { page, calls };
+  };
+  // прошлый каталог из списка (как его сохранил бы sync)
+  const catOf = (list, pid = "PL", extra = {}) => ({
+    playlists: [{ id: pid, head: list.length, checked: NOW - DAY / 2, ...extra }],
+    videos: list.map((v, i) => ({ ...v, in: [[pid, i + 1, v.setId]] })),
+    gone: [],
+  });
+  const keys = (r, fresh) => fresh.concat(r.reuse.map((e) => e.v?.id || e.g?.id));
+  const go = async (list, cat, opt = {}) => {
+    const { page, calls } = yt(list, opt.count, opt.updated);
+    const fresh = [];
+    const r = await readPlaylist({ page, old: cat.playlists[0], olds: listsOf(cat).get("PL"), full: opt.full, onItem: (v) => fresh.push(v.id), now: NOW });
+    return { r, pages: calls.n, ids: keys(r, fresh) };
+  };
+  const base = range(0, 450);
+  const ids = (l) => l.map((v) => v.id);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  let t = await go(base, catOf(base));
+  ok(t.pages === 1 && !t.r.changed && t.r.count === 450 && same(t.ids, ids(base)), "ничего не менялось — одна страница");
+  ok(t.r.reuse[0].pos === 101 && t.r.reuse.at(-1).pos === 450, "остаток из прошлого каталога — места по порядку");
+
+  const liked = [...range(1000, 1003), ...base];
+  t = await go(liked, catOf(base));
+  ok(t.pages === 1 && t.r.changed && same(t.ids, ids(liked)), "новые сверху («Понравившиеся») — одна страница, склейка с прошлым");
+
+  const watched = base.slice(5);
+  t = await go(watched, catOf(base));
+  ok(t.pages === 1 && t.r.changed && same(t.ids, ids(watched)), "убрали первые 5 («Смотреть позже») — одна страница");
+
+  const deep = base.filter((_, i) => i !== 250);
+  t = await go(deep, catOf(base));
+  ok(t.pages === 3 && t.r.changed && same(t.ids, ids(deep)), "убрали видео в глубине — дочитали до него и склеили");
+
+  const appended = [...base, ...range(2000, 2010)];
+  t = await go(appended, catOf(base));
+  ok(t.pages === 5 && t.r.changed && same(t.ids, ids(appended)), "добавили в конец — прочитан целиком");
+
+  const swapped = [...base.slice(0, 300), mk(3000), ...base.slice(301)]; // в глубине: одно убрали, другое добавили — число то же
+  t = await go(swapped, catOf(base), { updated: "Обновлено 3 дня назад" });
+  ok(t.pages === 1 && !t.r.changed, "изменение в глубине без следов — не видно (для этого полное раз в сутки)");
+  t = await go(swapped, catOf(base, "PL", { checked: NOW - 2 * DAY }), { updated: "Обновлено сегодня" });
+  ok(t.pages === 5 && t.r.changed && same(t.ids, ids(swapped)), "«Обновлено сегодня» после прошлой проверки — перечитан целиком");
+
+  const cap = range(0, 5000);
+  const capNew = [...range(9000, 9002), ...cap.slice(0, 4998)];
+  t = await go(capNew, catOf(cap), { count: 5000 });
+  ok(t.pages === 1 && t.r.count === 5000 && same(t.ids, ids(capNew)), "предел 5 000: сверху два новых — два последних отрезаны");
+
+  t = await go(base, catOf(base), { full: true });
+  ok(t.pages === 5 && !t.r.changed && t.r.reuse.length === 0, "полное обновление — всё читается заново");
+  t = await go(base, catOf(base, "PL", { head: null }));
+  ok(t.pages === 5, "в прошлом каталоге нет числа видео (старый формат) — читается целиком");
+  t = await go(base, catOf(base, "PL", { failed: true }));
+  ok(t.pages === 5, "в прошлый раз плейлист не прочитался — читается целиком");
+  const small = range(0, 40);
+  t = await go([mk(500), ...small], catOf(small));
+  ok(t.pages === 1 && t.r.changed && t.r.count === 41, "маленький плейлист (одна страница) — изменение видно");
+
+  // удалённые видео (cat.gone) — тоже часть порядка
+  const withGone = catOf(base);
+  const g = withGone.videos.splice(120, 1)[0];
+  withGone.gone.push({ pid: "PL", id: g.id, setId: g.setId, title: "[Удалённое видео]", pos: 121 });
+  t = await go(base, withGone);
+  ok(t.pages === 1 && !t.r.changed && t.r.reuse.some((e) => e.g && e.pos === 121), "удалённые из прошлого каталога остаются на своих местах");
+
+  ok(sameList(["a", "b"], ["a", "b"]) && !sameList(["a"], ["a", "b"]), "сравнение списков");
+  ok(splice(["x"], ["x"], 1, 1) === null, "склейка по слишком короткому куску — нет");
+  ok(syncSummary({ changed: 3, added: 15, removed: 0 }) === "3 плейлиста изменились, +15 видео", "итог: изменились и прибавилось");
+  ok(syncSummary({ changed: 21, added: 1500, removed: 2 }) === "21 плейлист изменился, +1 500 и −2 видео", "итог: прибавилось и убрано");
+  ok(syncSummary({ changed: 0, added: 0, removed: 0 }) === "изменений нет", "итог без изменений");
+}
 
 // ---------- пересказ видео (tldr-core.js): общий для панели и окна на ленте ----------
 {

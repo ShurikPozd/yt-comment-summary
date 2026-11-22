@@ -227,22 +227,47 @@ export const ago = (ts) => {
   return `${d} ${plural(d, "день", "дня", "дней")} назад`;
 };
 
+export const NOTE_FOR = 10 * 60000; // итог обновления виден столько, потом — «Обновлено N мин назад»
+
 export function renderSync() {
   const btn = $("#sync");
   const text = $("#sync-text");
   const bar = $("#progress");
   btn.disabled = state.syncing;
   btn.classList.toggle("spin", state.syncing);
+  const cat = state.cat;
+  btn.title = `Обновить изменившиеся плейлисты. Удерживайте Shift — перечитать все${cat?.fullAt ? ` (все перечитаны ${ago(cat.fullAt)})` : ""}`;
   const p = state.progress;
+  // две строки: что происходит — и подробности под ней (на узком окне строка скрыта, остаётся полоса)
+  let main = "";
+  let sub = "";
+  let tip = "";
   if (state.syncing && p) {
-    text.textContent = p.total ? `Читаю плейлисты: ${p.done} из ${p.total} · ${videosWord(p.videos)}` : "Подключаюсь к YouTube…";
+    if (!p.total) main = "Подключаюсь к YouTube…";
+    else if (p.full) {
+      main = `Читаю все плейлисты: ${p.done} из ${p.total}`;
+      sub = videosWord(p.videos);
+    } else {
+      main = `Проверяю плейлисты: ${p.done} из ${p.total}`;
+      sub = p.changed ? `${plural(p.changed, "изменился", "изменились", "изменились")} ${nf.format(p.changed)}` : "пока без изменений";
+    }
     bar.hidden = false;
     bar.firstElementChild.style.width = `${p.total ? Math.round((p.done / p.total) * 100) : 4}%`;
   } else {
     bar.hidden = true;
-    text.textContent = state.error ? "Не обновилось" : state.cat ? `Обновлено ${ago(state.cat.syncedAt)}` : "";
-    text.title = state.error || "";
+    const note = state.syncNote && Date.now() - state.syncNote.at < NOTE_FOR ? state.syncNote : null;
+    if (state.error) {
+      main = "Не обновилось";
+      tip = state.error;
+    } else if (cat) {
+      main = note?.full ? `Все плейлисты перечитаны ${ago(cat.syncedAt)}` : `Обновлено ${ago(cat.syncedAt)}`;
+      sub = note?.text || "";
+      if (cat.fullAt && !note?.full) tip = `Все плейлисты перечитаны ${ago(cat.fullAt)}`;
+    }
   }
+  text.classList.toggle("two", Boolean(sub));
+  text.innerHTML = main ? `<span class="st-main">${esc(main)}</span>${sub ? `<span class="st-sub">${esc(sub)}</span>` : ""}` : "";
+  text.title = [sub ? `${main}: ${sub}` : main, tip].filter(Boolean).join(". ");
   if (!state.cat && state.view !== "queue") renderEmpty();
 }
 
