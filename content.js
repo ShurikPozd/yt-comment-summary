@@ -949,7 +949,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -961,6 +961,7 @@
     playerPrefs.sponsorSkip = settings?.sponsorSkip !== false; // пропуск вставок — sponsor.js, по умолчанию вкл.
     playerPrefs.channelSpeed = settings?.channelSpeed !== false; // скорость по каналам — speed.js, по умолчанию вкл.
     playerPrefs.focusMode = Boolean(settings?.focusMode); // «Без отвлечений» — focus.js
+    playerPrefs.silenceSkip = Boolean(settings?.silenceSkip); // «Пропускать тишину» — silence.js
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -977,6 +978,8 @@
         showPageToast(playerPrefs.channelSpeed ? "Скорость будет запоминаться для каждого канала" : "Скорость больше не запоминается по каналам", UI_ICONS.speed);
       } else if (before.focusMode !== playerPrefs.focusMode) {
         showPageToast(playerPrefs.focusMode ? "Режим без отвлечений включён" : "Режим без отвлечений выключен", UI_ICONS.focus);
+      } else if (before.silenceSkip !== playerPrefs.silenceSkip) {
+        showPageToast(playerPrefs.silenceSkip ? "Паузы в речи будут проходить быстрее" : "Паузы в речи — как обычно", UI_ICONS.silence);
       }
     }
   }
@@ -1029,6 +1032,10 @@
     .ytcs-item .ytcs-label { flex: 1; min-width: 0; position: relative; top: -.075em; } /* оптическая центровка */
     .ytcs-item[hidden] { display: none; }
     .ytcs-item .ytcs-ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    /* вторая строка пункта: «Сэкономлено сегодня: 3 мин» у «Пропускать тишину» */
+    .ytcs-item .ytcs-sub { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: rgba(255, 255, 255, .6); font-variant-numeric: tabular-nums; }
+    .ytcs-item .ytcs-sub[hidden] { display: none; }
+    .ytcs-item:has(.ytcs-sub:not([hidden])) { padding-top: 5px; padding-bottom: 5px; }
     .ytcs-item .ytcs-aside { flex: none; color: #ff6b85; font-weight: 600; font-variant-numeric: tabular-nums; position: relative; top: -.075em; }
     .ytcs-sep { height: 1px; margin: 6px 0; background: rgba(255, 255, 255, .1); }
     /* группы пунктов: линия сверху и подпись группы; пустая группа (всё скрыто) не показывается */
@@ -1141,6 +1148,8 @@
     // луна со звёздочкой — «Таймер сна» (sleep.js); стрелка — раскрыть варианты
     moon: SVG('<path d="M19.5 14.2A7.8 7.8 0 1 1 9.8 4.5a6.2 6.2 0 0 0 9.7 9.7z"/><path d="M17.5 3.8v2.6M16.2 5.1h2.6" opacity=".7"/>'),
     chev: SVG('<path d="M7 10l5 5 5-5"/>'),
+    // волна звука и «вперёд» — «Пропускать тишину» (паузы быстрее, silence.js)
+    silence: SVG('<path d="M3 10.5v3M6.5 7v10M10 9.5v5"/><path d="M13.2 7.5l4.3 4.5-4.3 4.5M17.4 7.5l4.3 4.5-4.3 4.5"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1185,6 +1194,7 @@
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitem" data-act="speedreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить скорость канала</span><span class="ytcs-aside">1×</span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="silenceSkip" title="Паузы между фразами проходят быстрее, речь — с вашей скоростью">${UI_ICONS.silence}<span class="ytcs-label">Пропускать тишину<span class="ytcs-sub" hidden></span></span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitem" data-act="sleep" aria-expanded="false" hidden>${UI_ICONS.moon}<span class="ytcs-label ytcs-ellipsis">Таймер сна</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
         <div class="ytcs-sleep-opts" role="group" aria-label="Остановить видео через" hidden>
@@ -1212,6 +1222,7 @@
     });
     syncSpeedItem();
     syncSleepItem();
+    syncSilenceItem();
   }
 
   // ---- «Таймер сна» (sleep.js): «осталось 23 мин» в пункте, выбранный вариант подсвечен ----
@@ -1245,6 +1256,22 @@
     // высоту строк не пересчитываем (меню не «прыгает»): не помещается — прокручиваем к вариантам
     // (только само меню — scrollIntoView прокрутил бы и страницу)
     if (open) uiMenu.scrollTop = Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight);
+  }
+
+  // «Пропускать тишину» — вторая строка: сколько сэкономлено (silence.js)
+  function syncSilenceItem() {
+    const sub = uiMenu?.querySelector('[data-toggle="silenceSkip"] .ytcs-sub');
+    if (!sub) return;
+    const st = playerPrefs.silenceSkip ? globalThis.__ytcsSilence?.status?.() : null;
+    const fmt = globalThis.__ytcsSilenceCore?.fmtSaved;
+    let text = "";
+    if (st && fmt) {
+      if (st.state === "none") text = "Звук этого видео недоступен";
+      else if (st.today >= 1) text = `Сэкономлено сегодня: ${fmt(st.today)}`;
+      else if (st.total >= 1) text = `Сэкономлено всего: ${fmt(st.total)}`;
+    }
+    sub.textContent = text;
+    sub.hidden = !text;
   }
 
   function setNote(text) {
@@ -1351,7 +1378,8 @@
   function syncRateRow() {
     const rv = uiMenu?.querySelector(".ytcs-rv");
     const v = document.querySelector("#movie_player video");
-    if (rv && v) rv.textContent = fmtRate(v.playbackRate);
+    // без временного ускорения пауз («Пропускать тишину»)
+    if (rv && v) rv.textContent = fmtRate(globalThis.__ytcsSpeed?.rate?.() ?? v.playbackRate);
   }
   document.addEventListener("ratechange", () => uiMenu?.classList.contains("open") && syncRateRow(), true);
 

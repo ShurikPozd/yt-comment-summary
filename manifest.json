@@ -117,7 +117,9 @@
       ],
       "js": [
         "speed-core.js",
-        "speed.js"
+        "speed.js",
+        "silence-core.js",
+        "silence.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
