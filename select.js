@@ -291,7 +291,7 @@
     $(".bar").addEventListener("click", (e) => {
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (act === "clear") clear();
-      else if (act === "save") saveToPlaylists();
+      else if (act === "save") void saveToPlaylists();
       else if (act === "queue") void addToQueue();
     });
     document.documentElement.appendChild(host);
@@ -443,10 +443,13 @@
     console.info("[ytcs]", text);
   }
 
-  function saveToPlaylists() {
+  async function saveToPlaylists() {
     const videos = [...picked.values()];
     if (!videos.length) return;
-    if (!alive() || !globalThis.__ytcsPlaylists?.open) return message("Обновите страницу (F5): расширение обновилось");
+    if (!alive()) return message("Обновите страницу (F5): расширение обновилось");
+    // окно плейлистов грузится по требованию (lazy.js) — десятки мс
+    if (!globalThis.__ytcsPlaylists && !(await globalThis.__ytcsLazy?.load("playlists"))) return message("Не получилось открыть окно — обновите страницу (F5)");
+    if (!globalThis.__ytcsPlaylists?.open) return message("Обновите страницу (F5): расширение обновилось");
     void globalThis.__ytcsPlaylists.open({
       videos,
       // сохранили — выбор больше не нужен (если за это время не выбрали другое)

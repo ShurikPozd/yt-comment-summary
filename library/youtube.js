@@ -7,6 +7,9 @@ import { EV } from "./state.js";
 // и ждёт ответ. Функция самодостаточная — Chrome копирует её текст во вкладку.
 export function bridgeCall(ev, op, args) {
   return new Promise((resolve) => {
+    // скрипта во вкладке нет (её перезагрузили: playlists-main.js теперь не в
+    // манифесте, а вставляется по требованию) — сказать сразу, а не ждать 45 с
+    if (!window[`__ytcsPlMain:${ev}`]) return resolve({ ok: false, error: "noscript" });
     const id = `lib${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     const timer = setTimeout(() => {
       window.removeEventListener("message", onMsg);
@@ -92,6 +95,10 @@ export async function yt(op, args = {}) {
     }
     const r = res?.result;
     if (r?.ok) return r.data;
+    if (r?.error === "noscript" && attempt < 2) {
+      if (!(await inject(tab.id))) ytTab = null; // не вставился — возьмём другую вкладку
+      continue;
+    }
     // настройки YouTube в только что открытой вкладке ещё не готовы — подождём;
     // нет ответа — вкладку перезагрузили, скрипт пропал: подключимся заново
     if ((r?.error === "noconfig" || r?.error === "noreply") && attempt < 2) {
@@ -99,6 +106,7 @@ export async function yt(op, args = {}) {
       await new Promise((ok) => setTimeout(ok, 1500));
       continue;
     }
-    throw Object.assign(new Error(r?.message || r?.error || "fail"), { code: r?.error || "fail" });
+    const code = r?.error === "noscript" ? "noreply" : r?.error || "fail"; // для сообщений — как «не ответил»
+    throw Object.assign(new Error(r?.message || code), { code });
   }
 }

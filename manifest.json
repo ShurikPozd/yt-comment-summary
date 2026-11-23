@@ -43,9 +43,7 @@
         "https://m.youtube.com/*"
       ],
       "js": [
-        "early-main.js",
-        "clip-main.js",
-        "playlists-main.js"
+        "early-main.js"
       ],
       "run_at": "document_start",
       "world": "MAIN"
@@ -56,11 +54,9 @@
         "https://m.youtube.com/*"
       ],
       "js": [
+        "lazy.js",
         "transcript.js",
-        "thumb-preview.js",
         "content.js",
-        "clip.js",
-        "playlists.js",
         "queue.js",
         "video-actions.js",
         "select.js"
@@ -71,11 +67,13 @@
       "matches": [
         "https://www.youtube.com/*"
       ],
+      "exclude_matches": [
+        "https://www.youtube.com/embed/*"
+      ],
       "js": [
         "sponsor.js"
       ],
-      "run_at": "document_idle",
-      "all_frames": true
+      "run_at": "document_idle"
     },
     {
       "matches": [
@@ -104,6 +102,19 @@
       "matches": [
         "https://www.youtube.com/*"
       ],
+      "exclude_matches": [
+        "https://www.youtube.com/embed/*"
+      ],
+      "js": [
+        "speed-main.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/embed/*"
+      ],
       "js": [
         "speed-main.js"
       ],
@@ -115,31 +126,31 @@
       "matches": [
         "https://www.youtube.com/*"
       ],
+      "exclude_matches": [
+        "https://www.youtube.com/embed/*"
+      ],
       "js": [
         "speed-core.js",
         "speed.js",
         "silence-core.js",
-        "silence.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": true
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "js": [
+        "silence.js",
         "sleep-core.js",
-        "sleep.js"
+        "sleep.js",
+        "stats.js"
       ],
-      "run_at": "document_idle",
-      "all_frames": true
+      "run_at": "document_idle"
     },
     {
       "matches": [
-        "https://www.youtube.com/*"
+        "https://www.youtube.com/embed/*"
       ],
       "js": [
+        "speed-core.js",
+        "speed.js",
+        "silence-core.js",
+        "silence.js",
+        "sleep-core.js",
+        "sleep.js",
         "stats.js"
       ],
       "run_at": "document_idle",
