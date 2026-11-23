@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Что умеет расширение — Сводка комментариев YouTube</title>
+    <link rel="icon" href="../icons/icon32.png" />
+    <link rel="stylesheet" href="welcome.css" />
+    <script src="../sidepanel/theme-boot.js"></script>
+  </head>
+  <body>
+    <!-- Страница «Что умеет расширение»: открывается сама при установке, по ссылке
+         в настройках панели и в шапке библиотеки. Карточки, клавиши и «Что нового»
+         рисует welcome.js — тексты и список версий там же. -->
+    <header class="hero">
+      <img class="hero-icon" src="../icons/icon128.png" alt="" width="128" height="128" />
+      <h1>Что умеет расширение</h1>
+      <p class="lead">
+        Набор для YouTube: библиотека всех ваших плейлистов, очередь вместо сотен вкладок, удобный плеер,
+        ИИ-сводка комментариев и пересказ видео. Бесплатно.
+      </p>
+      <div id="hero-update" class="hero-update" hidden></div>
+      <nav class="jump" aria-label="Разделы страницы">
+        <a href="#youtube">На YouTube</a>
+        <a href="#panel">Панель</a>
+        <a href="#library">Моя библиотека</a>
+        <a href="#keys">Клавиши</a>
+        <a href="#news">Что нового</a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <section id="youtube" class="sec">
+        <div class="sec-head">
+          <h2>На YouTube</h2>
+          <p>Кнопка расширения — в плеере, рядом с шестерёнкой. Те же действия — по правому клику на странице.</p>
+        </div>
+        <div class="cards" data-group="youtube"></div>
+      </section>
+
+      <section id="panel" class="sec">
+        <div class="sec-head">
+          <h2>Панель с комментариями</h2>
+          <p>Откройте видео и нажмите значок расширения — панель откроется справа.</p>
+        </div>
+        <div class="cards" data-group="panel"></div>
+      </section>
+
+      <section id="library" class="sec">
+        <div class="sec-head">
+          <h2>Моя библиотека</h2>
+          <p>Отдельная страница: все ваши плейлисты, очередь, подписки и статистика в одном месте.</p>
+        </div>
+        <div class="cards" data-group="library"></div>
+      </section>
+
+      <section id="keys" class="sec">
+        <div class="sec-head">
+          <h2>Клавиши</h2>
+          <p>Сочетания «везде» работают в любой вкладке Chrome — их можно поменять или назначить свои.</p>
+        </div>
+        <div class="keys-all">
+          <div class="kcard kcard-wide">
+            <h3>Везде в Chrome</h3>
+            <div id="keys-global" class="klist klist-2"></div>
+          </div>
+        </div>
+        <div class="cards cards-keys" id="keys-local"></div>
+      </section>
+
+      <section id="news" class="sec">
+        <div class="sec-head">
+          <h2>Что нового</h2>
+          <p>Последние версии расширения — коротко о главном.</p>
+        </div>
+        <ol id="news-list" class="news"></ol>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span id="foot-ver">Сводка комментариев YouTube</span>
+    </footer>
+
+    <script type="module" src="welcome.js"></script>
+  </body>
+</html>

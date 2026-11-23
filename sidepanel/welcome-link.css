@@ -1,0 +1,147 @@
+/* «Что умеет расширение» в панели: строка-ссылка вверху настроек и плашка
+   «Расширение обновилось» после крупного обновления (../welcome/link.js). */
+
+/* строка-ссылка: значок · заголовок и пояснение · «Новое» · стрелка — всё по центру по высоте */
+.welcome-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 14px 14px 14px 16px;
+  border-radius: var(--r-m);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.welcome-row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.wr-ic {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.wr-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.wr-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wr-text .hint {
+  margin: 0;
+}
+
+.wr-new {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.wr-new[hidden] {
+  display: none;
+}
+
+.wr-go {
+  display: grid;
+  flex: none;
+  color: var(--muted);
+}
+
+/* плашка сверху панели — как «Сломалось: …», но в цвет акцента */
+.wn-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 16px 0;
+  padding: 6px 4px 6px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.wn-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.wn-text {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.wn-open,
+.wn-close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wn-open {
+  padding: 0 11px;
+  white-space: nowrap;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.wn-open:hover {
+  background: var(--accent-hover);
+}
+
+.wn-close {
+  width: 28px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wn-close:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+/* в настройках есть своя строка с «Новое» — плашка там лишняя */
+#app.on-settings .wn-strip {
+  display: none;
+}

@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="sponsor-settings.css" />
     <link rel="stylesheet" href="channel-speed.css" />
     <link rel="stylesheet" href="focus-settings.css" />
+    <link rel="stylesheet" href="welcome-link.css" />
     <script src="theme-boot.js"></script>
   </head>
   <body>
@@ -15,6 +16,8 @@
     <div id="app">
       <div id="bg-run" class="bg-run hidden" role="status"></div>
       <div id="selfcheck-alert" class="sc-alert hidden" role="status"></div>
+      <!-- после крупного обновления: «Расширение обновилось · Что нового» (../welcome/link.js) -->
+      <div id="whatsnew" class="wn-strip" role="status" hidden></div>
       <header id="video-header" class="hidden">
         <div class="thumb-wrap">
           <img id="thumbnail" alt="" />
@@ -167,6 +170,15 @@
         </div>
 
         <div id="view-settings" class="view">
+          <!-- страница «Что умеет расширение» (../welcome/link.js) -->
+          <button type="button" id="btn-welcome" class="welcome-row" data-welcome>
+            <span class="wr-ic" data-icon="help" data-size="20"></span>
+            <span class="wr-text">
+              <span class="wr-title">Что умеет расширение<span class="wr-new" hidden>Новое</span></span>
+              <span class="hint">Все возможности, клавиши и что нового</span>
+            </span>
+            <span class="wr-go" data-icon="chevron" data-size="16"></span>
+          </button>
           <div class="settings-block">
             <h3>Плеер YouTube</h3>
             <label class="switch-row">
@@ -326,5 +338,6 @@
     <script src="../speed-core.js"></script>
     <script type="module" src="channel-speed.js"></script>
     <script type="module" src="focus-settings.js"></script>
+    <script type="module" src="../welcome/link.js"></script>
   </body>
 </html>
