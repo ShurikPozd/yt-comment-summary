@@ -1023,7 +1023,10 @@
     /* значок и подпись шапки — на одной линии со значками и подписями пунктов (20 px + 14 px) */
     .ytcs-head { display: flex; align-items: center; gap: 14px; padding: 6px 16px 10px; font-size: 12px; font-weight: 600;
       letter-spacing: .02em; color: rgba(255, 255, 255, .6); }
-    .ytcs-head svg { width: 16px; height: 16px; margin: 0 2px; flex: none; color: #ff4e6a; }
+    .ytcs-head svg { width: 16px; height: 16px; margin: 0 2px; flex: none; color: #ff4e6a; position: relative; top: -.1em; }
+    /* шрифт YouTube: заглавные сидят выше середины строки (~1px при 14px) — подписи
+       опускаем на .07em, чтобы они были ровно по центру строки и значка (замер по пикселям) */
+    .ytcs-menu :is(.ytcs-item, .ytcs-back) > span:not(.ytcs-switch) { position: relative; top: .07em; }
     .ytcs-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: var(--ytcs-ih, 40px); padding: 0 16px;
       background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
       transition: background-color .12s ease; }
