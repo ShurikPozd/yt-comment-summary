@@ -1408,10 +1408,24 @@ button.ghost.danger {
   .views .brand-icon {
     display: none;
   }
+  /* узкое окно и боковая панель: карточки очереди — одним столбцом по центру: без пустых
+     половинок и ничего не прыгает, когда раскрываются настройки */
   .q-side {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  /* «Как работает очередь» раскрывается — пусть растёт вниз в самом конце, на всю ширину,
+     и ничего не сдвигает («Резервная копия» и прочие кнопки — выше, на своих местах) */
+  .q-side .q-set {
+    grid-column: 1 / -1;
+    order: 10;
+  }
+  .q-side .danger {
+    order: 11;
   }
   /* на узком окне подсказка по клавишам и счётчик вкладок — лишние */
   .q-side .keys,
@@ -3991,9 +4005,9 @@ body.embed .views button {
   flex: none;
 }
 
-/* узкое окно (≤640): вкладки — строкой сверху, под ними поиск, «Обновить» и «Статистика» —
-   одной строкой, без пустых мест */
-@media (max-width: 640px) {
+/* узкое окно (до 1000 px — с тремя вкладками шапке тесно): вкладки — строкой сверху, под ними
+   поиск, «Обновить»/«Собрать вкладки» и «Статистика» — одной строкой, без пустых мест */
+@media (max-width: 1000px) {
   body:not(.embed) .top {
     grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas: "views views views" "search sync where";

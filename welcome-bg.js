@@ -32,7 +32,14 @@ export async function paintWhatsNew() {
 globalThis.chrome?.runtime?.onInstalled?.addListener(async ({ reason, previousVersion }) => {
   const ver = chrome.runtime.getManifest().version;
   if (reason === "install") {
-    await chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PATH) }).catch(() => {});
+    let cur = null;
+    try {
+      [cur] = (await chrome.tabs.query({ active: true, lastFocusedWindow: true })) || [];
+    } catch (e) {
+      cur = null; // нет активной вкладки — откроем в конце
+    }
+    const at = cur ? { index: cur.index + 1, windowId: cur.windowId } : {};
+    await chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PATH), ...at }).catch(() => {});
     return;
   }
   if (reason !== "update" || !previousVersion || minor(previousVersion) === minor(ver)) return;

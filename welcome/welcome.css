@@ -439,8 +439,16 @@ button.try:active {
   column-gap: 44px;
 }
 
+/* «Назначить свои клавиши» — последней ячейкой: по центру всего свободного места до низа
+   карточки (строка + нижний отступ карточки); попала в левую колонку — на всю ширину */
 .krow-btn {
   justify-content: center;
+  min-height: calc(3rem + var(--card-pad));
+  margin-bottom: calc(-1 * var(--card-pad));
+}
+
+.klist-2 > .krow-btn:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .krow-btn button.try {

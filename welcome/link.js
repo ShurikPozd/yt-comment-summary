@@ -15,7 +15,11 @@ export async function openWelcome(hash = "") {
     chrome.windows.update(open.windowId, { focused: true }).catch(() => {});
     return;
   }
-  await chrome.tabs.create({ url: WELCOME_URL + hash }).catch(() => {});
+  // новая вкладка — справа от активной, а не в конце ряда
+  const [cur] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+  await chrome.tabs
+    .create({ url: WELCOME_URL + hash, ...(cur ? { index: cur.index + 1, openerTabId: cur.id, windowId: cur.windowId } : {}) })
+    .catch(() => chrome.tabs.create({ url: WELCOME_URL + hash }).catch(() => {}));
 }
 
 function paint(wn) {
