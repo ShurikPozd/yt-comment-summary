@@ -346,6 +346,10 @@
       doneRec = null;
     }
     lastId = id;
+    // другое видео — выбор начинается заново
+    selMode = false;
+    sel.clear();
+    anchor = null;
     hideOffer();
     schedule();
   }
@@ -359,6 +363,8 @@
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     list: '<path d="M4 6h11"/><path d="M4 12h11"/><path d="M4 18h7"/><path d="M17 15l4 3-4 3z"/>',
     undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+    x: '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
+    pick: '<path d="M4 7l2 2 3.5-3.5"/><path d="M13 7h7"/><path d="M4 16l2 2 3.5-3.5"/><path d="M13 16h7"/>',
   };
   const svg = (k, s = 20) =>
     `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
@@ -443,6 +449,49 @@
     .rt span { display: block; margin-top: 3px; color: #606060; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     @media (prefers-reduced-motion: reduce) { .th img { transition: none; } }
     :host([dark]) .rt span { color: #aaa; }
+    /* шапка: «Выбрать» и «Вся очередь» рядом */
+    .hbtns { display: flex; gap: 8px; flex: none; }
+    .all.on, :host([dark]) .all.on { background: #ff3b5c; color: #fff; }
+    /* на обложке слева сверху: крестик «Убрать из очереди» (при наведении), в режиме выбора — кружок-отметка */
+    .row { user-select: none; }
+    .x, .pk { position: absolute; left: 8px; top: 8px; z-index: 2; display: grid; place-items: center; box-sizing: border-box;
+      width: 30px; height: 30px; border-radius: 50%; color: #fff; }
+    .x { background: rgba(0,0,0,.72); opacity: 0; transition: opacity .15s ease, background-color .15s ease; }
+    .row:hover .x, .row:focus-visible .x { opacity: 1; }
+    .x:hover { background: #e8002d; }
+    .pk { display: none; border: 2px solid rgba(255,255,255,.95); background: rgba(0,0,0,.4); }
+    .pk svg { opacity: 0; }
+    .sel .x { display: none; }
+    .sel .pk { display: grid; }
+    .row.on .pk { border-color: #ff3b5c; background: #ff3b5c; }
+    .row.on .pk svg { opacity: 1; }
+    .row.on, :host([dark]) .row.on { background: rgba(255,59,92,.14); box-shadow: inset 0 0 0 2px #ff3b5c; }
+    /* «Дальше» у первой плитки — слева снизу: левый верх занят крестиком */
+    .now { top: auto; bottom: 8px; }
+    /* полоса выбора под галереей — всегда на виду, галерея листается над ней */
+    .selbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px 16px; border-top: 1px solid rgba(0,0,0,.08); }
+    :host([dark]) .selbar { border-top-color: rgba(255,255,255,.12); }
+    .selbar b { flex: 1; min-width: 0; font: 500 14px Roboto, Arial, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .selbar button { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px;
+      border: 0; border-radius: 18px; background: rgba(0,0,0,.05); color: inherit; font: 500 14px Roboto, Arial, sans-serif; cursor: pointer; white-space: nowrap; }
+    :host([dark]) .selbar button { background: rgba(255,255,255,.1); }
+    .selbar button:hover:not(:disabled) { background: rgba(0,0,0,.1); }
+    :host([dark]) .selbar button:hover:not(:disabled) { background: rgba(255,255,255,.2); }
+    .selbar .drop, :host([dark]) .selbar .drop { background: #e8002d; color: #fff; }
+    :host([dark]) .selbar .drop { background: #ff3b5c; }
+    .selbar .drop:hover:not(:disabled) { background: #c80027; }
+    :host([dark]) .selbar .drop:hover:not(:disabled) { background: #ff2149; }
+    .selbar button:disabled { opacity: .45; cursor: default; }
+    /* колонка средней ширины: кнопки шапки — значками, чтобы заголовок и «N из M» не переносились */
+    @container (max-width: 520px) {
+      .hbtns .all .lbl { display: none; }
+      .hbtns .all { width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; }
+    }
+    @container (max-width: 380px) {
+      .selbar { flex-wrap: wrap; }
+      .selbar b { flex-basis: 100%; }
+      .selbar .drop { flex: 1; }
+    }
     .note { margin: 0 16px 12px; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.05); display: flex; align-items: center; gap: 10px; }
     :host([dark]) .note { background: rgba(255,255,255,.08); }
     .note span { flex: 1; }
@@ -490,13 +539,15 @@
     const next = i >= 0 ? queue[i + 1] || null : queue[0] || null;
     // галерея — что дальше: следующее крупно, остальные плиткой (текущее — строкой выше)
     const rows = (i >= 0 ? queue.slice(i + 1) : queue.filter((x) => x.id !== id)).slice(0, 40);
+    shown = rows.map((r) => r.id);
+    for (const x of sel) if (!shown.includes(x)) sel.delete(x); // убранное или ушедшее из галереи — уже не отмечено
     const curRec = i >= 0 ? queue[i] : null;
     const row = (r, k) => {
       const p = pos[r.id] || 0;
       const pct = r.len ? Math.min(100, Math.round((p / r.len) * 100)) : 0;
       const sub = [r.channel, r.len && p > 5 ? `осталось ${fmtDur(left(r))}` : r.short ? "Shorts" : ""].filter(Boolean).join(" · ");
-      return `<button class="row${k === 0 ? " hero" : ""}" data-go="${esc(r.id)}" title="${esc(r.title)}">
-        <span class="th"><img loading="lazy" alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/${k === 0 ? "hqdefault" : "mqdefault"}.jpg">${r.len ? `<span class="len">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${k === 0 ? `<span class="now">Дальше</span>` : ""}</span>
+      return `<button class="row${k === 0 ? " hero" : ""}${sel.has(r.id) ? " on" : ""}" data-go="${esc(r.id)}" title="${esc(r.title)}"${selMode ? ` aria-pressed="${sel.has(r.id)}"` : ""}>
+        <span class="th"><span class="x" data-drop="${esc(r.id)}" title="Убрать из очереди" aria-hidden="true">${svg("x", 16)}</span><span class="pk" aria-hidden="true">${svg("check", 16)}</span><img loading="lazy" alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/${k === 0 ? "hqdefault" : "mqdefault"}.jpg">${r.len ? `<span class="len">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${k === 0 ? `<span class="now">Дальше</span>` : ""}</span>
         <span class="rt"><b>${esc(r.title || "Видео")}</b><span>${esc(sub)}</span></span>
       </button>`;
     };
@@ -505,7 +556,10 @@
       <div class="box" role="region" aria-label="Очередь">
         <div class="head">
           <div class="ttl"><b>Очередь</b><span>${i >= 0 ? `${i + 1} из ${total}` : total ? `${total} видео` : "больше ничего нет"}${leftAll ? ` · осталось ≈ ${fmtDur(leftAll)}` : ""}</span></div>
-          <button class="all" data-act="all" title="Вся очередь — в «Моей библиотеке»" aria-label="Вся очередь">${svg("list", 18)}<span class="lbl">Вся очередь</span></button>
+          <div class="hbtns">
+            <button class="all${selMode ? " on" : ""}" data-act="select" aria-pressed="${selMode}" title="Выбрать несколько видео и убрать разом (или Ctrl/Shift+клик по видео)" aria-label="Выбрать">${svg("pick", 18)}<span class="lbl">Выбрать</span></button>
+            <button class="all" data-act="all" title="Вся очередь — в «Моей библиотеке»" aria-label="Вся очередь">${svg("list", 18)}<span class="lbl">Вся очередь</span></button>
+          </div>
         </div>
         ${done ? `<div class="note"><span>Досмотрено — убрано из очереди</span><button data-act="undo">${svg("undo", 16)}Вернуть</button></div>` : ""}
         <div class="ctl" ${done && !total ? "hidden" : ""}>
@@ -514,7 +568,15 @@
           <button data-act="next" ${next ? "" : "disabled"} title="Следующее в очереди — клавиша ]" aria-label="Дальше"><span class="lbl">Дальше</span>${svg("next")}</button>
         </div>
         ${curRec ? `<div class="cur-line"><span>Сейчас</span><b title="${esc(curRec.title)}">${esc(curRec.title || "Видео")}</b></div>` : ""}
-        <div class="list">${rows.map(row).join("")}</div>
+        <div class="list${selMode ? " sel" : ""}">${rows.map(row).join("")}</div>
+        ${
+          selMode
+            ? `<div class="selbar"><b>${sel.size ? `Выбрано: ${sel.size}` : "Отметьте видео"}</b>
+          <button data-act="sel-all" title="Отметить все видео ниже">Все</button>
+          <button class="drop" data-act="sel-drop" ${sel.size ? "" : "disabled"}>${svg("x", 16)}Убрать</button>
+          <button data-act="sel-off" title="Выйти из выбора — Esc">Отмена</button></div>`
+            : ""
+        }
       </div>`;
     const list = host.shadowRoot.querySelector(".list");
     // новое видео — галерея с начала; то же — оставляем, где листали
@@ -533,7 +595,25 @@
   }
 
   function onClick(e) {
+    const dropEl = e.target.closest("[data-drop]");
+    if (dropEl) {
+      e.stopPropagation();
+      return void dropIds([dropEl.dataset.drop]);
+    }
     const goEl = e.target.closest("[data-go]");
+    // выбор: Ctrl/⌘+клик — отметить одно, Shift+клик — от прошлой отметки до этой; в режиме выбора — просто клик
+    if (goEl && (selMode || e.ctrlKey || e.metaKey || e.shiftKey)) {
+      e.preventDefault();
+      const gid = goEl.dataset.go;
+      if (e.shiftKey && anchor && shown.includes(anchor)) {
+        const [a, b] = [shown.indexOf(anchor), shown.indexOf(gid)].sort((x, y) => x - y);
+        for (const x of shown.slice(a, b + 1)) sel.add(x);
+      } else if (sel.has(gid)) sel.delete(gid);
+      else sel.add(gid);
+      anchor = gid;
+      selMode = true;
+      return render();
+    }
     if (goEl) {
       const rec = queue.find((x) => x.id === goEl.dataset.go);
       if (rec && rec.id !== curId()) go(rec);
@@ -546,7 +626,46 @@
     else if (act === "done") void finish(id);
     else if (act === "undo") void undoFinish();
     else if (act === "all") void send({ type: "lib:open", view: "queue" });
+    else if (act === "select" || act === "sel-off") {
+      selMode = act === "select" ? !selMode : false;
+      sel.clear();
+      anchor = null;
+      render();
+    } else if (act === "sel-all") {
+      for (const x of shown) sel.add(x);
+      render();
+    } else if (act === "sel-drop") void dropIds([...sel]);
   }
+
+  // ---------- убрать из очереди (крестик или выбранные) — с «Вернуть» ----------
+  const sel = new Set();
+  let selMode = false;
+  let anchor = null;
+  let shown = [];
+  async function dropIds(ids) {
+    const items = ids
+      .map((id) => ({ at: queue.findIndex((x) => x.id === id), rec: queue.find((x) => x.id === id), t: pos[id] || 0 }))
+      .filter((x) => x.rec)
+      .sort((a, b) => a.at - b.at);
+    if (!items.length) return;
+    const r = await send({ type: "queue:remove", ids: items.map((x) => x.rec.id), why: "drop" });
+    if (!r) return toast("Не получилось убрать — обновите страницу (F5)");
+    for (const x of items) sel.delete(x.rec.id);
+    if (!sel.size) selMode = false;
+    schedule();
+    toast(items.length === 1 ? `Убрано из очереди: «${items[0].rec.title || "видео"}»` : `Убрано из очереди: ${items.length} видео`, [
+      ["Вернуть", () => send({ type: "queue:put", items, undo: "drop" })],
+    ]);
+  }
+
+  // Esc — выйти из выбора
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !selMode || !host?.isConnected) return;
+    selMode = false;
+    sel.clear();
+    anchor = null;
+    render();
+  });
 
   // клавиши [ ] и Shift+] — на видео из очереди, когда вы не печатаете
   window.addEventListener(
