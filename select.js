@@ -830,7 +830,7 @@
     setQueue(queueList.filter((x) => x.id !== id));
     renderQ();
     try {
-      await chrome.runtime.sendMessage({ type: "queue:remove", ids: [id] });
+      await chrome.runtime.sendMessage({ type: "queue:remove", ids: [id], why: "drop" });
     } catch (e) {
       message("Не получилось убрать — обновите страницу (F5)");
     }

@@ -121,6 +121,16 @@
       ],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "stats.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "omnibox": {

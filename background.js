@@ -3,6 +3,7 @@ import { sanitizeFilename } from "./groq.js";
 import "./tldr-bg.js"; // окно «О чём видео» на ленте: пересказ через порт
 import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адресной строке — поиск по библиотеке
 import { saveVideo } from "./archive-bg.js"; // «В архив Telegram»: видео в бот-архив
+import { statsAdd } from "./stats-bg.js"; // статистика просмотра: прибавки от вкладок, счётчики очереди
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
@@ -629,13 +630,16 @@ async function qFillMeta(ids) {
   }
 }
 
-function qRemove(ids) {
+// why — для статистики: "done" досмотрели, "drop" убрали без просмотра (иначе не считаем)
+function qRemove(ids, why = "") {
   const drop = new Set(ids);
   return qSerial(async () => {
     const { queue, pos } = await qLoad();
     for (const id of drop) delete pos[id];
     const left = queue.filter((x) => !drop.has(x.id));
     await chrome.storage.local.set({ queue: left, queuePos: pos });
+    const gone = queue.length - left.length;
+    if (gone && (why === "done" || why === "drop")) void statsAdd({ [why === "done" ? "qd" : "qx"]: gone });
     return { total: left.length };
   });
 }
@@ -781,8 +785,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (typeof msg?.type !== "string" || !msg.type.startsWith("queue:")) return;
   const tab = sender.tab || null;
   const run = {
-    "queue:add": () => qAdd(Array.isArray(msg.items) ? msg.items : [], Number.isInteger(msg.at) ? msg.at : -1),
-    "queue:remove": () => qRemove(Array.isArray(msg.ids) ? msg.ids.map(String) : []),
+    "queue:add": () => {
+      // «Вернуть» после «Досмотрел» / «Убрать» — забираем назад из статистики
+      if (msg.undo === "done" || msg.undo === "drop") void statsAdd({ [msg.undo === "done" ? "qd" : "qx"]: -1 });
+      return qAdd(Array.isArray(msg.items) ? msg.items : [], Number.isInteger(msg.at) ? msg.at : -1);
+    },
+    "queue:remove": () => qRemove(Array.isArray(msg.ids) ? msg.ids.map(String) : [], String(msg.why || "")),
     "queue:top": () => qTop(String(msg.id || "")),
     "queue:pos": () => qPos(String(msg.id || ""), Number(msg.t) || 0, Number(msg.len) || 0),
     "queue:opts": () => qOpts(msg.patch && typeof msg.patch === "object" ? msg.patch : null).then((opts) => ({ opts })),

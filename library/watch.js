@@ -172,7 +172,7 @@ export async function watchDone() {
   const after = list[i + 1] || list.find((x) => x.id !== watch.id);
   const id = watch.id;
   watch.t = 0; // досмотрено — место не храним
-  await qmsg({ type: "queue:remove", ids: [id] });
+  await qmsg({ type: "queue:remove", ids: [id], why: "done" });
   await loadQueue();
   if (after) openWatch(after.id, "queue");
   else closeWatch();
@@ -205,7 +205,7 @@ export async function onWatchEnded() {
   const items = watchPick();
   if (watch.source === "queue" && state.qopts.removeWatched) {
     watch.t = 0;
-    await qmsg({ type: "queue:remove", ids: [id] });
+    await qmsg({ type: "queue:remove", ids: [id], why: "done" });
     await loadQueue();
   }
   if (state.qopts.autoNext && items[0]) return openWatch(items[0].id, watch.source);

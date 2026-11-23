@@ -132,7 +132,7 @@ async function act(kind) {
     if (kind === "del") {
       tri.undo.push({ kind, rec: r, at, t: state.qpos[r.id] || 0, i: tri.i });
       tri.removed++;
-      await qmsg({ type: "queue:remove", ids: [r.id] });
+      await qmsg({ type: "queue:remove", ids: [r.id], why: "drop" });
     } else if (kind === "top") {
       tri.undo.push({ kind, rec: r, at, i: tri.i });
       tri.topped++;
@@ -156,7 +156,7 @@ async function undo() {
   try {
     if (u.kind === "del") {
       tri.removed--;
-      await qmsg({ type: "queue:add", items: [{ ...u.rec, t: u.t }], at: u.at });
+      await qmsg({ type: "queue:add", items: [{ ...u.rec, t: u.t }], at: u.at, undo: "drop" });
     } else if (u.kind === "top") {
       // вернуть на прежнее место: убрать и вставить туда же
       tri.topped--;

@@ -178,8 +178,19 @@
   function skip(v, s) {
     const { end, ids } = chainEnd(s);
     const d = v.duration;
+    const from = v.currentTime;
     v.currentTime = Number.isFinite(d) && end >= d - 0.3 ? d : end;
     showNotice("skipped", s, ids);
+    notice.saved = savedStat(v, from);
+  }
+
+  // Статистика просмотра (stats.js): сколько секунд реального времени сэкономил
+  // пропуск — при текущей скорости. «Вернуть» отдаёт их обратно.
+  function savedStat(v, from) {
+    const sec = (v.currentTime - from) / (v.playbackRate || 1);
+    if (!(sec > 0)) return 0;
+    document.dispatchEvent(new CustomEvent("ytcs-stats:saved", { detail: JSON.stringify({ kind: "sponsor", sec }) }));
+    return sec;
   }
 
   // ---------- Сообщение поверх плеера (shadow DOM) ----------
@@ -210,7 +221,7 @@
     .x svg { width: 16px; height: 16px; }
     @media (prefers-reduced-motion: reduce) { :host, .n, button { transition: none; } }`;
 
-  const notice = { host: null, root: null, kind: "", seg: null, ids: [], timer: 0, hover: false };
+  const notice = { host: null, root: null, kind: "", seg: null, ids: [], timer: 0, hover: false, saved: 0 };
 
   function noticeHost() {
     const p = player();
@@ -297,6 +308,8 @@
     const s = notice.seg;
     if (!v || !s) return hideNotice();
     if (notice.kind === "skipped") {
+      if (notice.saved > 0) document.dispatchEvent(new CustomEvent("ytcs-stats:saved", { detail: JSON.stringify({ kind: "sponsor", sec: -notice.saved }) }));
+      notice.saved = 0;
       // вернуться к началу вставки и больше её не пропускать
       for (const id of notice.ids.length ? notice.ids : [s.uuid]) reverted.add(id);
       v.currentTime = Math.max(0, s.start);
@@ -306,7 +319,9 @@
     }
     // предложение «Пропустить» для сегмента «только на полосе»
     const d = v.duration;
+    const from = v.currentTime;
     v.currentTime = Number.isFinite(d) && s.end >= d - 0.3 ? d : s.end;
+    savedStat(v, from);
     hideNotice();
   }
 

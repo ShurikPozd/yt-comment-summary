@@ -6,6 +6,7 @@
 //   - быстрое обновление библиотеки: что изменилось в плейлисте (library/sync-plan.js);
 //   - подсказки адресной строки «yt …» (omnibox-core.js): XML, выбор, подсветка, очередь.
 //   - «В архив Telegram»: тело запроса к боту, разбор ответов, фон с поддельным chrome/fetch.
+//   - статистика просмотра (stats-core.js): прибавки по дням и каналам, вытеснение, итоги.
 // Запускается из check-syntax.sh перед коммитом.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -15,6 +16,7 @@ import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs } from 
 import { countOf, dayOf, fullDue, listsOf, readPlaylist, sameList, splice, syncSummary, updDay } from "../library/sync-plan.js";
 import { buildData, describe, escapeXml, fingerprint, parseInput, suggest, videoIdOf, videoUrl } from "../omnibox-core.js";
 import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
+import * as ST from "../stats-core.js";
 import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
@@ -556,6 +558,186 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(P({ current: 1.25, carried: null }) === "null", "обычную скорость YouTube не трогаем");
   ok(P({ current: 1.25, carried: 1.5 }) === "null", "скорость сменилась не нами — не трогаем");
   ok(P({ stored: 1, current: 1.5, carried: 1.5 }) === JSON.stringify({ rate: 1, why: "channel" }), "музыка 1× после лекций 1,5×");
+}
+
+// ---------- статистика просмотра (stats-core.js) ----------
+{
+  const NOW = new Date(2026, 10, 23, 15, 0).getTime(); // 23 ноября 2026, 15:00 по местному
+  const A = "UC" + "a".repeat(22);
+  const B = "UC" + "b".repeat(22);
+  ok(ST.dayKey(NOW) === "2026-11-23" && ST.shiftDay("2026-03-01", -1) === "2026-02-28" && ST.shiftDay("2026-12-31", 1) === "2027-01-01", "ключи дней");
+  ok(ST.shiftDay("2026-03-30", -1) === "2026-03-29" && ST.shiftDay("2026-10-26", -1) === "2026-10-25", "дни через переход на летнее время");
+  let st = ST.emptyStats(NOW);
+  ST.addDelta(st, { w: 600, sp: 200, n: 1, ch: { id: A, name: "Лекции", sec: 600 } }, NOW);
+  ST.addDelta(st, { w: 300, s: 120, sb: 45, ch: { id: A, name: "Лекции", sec: 300 } }, NOW);
+  ST.addDelta(st, { w: 1200, day: "2026-11-20", ch: { id: B, name: "Музыка", sec: 1200 } }, NOW);
+  const d = st.days["2026-11-23"];
+  ok(d.w === 900 && d.s === 120 && d.sp === 200 && d.sb === 45 && d.n === 1, "прибавки складываются по дню");
+  ok(st.ch[A].a === 900 && st.ch[A].d["2026-11-23"] === 900 && st.ch[A].n === "Лекции", "канал копит время по дням");
+  // отрицательное — только для счётчиков очереди и не ниже нуля
+  ST.addDelta(st, { w: -500, qd: 1 }, NOW);
+  ST.addDelta(st, { qd: -1 }, NOW);
+  ST.addDelta(st, { qd: -1, qx: 2 }, NOW);
+  ok(d.w === 900 && !d.qd && d.qx === 2, "минус только у очереди и не ниже нуля");
+  ST.addDelta(st, { w: 1e9 }, NOW);
+  ok(d.w === 900 + 86400, "мусорная прибавка обрезана до суток");
+  d.w = 900;
+  // канал по названию, потом с id — сливается
+  ST.addDelta(st, { w: 60, ch: { id: "", name: "Без id", sec: 60 } }, NOW);
+  ok(st.ch["n:Без id"]?.a === 60, "канал без id — по названию");
+  const C = "UC" + "c".repeat(22);
+  ST.addDelta(st, { w: 40, ch: { id: C, name: "Без id", sec: 40 } }, NOW);
+  ok(!st.ch["n:Без id"] && st.ch[C].a === 100 && st.ch[C].d["2026-11-23"] === 100, "название → id: время переносится");
+  // итоги
+  const sum = ST.summarize(st, 7, NOW);
+  ok(sum.series.length === 7 && sum.series[6].key === "2026-11-23" && sum.series[3].key === "2026-11-20", "7 столбиков по дням, последний — сегодня");
+  ok(sum.series[6].video === 1000 && sum.series[6].shorts === 120 && sum.series[3].video === 1200, "столбики: видео и Shorts отдельно");
+  ok(sum.watch === 2320 && sum.shorts === 120 && sum.speed === 200 && sum.sponsor === 45 && sum.saved === 245 && sum.qx === 2, "итоги за 7 дней");
+  ok(sum.channels[0].key === B && sum.channels[1].key === A && Math.abs(sum.channels[0].share - 1200 / 2200) < 1e-9, "топ каналов с долей от обычных видео");
+  const s1 = ST.summarize(st, 1, NOW);
+  ok(s1.watch === 1120 && s1.channels[0].key === A && s1.series.length === 1, "итоги за сегодня");
+  const s90 = ST.summarize(st, 90, NOW);
+  ok(s90.series.length === 13 && s90.series[12].to === "2026-11-23" && s90.series[12].from === "2026-11-17" && s90.series[0].from === s90.from, "90 дней — по неделям, первая неделя не раньше начала");
+  ok(s90.series.reduce((a, x) => a + x.video + x.shorts, 0) === s90.watch, "недели складываются в итог");
+  const tt = ST.totals(st, NOW);
+  ok(tt.today === 1120 && tt.week === 2320 && tt.month === 2320, "сегодня / неделя / месяц");
+  ok(ST.summarize(st, 2, new Date(2026, 10, 25, 9).getTime()).watch === 0, "через два дня — за 2 дня пусто");
+  {
+    const fresh = ST.emptyStats(new Date(2026, 10, 22, 10).getTime()); // начали считать вчера
+    ST.addDelta(fresh, { w: 1200 }, NOW);
+    const f30 = ST.summarize(fresh, 30, NOW);
+    ok(f30.days === 2 && f30.avg === 600 && ST.summarize({ ...fresh, since: NOW - 90 * 86400000 }, 30, NOW).days === 30, "среднее — за дни, что собирали, а не за весь период");
+    ok(ST.totals(fresh, NOW).newToday === false && ST.totals(ST.emptyStats(NOW), NOW).newToday === true, "считаем с сегодняшнего дня");
+  }
+  // хранение: старое уходит, лишние каналы вытесняются
+  st.days["2025-01-01"] = { w: 10 };
+  st.ch[A].d["2026-06-01"] = 50;
+  ST.prune(st, NOW, 2);
+  ok(!st.days["2025-01-01"] && !st.ch[A].d["2026-06-01"] && st.ch[A].d["2026-11-23"] === 900, "дни старше срока убраны");
+  ok(Object.keys(st.ch).length === 2 && !st.ch[C], "каналов сверх предела — вытеснены наименее смотренные");
+  // чтение из хранилища
+  const back = ST.cleanStats(JSON.parse(JSON.stringify(st)), NOW);
+  const canon = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, Object.entries(o[k]).sort()]));
+  ok(canon(back.days) === canon(st.days) && back.ch[A].a === st.ch[A].a, "запись и чтение без потерь");
+  const junk = ST.cleanStats({ days: { bad: { w: 1 }, "2026-11-23": { w: "x", s: -5, n: 2 } }, ch: { "": {}, [A]: { d: { "2026-11-23": "abc" } } } }, NOW);
+  ok(JSON.stringify(junk.days) === JSON.stringify({ "2026-11-23": { n: 2 } }) && junk.ch[A].a === 0 && !junk.ch[""], "битые данные отброшены");
+  ok(!ST.hasData(ST.emptyStats()) && ST.hasData(st), "есть ли данные");
+  ok(ST.fmtDur(0) === "0 мин" && ST.fmtDur(35) === "35 с" && ST.fmtDur(720) === "12 мин" && ST.fmtDur(3900) === "1 ч 05 мин" && ST.fmtDur(7200) === "2 ч" && ST.fmtDur(460800) === "128 ч", "длительность по-человечески");
+  ok(ST.channelKey(A, "x") === A && ST.channelKey("bad", " Канал ") === "n:Канал" && ST.channelKey("", "") === "", "ключ канала");
+}
+
+// ---------- статистика: счётчик на странице (stats.js) и фон (stats-bg.js) ----------
+{
+  // stats.js в песочнице: поддельные видео, плеер, часы и chrome.runtime
+  const sent = [];
+  const docL = {};
+  const timers = [];
+  let clock = 0;
+  const player = { classList: { contains: (c) => c === "ad-showing" && player.ad } };
+  const video = { paused: false, ended: false, seeking: false, readyState: 4, muted: false, volume: 1, currentTime: 0, duration: 600, playbackRate: 1, closest: () => player };
+  const ctx = {
+    console,
+    JSON,
+    Map,
+    Set,
+    Math,
+    Number,
+    URLSearchParams,
+    location: { pathname: "/watch", search: "?v=abcdefghijk" },
+    performance: { now: () => clock },
+    setInterval: (fn, ms) => timers.push({ fn, ms }),
+    CustomEvent: class {
+      constructor(type, o) {
+        this.type = type;
+        this.detail = o?.detail;
+      }
+    },
+    document: {
+      visibilityState: "visible",
+      querySelector: (sel) => (sel.includes("video") ? video : null),
+      addEventListener: (ev, fn) => (docL[ev] ||= []).push(fn),
+      removeEventListener: (ev, fn) => (docL[ev] = (docL[ev] || []).filter((f) => f !== fn)),
+      dispatchEvent: (e) => (docL[e.type] || []).forEach((f) => f(e)),
+    },
+    window: { addEventListener() {} },
+    chrome: {
+      runtime: { id: "ext", sendMessage: (m) => (sent.push(m), Promise.resolve()) },
+      storage: { local: { get: () => Promise.resolve({}) }, onChanged: { addListener() {} } },
+    },
+  };
+  ctx.window.top = ctx.window;
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  // канал отвечает мир страницы (speed-main.js)
+  ctx.document.addEventListener("ytcs-speed:ask", () =>
+    ctx.document.dispatchEvent(new ctx.CustomEvent("ytcs-speed:info", { detail: JSON.stringify({ videoId: "abcdefghijk", channelId: "UC" + "z".repeat(22), name: "Канал" }) }))
+  );
+  vm.runInContext(readFileSync(new URL("../stats.js", import.meta.url), "utf8"), ctx);
+  const tick = timers.find((t) => t.ms === 1000).fn;
+  const flush = timers.find((t) => t.ms === 15000).fn;
+  const step = (sec, moved = sec * video.playbackRate) => {
+    clock += sec * 1000;
+    video.currentTime += moved;
+    tick();
+  };
+  tick();
+  for (let i = 0; i < 10; i++) step(1); // 10 с на 1×
+  video.playbackRate = 2;
+  for (let i = 0; i < 10; i++) step(1); // 10 с на 2× — сэкономлено 10 с
+  step(1, 120); // перемотка — не считается
+  video.paused = true;
+  step(5, 0); // пауза
+  video.paused = false;
+  player.ad = true;
+  step(5); // реклама YouTube
+  player.ad = false;
+  ctx.document.visibilityState = "hidden";
+  video.muted = true;
+  step(5); // вкладка в фоне и без звука
+  ctx.document.visibilityState = "visible";
+  video.muted = false;
+  ctx.document.dispatchEvent(new ctx.CustomEvent("ytcs-stats:saved", { detail: JSON.stringify({ kind: "sponsor", sec: 40 }) }));
+  flush();
+  const d = sent.find((m) => m.type === "stats:add")?.delta || {};
+  ok(sent.length === 1 && Math.abs(d.w - 19) < 1.1 && Math.abs(d.sp - 9) < 1.1 && d.sb === 40, "время: только воспроизведение, перемотки/пауза/реклама/фон без звука — мимо");
+  ok(d.ch?.id === "UC" + "z".repeat(22) && Math.abs(d.ch.sec - d.w) < 0.01 && d.n === undefined, "канал от плеера; «смотрели» — с 30 с, а не раньше");
+  for (let i = 0; i < 15; i++) step(1);
+  video.currentTime = 560;
+  clock += 1000;
+  tick();
+  step(1);
+  flush();
+  const d2 = sent[1]?.delta || {};
+  ok(d2.n === 1 && d2.fin === 1, "дольше 30 с — «смотрели», дошли до 90% — «досмотрено»");
+  // Shorts — отдельно, без канала
+  ctx.location.pathname = "/shorts/abcdefghijk";
+  video.playbackRate = 1;
+  tick();
+  for (let i = 0; i < 5; i++) step(1);
+  flush();
+  const d3 = sent[2]?.delta || {};
+  ok(d3.s > 3.9 && !d3.w && !d3.ch, "Shorts — своим счётом, без каналов");
+}
+{
+  // фон: прибавки по очереди, выключатель уважается
+  let store = { settings: {} };
+  let listener = null;
+  globalThis.chrome = {
+    runtime: { id: "ext", onMessage: { addListener: (f) => (listener = f) } },
+    storage: { local: { get: async (k) => Object.fromEntries([].concat(k).filter((x) => x in store).map((x) => [x, structuredClone(store[x])])), set: async (o) => Object.assign(store, structuredClone(o)) } },
+  };
+  const { statsAdd } = await import("../stats-bg.js?t=" + Date.now());
+  await Promise.all([statsAdd({ w: 10 }), statsAdd({ w: 20, qd: 1 }), statsAdd({ qx: 2 })]);
+  const today = ST.dayKey();
+  ok(store.watchStats?.days?.[today]?.w === 30 && store.watchStats.days[today].qd === 1 && store.watchStats.days[today].qx === 2, "фон: прибавки складываются по очереди");
+  let reply = null;
+  listener({ type: "stats:add", delta: { w: 5 } }, { id: "чужое" }, (r) => (reply = r));
+  await statsAdd({});
+  ok(store.watchStats.days[today].w === 30 && reply === null, "фон: чужие сообщения не принимаются");
+  store.settings = { watchStats: false };
+  await statsAdd({ w: 100 });
+  ok(store.watchStats.days[today].w === 30, "фон: сбор выключен — не пишем");
+  delete globalThis.chrome;
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
