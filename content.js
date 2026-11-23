@@ -1030,14 +1030,14 @@
     .ytcs-item:hover, .ytcs-item:focus-visible { background: rgba(255, 255, 255, .1); outline: none; }
     .ytcs-item:active { background: rgba(255, 255, 255, .16); }
     .ytcs-item > svg { flex: none; width: 20px; height: 20px; opacity: .9; }
-    .ytcs-item .ytcs-label { flex: 1; min-width: 0; position: relative; top: -.075em; } /* оптическая центровка */
+    .ytcs-item .ytcs-label { flex: 1; min-width: 0; } /* подпись — ровно по центру значка */
     .ytcs-item[hidden] { display: none; }
     .ytcs-item .ytcs-ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     /* вторая строка пункта: «Сэкономлено сегодня: 3 мин» у «Пропускать тишину» */
     .ytcs-item .ytcs-sub { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: rgba(255, 255, 255, .6); font-variant-numeric: tabular-nums; }
     .ytcs-item .ytcs-sub[hidden] { display: none; }
     .ytcs-item:has(.ytcs-sub:not([hidden])) { padding-top: 5px; padding-bottom: 5px; }
-    .ytcs-item .ytcs-aside { flex: none; color: #ff6b85; font-weight: 600; font-variant-numeric: tabular-nums; position: relative; top: -.075em; }
+    .ytcs-item .ytcs-aside { flex: none; color: #ff6b85; font-weight: 600; font-variant-numeric: tabular-nums; }
     .ytcs-sep { height: 1px; margin: 6px 0; background: rgba(255, 255, 255, .1); }
     /* группы пунктов: линия сверху и подпись группы; пустая группа (всё скрыто) не показывается */
     .ytcs-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .1); }
@@ -1053,7 +1053,7 @@
     .ytcs-step:active { background: rgba(255, 255, 255, .32); }
     .ytcs-step svg { width: 16px; height: 16px; }
     .ytcs-rv { flex: none; min-width: 3em; text-align: center; color: #ff6b85; font-weight: 700; font-variant-numeric: tabular-nums;
-      position: relative; top: -.075em; }
+      }
     /* экраны меню: строка раздела со стрелкой › и шапка раздела «‹ Сохранить» */
     .ytcs-pane[hidden] { display: none; }
     .ytcs-pane > .ytcs-group:first-child, .ytcs-back + .ytcs-group { margin-top: 0; padding-top: 0; border-top: 0; }
@@ -1064,7 +1064,7 @@
       margin: -2px 0 6px; padding: 0 16px 6px 16px; border: 0; border-bottom: 1px solid rgba(255, 255, 255, .1);
       background: none; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
     .ytcs-back svg { width: 20px; height: 20px; flex: none; }
-    .ytcs-back span { position: relative; top: -.075em; }
+    .ytcs-back span { line-height: 1.2; }
     .ytcs-back:hover, .ytcs-back:focus-visible { background: rgba(255, 255, 255, .06); outline: none; }
     .ytcs-gh { padding: 6px 16px 4px; font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .55); }
     .ytcs-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px;
@@ -1331,9 +1331,8 @@
   function closeYtSettings() {
     const menu = document.querySelector("#movie_player .ytp-settings-menu");
     if (!menu || menu.style.display === "none" || !menu.offsetParent) return;
-    const btn = document.querySelector("#movie_player .ytp-settings-button");
-    if (btn?.getAttribute("aria-expanded") === "true") btn.click();
-    else menu.style.display = "none";
+    // штатным нажатием ⚙ — чтобы YouTube сам знал, что меню закрыто
+    document.querySelector("#movie_player .ytp-settings-button")?.click();
   }
 
   function openMenu(open) {

@@ -318,7 +318,7 @@
     .n.plain { padding-right: 18px; min-height: 34px; }
     svg { flex: none; width: 20px; height: 20px; color: #ff6b85; }
     .txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      position: relative; top: -.06em; }
+      }
     b, .nm { white-space: nowrap; }
     b { font-weight: 700; }
     /* узкий плеер: текст не обрезается, а переносится — «таблетка» становится карточкой */

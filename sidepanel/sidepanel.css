@@ -3295,8 +3295,7 @@ button.ghost,
 }
 
 .max-wrap span {
-  position: relative;
-  top: -0.075em; /* оптическая середина строки Segoe */
+  line-height: 1; /* подпись «лимит» — ровно по центру поля */
 }
 
 .max-wrap input {

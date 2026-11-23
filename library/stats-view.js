@@ -103,8 +103,9 @@ chrome.storage.onChanged.addListener(async (ch, area) => {
   render();
 });
 
+const statsHash = () => location.hash === "#stats" || new URLSearchParams(location.hash.slice(1)).get("v") === "stats";
 window.addEventListener("hashchange", () => {
-  if (location.hash === "#stats") void openStats();
+  if (statsHash()) void openStats();
   else if (sv.on) closeStats();
 });
 
@@ -480,4 +481,4 @@ async function setEnabled(on) {
 
 // ---------- старт: пришли по адресу #stats ----------
 // #stats — и #v=stats (так открывают разделы библиотеки меню правого клика и боковая панель)
-if (location.hash === "#stats" || new URLSearchParams(location.hash.slice(1)).get("v") === "stats") void openStats();
+if (statsHash()) void openStats();

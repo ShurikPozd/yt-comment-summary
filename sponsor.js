@@ -209,7 +209,7 @@
     .n.show { opacity: 1; transform: none; pointer-events: auto; }
     .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, .14); }
     .txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      position: relative; top: -.06em; }
+      }
     button { flex: none; height: 34px; border: 0; border-radius: 999px; font: inherit; cursor: pointer;
       transition: background-color .12s ease; }
     .act { padding: 0 16px 1px; background: rgba(255, 255, 255, .14); color: #fff; font-weight: 600; }
