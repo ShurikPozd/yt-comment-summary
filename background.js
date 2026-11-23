@@ -140,10 +140,16 @@ async function buildMenus() {
   mk("preview@action", "Открыть превью", A, {}, { parentId: "video@action" });
   mk("download@action", "Скачать превью", A, {}, { parentId: "video@action" });
   mk("collect@action", "Собрать вкладки YouTube в очередь", A);
+  // разделы «Моей библиотеки» — сразу нужный
+  mk("libviews@action", "Разделы библиотеки", A);
+  mk("libview-queue@action", "Очередь", A, {}, { parentId: "libviews@action" });
+  mk("libview-digest@action", "Подписки — новые видео", A, {}, { parentId: "libviews@action" });
+  mk("libview-stats@action", "Статистика просмотра", A, {}, { parentId: "libviews@action" });
   mk("player@action", "Плеер", A);
   for (const [key, title] of TOGGLES) {
     chrome.contextMenus.create({ id: `${key}@action`, title, type: "checkbox", checked: toggleOn(s, key), contexts: A, parentId: "player@action" });
   }
+  sleepMenu(A, {}, "player@action", "action");
 
   // Правый клик на странице YouTube — всё под значком расширения, без ограничений.
   const P = PAGE_CTX;
@@ -168,6 +174,17 @@ async function buildMenus() {
   chrome.contextMenus.create({ id: "sep1@page", type: "separator", contexts: P, ...onYT });
   for (const [key, title] of TOGGLES) {
     chrome.contextMenus.create({ id: `${key}@page`, title, type: "checkbox", checked: toggleOn(s, key), contexts: P, ...onYT });
+  }
+  sleepMenu(P, onYT, null, "page");
+}
+
+// «Таймер сна» в меню правого клика: 15 / 30 / 60 мин, «в конце видео», выключить (sleep.js)
+function sleepMenu(contexts, extra, parentId, where) {
+  const parent = parentId ? { parentId } : {};
+  chrome.contextMenus.create({ id: `sepsleep@${where}`, type: "separator", contexts, ...extra, ...parent });
+  chrome.contextMenus.create({ id: `sleep@${where}`, title: "Таймер сна", contexts, ...extra, ...parent });
+  for (const [v, title] of [["15", "Через 15 минут"], ["30", "Через 30 минут"], ["60", "Через час"], ["end", "В конце видео"], ["off", "Выключить таймер"]]) {
+    chrome.contextMenus.create({ id: `sleep-${v}@${where}`, title, contexts, ...extra, parentId: `sleep@${where}` });
   }
 }
 
@@ -301,6 +318,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (tab?.id) {
       const text = r.added.length ? `Добавлено в очередь · всего ${r.total}` : `Уже в очереди · всего ${r.total}`;
       chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text }).catch(() => {});
+    }
+    return;
+  }
+
+  // разделы библиотеки из меню значка
+  if (action.startsWith("libview-")) {
+    void openLibrary("", tab || null, action.slice(8));
+    return;
+  }
+
+  // таймер сна — во вкладке, где щёлкнули (или в активной — для меню значка)
+  if (action.startsWith("sleep-")) {
+    const v = action.slice(6);
+    const value = /^\d+$/.test(v) ? Number(v) : v;
+    const ours = tab?.url?.startsWith(chrome.runtime.getURL(""));
+    if (tab?.id && (ours || /^https:\/\/www\.youtube\.com\//.test(tab.url || ""))) {
+      chrome.tabs.sendMessage(tab.id, { type: "yt:sleep-set", value }).catch(() => {});
     }
     return;
   }
