@@ -336,9 +336,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const v = action.slice(6);
     const value = /^\d+$/.test(v) ? Number(v) : v;
     const ours = tab?.url?.startsWith(chrome.runtime.getURL(""));
-    if (tab?.id && (ours || /^https:\/\/www\.youtube\.com\//.test(tab.url || ""))) {
-      chrome.tabs.sendMessage(tab.id, { type: "yt:sleep-set", value }).catch(() => {});
+    let target = tab?.id && (ours || /^https:\/\/www\.youtube\.com\//.test(tab.url || "")) ? tab : null;
+    // меню значка на другом сайте — таймер для вкладки YouTube, где идёт звук (иначе — последней открытой)
+    if (!target) {
+      const yt = await chrome.tabs.query({ url: "https://www.youtube.com/*" }).catch(() => []);
+      target = yt.find((t) => t.audible) || yt.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0] || null;
     }
+    if (target?.id) chrome.tabs.sendMessage(target.id, { type: "yt:sleep-set", value }).catch(() => {});
     return;
   }
 
