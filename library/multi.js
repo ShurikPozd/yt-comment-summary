@@ -25,10 +25,11 @@ const IC = {
   check: (s) => svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', s),
   top: (s) => svg('<path d="M5 4h14"/><path d="M12 20V9"/><path d="M7.5 13.5L12 9l4.5 4.5"/>', s),
   bottom: (s) => svg('<path d="M5 20h14"/><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/>', s),
-  save: (s) => svg('<path d="M4 6h11"/><path d="M4 12h11"/><path d="M4 18h7"/><path d="M17 15v6"/><path d="M14 18h6"/>', s),
-  queue: (s) => svg('<path d="M4 6h11"/><path d="M4 12h11"/><path d="M4 18h7"/><path d="M15 15.5v5l4.5-2.5z"/>', s),
+  // рисунки «списка» — по центру квадрата 24×24 (иначе значок «садится» ниже подписи)
+  save: (s) => svg('<path d="M4 4.5h11"/><path d="M4 10.5h11"/><path d="M4 16.5h7"/><path d="M17 13.5v6"/><path d="M14 16.5h6"/>', s),
+  queue: (s) => svg('<path d="M4 4.75h11"/><path d="M4 10.75h11"/><path d="M4 16.75h7"/><path d="M15 14.25v5l4.5-2.5z"/>', s),
   remove: (s) => svg('<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 12.5h9l1-12.5"/><path d="M10 11v5"/><path d="M14 11v5"/>', s),
-  minus: (s) => svg('<path d="M4 6h11"/><path d="M4 12h7"/><path d="M4 18h6"/><circle cx="17" cy="16" r="4.5"/><path d="M15 16h4"/>', s),
+  minus: (s) => svg('<path d="M4 4.75h11"/><path d="M4 10.75h7"/><path d="M4 16.75h6"/><circle cx="17" cy="14.75" r="4.5"/><path d="M15 14.75h4"/>', s),
   hide: (s) =>
     svg('<path d="M3 3l18 18"/><path d="M10.6 5.1A10.5 10.5 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1"/><path d="M6.6 6.6A17.4 17.4 0 0 0 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>', s),
   all: (s) => svg('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.2l2.8 2.8L16 9.5"/>', s),
@@ -265,9 +266,17 @@ function renderBar() {
 // сверху, действия снизу); совсем узко — только значки с подсказками
 function fit() {
   if (!bar || bar.hidden) return;
-  bar.classList.remove("stack", "icons", "icons-all");
+  bar.classList.remove("stack", "grid2", "icons", "icons-all");
   const over = (sel = ".sel-btn, .sel-count") => bar.scrollWidth > bar.clientWidth + 1 || [...bar.querySelectorAll(sel)].some((b) => b.scrollWidth > b.clientWidth + 1);
   if (over()) bar.classList.add("stack");
+  // в строку действия помещаются, но впритык (подпись почти касается краёв кнопки) —
+  // сеткой 2×2 с подписями: так читается лучше, чем только значки
+  const tight = () =>
+    [...bar.querySelectorAll(".sel-acts .sel-btn")].some((b) => {
+      const l = b.querySelector(".lbl");
+      return l && l.getBoundingClientRect().width + 20 + 8 + 28 > b.clientWidth;
+    });
+  if (bar.classList.contains("stack") && tight()) bar.classList.add("grid2");
   if (over(".sel-acts .sel-btn")) bar.classList.add("icons");
   if (over()) bar.classList.add("icons-all");
   document.body.style.setProperty("--selbar-h", `${Math.ceil(bar.getBoundingClientRect().height)}px`);

@@ -4339,6 +4339,12 @@ body.sel-on .d-card .d-new {
   min-width: 0;
 }
 
+/* узко — действия сеткой 2×2, с подписями */
+.sel-bar.grid2 .sel-acts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 /* совсем узко — у действий только значки (подписи — в подсказках); если и
    верхней строке тесно — у «Выбрать всё» тоже */
 .sel-bar.icons .sel-acts .lbl,
