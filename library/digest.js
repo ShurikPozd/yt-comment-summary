@@ -431,7 +431,8 @@ setInterval(() => shown() && !dg.loading && renderStatus(), 60000);
 
 // ---------- всплывающая строка с «Вернуть» ----------
 let toastTimer = 0;
-function toast(html, undo) {
+// общая для библиотеки: выбор нескольких видео (multi.js) показывает здесь же «Вернуть»
+export function toast(html, undo) {
   let el = $("#d-toast");
   if (!el) {
     el = document.createElement("div");
@@ -519,6 +520,47 @@ function hideChannel(id) {
   renderBadge();
   updateDigest({ keep: true });
   toast(`Канал «${esc(name)}» скрыт в дайджесте`, () => unhideChannel(id));
+}
+
+// ---------- выбор нескольких видео (library/multi.js) ----------
+// В очередь — то, чего там ещё нет; «Отменить» в строке внизу
+export async function queueMany(ids) {
+  const items = queueable(ids.map(rec).filter(Boolean)).filter((x) => !dg.qids.has(x.id));
+  if (!items.length) return toast(ids.length > 1 ? "Все выбранные уже в очереди" : "Уже в очереди");
+  for (const x of items) dg.qids.add(x.id);
+  markRead(items.map((x) => x.id));
+  const r = await qmsg({ type: "queue:add", items: items.map(qItem) });
+  updateDigest({ keep: true });
+  if (!r?.ok) return toast("Не получилось добавить в очередь — обновите страницу");
+  const added = Array.isArray(r.added) ? r.added : items.map((x) => x.id);
+  toast(`В очереди: +${videosWord(added.length)}`, async () => {
+    for (const id of added) dg.qids.delete(id);
+    await qmsg({ type: "queue:remove", ids: added });
+    updateDigest({ keep: true });
+  });
+}
+
+// «Не интересно» сразу для нескольких
+export function hideMany(ids) {
+  const fresh = ids.filter((id) => !dg.marks.hidden.has(id));
+  if (!fresh.length) return;
+  const wasRead = new Set(fresh.filter((id) => dg.marks.read.has(id)));
+  for (const id of fresh) {
+    dg.marks.hidden.add(id);
+    dg.marks.read.add(id);
+  }
+  void save.marks();
+  renderBadge();
+  updateDigest({ keep: true });
+  toast(`Скрыто: ${videosWord(fresh.length)}`, () => {
+    for (const id of fresh) {
+      dg.marks.hidden.delete(id);
+      if (!wasRead.has(id)) dg.marks.read.delete(id);
+    }
+    void save.marks();
+    renderBadge();
+    updateDigest({ keep: true });
+  });
 }
 
 function unhideChannel(id) {

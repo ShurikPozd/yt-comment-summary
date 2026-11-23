@@ -18,6 +18,7 @@ import { closeWatch, openWatch, watchHere } from "./watch.js";
 import { yt } from "./youtube.js";
 import "./cover-actions.js"; // «Превью» и «О чём видео» на обложках
 import "./digest.js"; // «Подписки» — дайджест новых видео из подписок
+import "./multi.js"; // выбор нескольких видео: кружок на обложке, Ctrl/Shift, полоса действий внизу
 
 // ---------- адрес страницы: #q=…&pl=… (можно добавить в закладки) ----------
 export function readHash() {

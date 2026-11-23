@@ -4,6 +4,7 @@ import "./tldr-bg.js"; // окно «О чём видео» на ленте: п�
 import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адресной строке — поиск по библиотеке
 import { saveVideo } from "./archive-bg.js"; // «В архив Telegram»: видео в бот-архив
 import { statsAdd } from "./stats-bg.js"; // статистика просмотра: прибавки от вкладок, счётчики очереди
+import { moveIds, restoreAt } from "./library/multi-core.js"; // выбор нескольких в библиотеке: «Наверх», «В конец», «Вернуть»
 import { createLoader } from "./lazy-bg.js"; // клип, плейлисты, превью — во вкладку по требованию
 import { paintWhatsNew } from "./welcome-bg.js"; // «Что умеет расширение»: при установке, «NEW» после крупного обновления
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
@@ -706,13 +707,41 @@ function qRemove(ids, why = "") {
   });
 }
 
-function qTop(id) {
+// «Наверх» / «В конец» — одно видео или сразу несколько (в их нынешнем порядке)
+function qMove(ids, where = "top") {
   return qSerial(async () => {
     const { queue } = await qLoad();
-    const i = queue.findIndex((x) => x.id === id);
-    if (i > 0) queue.unshift(...queue.splice(i, 1));
-    await chrome.storage.local.set({ queue });
+    const moved = moveIds(queue, ids, where);
+    if (moved.some((x, i) => x !== queue[i])) await chrome.storage.local.set({ queue: moved });
     return { ok: true };
+  });
+}
+
+// «Вернуть» после «Убрать» в библиотеке: каждое видео — на своё прежнее место,
+// с прежними «добавлено …» и местом просмотра
+function qPut(items) {
+  return qSerial(async () => {
+    const { queue, pos } = await qLoad();
+    const clean = [];
+    for (const it of items) {
+      const r = it?.rec;
+      if (!/^[A-Za-z0-9_-]{11}$/.test(r?.id || "")) continue;
+      clean.push({
+        at: Number.isInteger(it.at) ? it.at : -1,
+        rec: {
+          id: r.id,
+          title: String(r.title || "").slice(0, 300),
+          channel: String(r.channel || "").slice(0, 120),
+          len: Math.round(Number(r.len) || 0),
+          short: Boolean(r.short),
+          addedAt: Number(r.addedAt) || Date.now(),
+        },
+      });
+      if (Number(it.t) > 5) pos[r.id] = Math.floor(it.t);
+    }
+    const next = restoreAt(queue, clean).slice(-Q_MAX);
+    await chrome.storage.local.set({ queue: next, queuePos: pos });
+    return { back: next.length - queue.length, total: next.length };
   });
 }
 
@@ -853,7 +882,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return qAdd(Array.isArray(msg.items) ? msg.items : [], Number.isInteger(msg.at) ? msg.at : -1);
     },
     "queue:remove": () => qRemove(Array.isArray(msg.ids) ? msg.ids.map(String) : [], String(msg.why || "")),
-    "queue:top": () => qTop(String(msg.id || "")),
+    "queue:top": () => qMove(Array.isArray(msg.ids) ? msg.ids.map(String) : [String(msg.id || "")], "top"),
+    "queue:bottom": () => qMove(Array.isArray(msg.ids) ? msg.ids.map(String) : [String(msg.id || "")], "bottom"),
+    "queue:put": async () => {
+      const r = await qPut(Array.isArray(msg.items) ? msg.items : []);
+      // вернули убранное — забираем назад из статистики «убрано без просмотра»
+      if (r.back && msg.undo === "drop") void statsAdd({ qx: -r.back });
+      return r;
+    },
     "queue:pos": () => qPos(String(msg.id || ""), Number(msg.t) || 0, Number(msg.len) || 0),
     "queue:opts": () => qOpts(msg.patch && typeof msg.patch === "object" ? msg.patch : null).then((opts) => ({ opts })),
     "queue:collect": () => collectTabs(),
