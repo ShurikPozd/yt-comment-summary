@@ -3807,6 +3807,11 @@ button.d-ch:hover {
   gap: 10px;
 }
 
+/* кнопки рядом — одной высоты */
+.d-ebtns button {
+  height: 2.9rem;
+}
+
 .d-hidden {
   align-self: center;
   width: min(100%, 34rem);
@@ -3986,12 +3991,16 @@ body.embed .views button {
   flex: none;
 }
 
-/* узкое окно (≤640): вкладки — строкой сверху, под ними поиск и «Обновить» */
+/* узкое окно (≤640): вкладки — строкой сверху, под ними поиск, «Обновить» и «Статистика» —
+   одной строкой, без пустых мест */
 @media (max-width: 640px) {
   body:not(.embed) .top {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "views views" "search sync";
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "views views views" "search sync where";
     row-gap: 12px;
+  }
+  body:not(.embed) .top .where {
+    grid-area: where;
   }
   body:not(.embed) .top .views {
     grid-area: views;
