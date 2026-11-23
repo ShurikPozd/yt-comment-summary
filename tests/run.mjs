@@ -19,6 +19,7 @@ import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from ".
 import * as ST from "../stats-core.js";
 import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRead, mergeFeed, newCount, queueable, visible } from "../library/digest-core.js";
 import { MODULES, createLoader } from "../lazy-bg.js";
+import { moveIds, rangeIds, restoreAt, snapshot } from "../library/multi-core.js";
 import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
@@ -1205,6 +1206,34 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   await new Promise((r) => setTimeout(r, 0));
   ok(badge.text === "", "приветствие: метку сняли — значок гаснет");
   delete globalThis.chrome;
+}
+
+// ---------- выбор нескольких видео в библиотеке (library/multi-core.js) ----------
+{
+  const order = ["a", "b", "c", "d", "e", "f"];
+  const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  ok(eq(rangeIds(order, "b", "e"), ["b", "c", "d", "e"]), "выбор: Shift — диапазон вниз");
+  ok(eq(rangeIds(order, "e", "b"), ["b", "c", "d", "e"]), "выбор: Shift — диапазон вверх, в порядке на экране");
+  ok(eq(rangeIds(order, null, "c"), ["c"]), "выбор: Shift без прошлого — одно видео");
+  ok(eq(rangeIds(order, "zz", "c"), ["c"]), "выбор: прошлое пропало из списка — одно видео");
+  ok(eq(rangeIds(order, "c", "nope"), []), "выбор: щелчок мимо списка — ничего");
+  ok(eq(rangeIds(order, "d", "d"), ["d"]), "выбор: Shift по тому же — само видео");
+
+  const q = order.map((id) => ({ id }));
+  const ids = (list) => list.map((x) => x.id).join("");
+  ok(ids(moveIds(q, ["e", "b", "d"], "top")) === "bdeacf", "выбор: «Наверх» — выбранные первыми в их порядке в очереди, не в порядке выбора");
+  ok(ids(moveIds(q, ["a", "c"], "bottom")) === "bdefac", "выбор: «В конец» — выбранные последними, остальные не двигаются");
+  ok(ids(moveIds(q, ["x"], "top")) === "abcdef", "выбор: нет в очереди — порядок прежний");
+  ok(ids(moveIds(q, ["a", "b"], "top")) === "abcdef", "выбор: уже наверху — без изменений");
+
+  const pos = { b: 120, e: 3 };
+  const snap = snapshot(q, ["e", "b"], pos);
+  ok(eq(snap.map((x) => [x.rec.id, x.at, x.t]), [["b", 1, 120], ["e", 4, 3]]), "выбор: снимок — места и где остановились, в порядке очереди");
+  const left = q.filter((x) => x.id !== "b" && x.id !== "e");
+  ok(ids(restoreAt(left, snap)) === "abcdef", "выбор: «Вернуть» — каждое на прежнее место");
+  ok(ids(restoreAt(left, snap.slice().reverse())) === "abcdef", "выбор: «Вернуть» — порядок в списке не важен");
+  ok(ids(restoreAt(left.slice(0, 2), snap)) === "abce", "выбор: очередь укоротилась — встают на прежние места или в конец");
+  ok(ids(restoreAt([...left, { id: "b" }], snap)) === "acdfeb", "выбор: уже вернувшееся не задваивается");
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);

@@ -4080,3 +4080,308 @@ button.welcome-btn.has-new::after {
 body.embed button.welcome-btn {
   display: none;
 }
+
+/* =====================================================================
+   Выбор нескольких видео (library/multi.js): кружок в левом верхнем углу
+   обложки, рамка у выбранных и полоса действий внизу — как на ленте YouTube.
+   ===================================================================== */
+.card {
+  position: relative;
+}
+
+.card > .pick {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: transparent;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 2px #fff, 0 1px 6px rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t-fast) ease, background-color var(--t-fast) ease, color var(--t-fast) ease, transform 0.1s ease-out;
+}
+
+.card > .pick svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke-width: 3;
+}
+
+/* кружок виден при наведении; пока что-то выбрано — у всех карточек */
+.card:hover > .pick,
+.card > .pick:focus-visible,
+body.sel-on .card > .pick {
+  opacity: 1;
+}
+
+.card > .pick:hover {
+  background: rgba(0, 0, 0, 0.72);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.card > .pick:active {
+  transform: scale(0.92);
+}
+
+.card.picked > .pick {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+/* выбранная — в рамке акцента и с лёгкой подсветкой обложки */
+.card.picked .thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 3px var(--accent);
+  pointer-events: none;
+}
+
+/* в режиме выбора щелчок выбирает — курсор и подсветка названия это показывают */
+body.sel-on .card .thumb,
+body.sel-on .card .title {
+  cursor: default;
+}
+
+body.sel-on .card .title:hover {
+  color: var(--fg);
+}
+
+/* «Новое» в «Подписках» стоит в том же углу — уступает место кружку */
+.d-new {
+  transition: left var(--t-fast) ease, top var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.d-card:hover .d-new,
+body.sel-on .d-card .d-new {
+  left: calc(16px + 2.15rem);
+  top: calc(8px + 2.15rem / 2);
+  transform: translateY(-50%);
+}
+
+@media (hover: none) {
+  .card > .pick {
+    opacity: 1;
+  }
+  .d-card .d-new {
+    left: calc(16px + 2.15rem);
+    top: calc(8px + 2.15rem / 2);
+    transform: translateY(-50%);
+  }
+}
+
+/* ---------- полоса «Выбрано: N» ---------- */
+.sel-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+  border-radius: 22px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow), 0 2px 8px rgba(0, 0, 0, 0.18);
+  transform: translateX(-50%);
+  animation: sel-in 0.26s var(--ease);
+}
+
+.sel-bar[hidden] {
+  display: none;
+}
+
+@keyframes sel-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px);
+  }
+}
+
+/* одной строкой: число, действия раздела, «Выбрать всё», крестик */
+.sel-head {
+  display: contents;
+}
+
+.sel-count {
+  order: 0;
+  flex: none;
+  padding: 0 10px 1px 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sel-count b {
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sel-acts {
+  order: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sel-head [data-sel="all"] {
+  order: 2;
+}
+
+.sel-head .x {
+  order: 3;
+}
+
+.sel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: none;
+  height: 2.9rem;
+  padding: 0 18px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--fg);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, transform 0.1s ease-out, opacity var(--t-fast) ease;
+}
+
+.sel-btn svg {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+.sel-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.sel-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.sel-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sel-btn.accent {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sel-btn.accent:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.sel-btn.x {
+  width: 2.9rem;
+  padding: 0;
+}
+
+/* не влезает строкой — две строки во всю ширину: сверху число, «Выбрать всё» и
+   крестик, снизу — действия поровну */
+.sel-bar.stack {
+  left: 16px;
+  right: 16px;
+  width: auto;
+  max-width: none;
+  flex-direction: column;
+  align-items: stretch;
+  transform: none;
+  animation-name: sel-in-stack;
+}
+
+@keyframes sel-in-stack {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.sel-bar.stack .sel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sel-bar.stack .sel-count {
+  flex: 1;
+  min-width: 0;
+  padding-left: 8px;
+}
+
+.sel-bar.stack .sel-acts > .sel-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* совсем узко — у действий только значки (подписи — в подсказках); если и
+   верхней строке тесно — у «Выбрать всё» тоже */
+.sel-bar.icons .sel-acts .lbl,
+.sel-bar.icons-all .sel-head .lbl {
+  display: none;
+}
+
+.sel-bar.icons .sel-acts .sel-btn,
+.sel-bar.icons-all .sel-head .sel-btn {
+  padding: 0;
+  min-width: 2.9rem;
+}
+
+/* ничего не прячется под полосой */
+body.sel-on .main {
+  padding-bottom: calc(var(--selbar-h, 64px) + 24px);
+}
+
+body.sel-on .d-toast {
+  bottom: calc(var(--selbar-h, 64px) + 32px);
+}
+
+/* поверх плеера, разбора и статистики полоса не нужна */
+body[data-watch] .sel-bar,
+body:has(#triage:not([hidden])) .sel-bar,
+body:has(#stats:not([hidden])) .sel-bar {
+  display: none;
+}
+
+body.embed .sel-bar {
+  bottom: 12px;
+}
+
+body.embed .sel-bar.stack {
+  left: 10px;
+  right: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sel-bar,
+  .card > .pick,
+  .d-new {
+    animation: none;
+    transition: none;
+  }
+}
