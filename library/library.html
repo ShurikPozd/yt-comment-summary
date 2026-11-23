@@ -21,6 +21,8 @@
         <kbd class="hint" title="Поиск — клавиша /">/</kbd>
       </label>
       <div class="where">
+        <!-- «Статистика» — library/stats-view.js -->
+        <button id="st-tab" type="button" class="icon-btn st-tab" aria-pressed="false" title="Статистика просмотра: сколько смотрели и сколько сэкономили" aria-label="Статистика просмотра"><span class="st-tab-ic"></span><span class="st-tab-label">Статистика</span></button>
         <button id="where-back" type="button" class="icon-btn embed-only" title="Назад к сводке" aria-label="Назад к сводке"><span data-icon="chevron" data-size="18"></span></button>
         <button id="where" type="button" class="icon-btn" title="" aria-label=""><span data-icon="external" data-size="18"></span></button>
       </div>
@@ -86,11 +88,15 @@
     <!-- «Разобрать завалы»: видео по одному, крупно, решения клавишами -->
     <section id="triage" class="triage" hidden aria-label="Разобрать очередь"></section>
 
+    <!-- «Статистика»: сколько смотрели и сколько сэкономили (library/stats-view.js) -->
+    <section id="stats" class="stats" hidden aria-label="Статистика просмотра"></section>
+
     <!-- субтитры видео — для поиска по ним (library/subs.js) -->
     <script src="../transcript.js"></script>
     <!-- «Превью» и «О чём видео» на обложках — общий модуль с карточками YouTube -->
     <script src="../thumb-preview.js"></script>
     <script src="../video-actions.js"></script>
     <script type="module" src="library.js"></script>
+    <script type="module" src="stats-view.js"></script>
   </body>
 </html>

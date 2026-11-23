@@ -2794,3 +2794,688 @@ body[data-view="queue"].q-none .filters {
     animation: none !important;
   }
 }
+
+/* =====================================================================
+   «Статистика» (library/stats-view.js): плитки, столбики по дням, каналы,
+   сэкономленное время. Поверх остальных разделов, как «Разобрать завалы».
+   Цвета — токены расширения: видео — акцент, Shorts — нейтральный серый.
+   ===================================================================== */
+body[data-stats] .filters,
+body[data-stats] .body,
+body[data-stats] .watch,
+body[data-stats] .triage {
+  display: none !important;
+}
+
+/* поиск и «Обновить» статистике не нужны — прячем, но место держим: кнопки шапки не прыгают */
+body[data-stats] .top .search,
+body[data-stats] .top .sync {
+  visibility: hidden;
+}
+
+body.embed[data-stats] .top .search {
+  display: none;
+}
+
+/* кнопка в шапке, рядом с «в панель»: на широком окне — с подписью, уже — значок */
+.st-tab-ic {
+  display: grid;
+}
+
+.st-tab-label {
+  display: none;
+}
+
+button.st-tab[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+
+@media (min-width: 1101px) {
+  body:not(.embed) button.st-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    padding: 0 18px 0 14px;
+    border-radius: 999px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  body:not(.embed) .st-tab-label {
+    display: inline;
+  }
+}
+
+/* телефон: шапка в две строки, как в боковой панели — поиск во всю ширину, а не
+   сжатым кружком; «в панель» там не нужна, а статистика — нужна */
+@media (max-width: 640px) {
+  body:not(.embed) .top {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "views sync where" "search search search";
+    row-gap: 10px;
+  }
+  body:not(.embed) .views {
+    grid-area: views;
+  }
+  body:not(.embed) .search {
+    grid-area: search;
+  }
+  body:not(.embed) .sync {
+    grid-area: sync;
+  }
+  body:not(.embed) .where {
+    grid-area: where;
+    display: flex;
+  }
+  body:not(.embed) #where {
+    display: none;
+  }
+  body:not(.embed)[data-stats] .top .search {
+    display: none;
+  }
+}
+
+.where {
+  gap: 10px;
+}
+
+body.embed .where {
+  gap: 6px;
+}
+
+.stats {
+  --st-video: var(--accent);
+  /* нейтральный серый одной ступени для обеих тем: отличим от акцента и при дальтонизме (ΔE ≥ 9), контраст с фоном ≥ 3:1 */
+  --st-shorts: #8c8c91;
+  --st-card-pad: clamp(16px, 1.3rem, 26px);
+  padding: 26px var(--pad) 40px;
+}
+
+.st-wrap {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.st-empty-wrap {
+  min-height: calc(100vh - 3.2rem - 33px - 66px);
+  justify-content: center;
+  align-items: center;
+}
+
+.st-empty {
+  text-align: center;
+}
+
+.st-empty .empty-title {
+  margin: 0;
+}
+
+.st-empty-note {
+  font-size: 0.92rem;
+}
+
+.st-head h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.st-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.st-off {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding: 12px 12px 12px var(--st-card-pad);
+  border-radius: var(--r-l);
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+
+.st-off > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.st-off svg {
+  color: var(--accent-ink);
+}
+
+/* плитки «Сегодня / 7 дней / 30 дней» */
+.st-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.st-tile,
+.st-card {
+  min-width: 0;
+  padding: var(--st-card-pad);
+  border-radius: var(--r-l);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.st-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.st-tile-l {
+  color: var(--fg-2);
+  font-size: 1.02rem;
+  font-weight: 650;
+}
+
+.st-tile-v,
+.st-hero {
+  color: var(--fg-2);
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.st-tile-v b,
+.st-hero b {
+  color: var(--fg);
+  font-size: 2.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.st-tile-s {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* строка «За последние …» и выбор периода — для всего, что ниже */
+.st-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.st-bar h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.st-range {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.st-range button {
+  height: 2.3rem;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.st-range button:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.st-range button[aria-checked="true"] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* карточки */
+.st-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.st-card-h {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 20px;
+  flex-wrap: wrap;
+}
+
+.st-card-h h3 {
+  margin: 0;
+  font-size: 1.18rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.st-card-h p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.st-legend {
+  display: flex;
+  gap: 16px;
+  padding-top: 3px;
+  color: var(--fg-2);
+  font-size: 0.92rem;
+}
+
+.st-legend span,
+.st-tip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-legend i,
+.st-tip-row i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.k-video {
+  background: var(--st-video);
+}
+
+.k-shorts {
+  background: var(--st-shorts);
+}
+
+/* столбики */
+.st-chart {
+  position: relative;
+  min-height: 200px;
+}
+
+.st-chart svg {
+  display: block;
+  overflow: visible;
+  outline: none;
+}
+
+.st-chart svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
+.st-chart .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.st-chart .base {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.st-chart text {
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.st-chart .xl.now {
+  fill: var(--fg-2);
+  font-weight: 650;
+}
+
+.st-chart .hit {
+  fill: transparent;
+}
+
+.st-chart .col.on .hit {
+  fill: var(--bg-3);
+  opacity: 0.7;
+}
+
+.st-chart .b-video {
+  fill: var(--st-video);
+}
+
+.st-chart .b-shorts {
+  fill: var(--st-shorts);
+}
+
+.st-chart .col.on .b-video,
+.st-chart .col.on .b-shorts {
+  filter: brightness(1.12);
+}
+
+.st-tip {
+  position: absolute;
+  z-index: 2;
+  min-width: 9rem;
+  padding: 10px 14px;
+  border-radius: var(--r-m);
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.st-tip-h {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.st-tip-v {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.st-tip-row {
+  display: flex;
+  margin-top: 4px;
+  color: var(--fg-2);
+  font-size: 0.88rem;
+}
+
+.st-tip-row b {
+  margin-left: auto;
+  padding-left: 14px;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* таблица для чтения с экрана */
+.st-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* каналы | сэкономлено + видео */
+.st-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+.st-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.st-side > .st-card {
+  flex: 1;
+}
+
+/* каналов мало — карточка каналов во всю ширину, а не высокой пустой колонкой */
+.st-cols.few {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.st-cols.few .st-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.st-ch,
+.st-save {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.st-ch-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 7px;
+}
+
+.st-ch-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.st-ch-val {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-ch-val b,
+.st-save b {
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.st-ch-val span {
+  min-width: 2.9em;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.st-save span {
+  color: var(--fg-2);
+}
+
+.st-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.st-meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--st-video);
+}
+
+.st-ch-more,
+.st-none {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.st-ch-more {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.st-none {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 6rem;
+  text-align: center;
+}
+
+.st-hero {
+  margin-top: -6px;
+}
+
+.st-nums {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.st-side .st-nums {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* карточка растянута по соседке — числа по центру оставшейся высоты, без пустоты снизу */
+.st-videos .st-nums {
+  flex: 1;
+  align-content: center;
+}
+
+.st-num {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.st-lbl {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+/* настройки: выключатель и «Очистить» в одну строку */
+.st-set {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 28px;
+}
+
+.st-set .switch {
+  padding: 0;
+}
+
+.st-clear {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.st-confirm {
+  color: var(--fg-2);
+  font-weight: 550;
+}
+
+/* по ширине самой страницы статистики (в боковой панели — тоже) */
+@container (max-width: 980px) {
+  .st-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .st-side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 720px) {
+  .st-side {
+    display: flex;
+  }
+  .st-set {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .st-clear {
+    justify-content: flex-start;
+  }
+}
+
+/* узко (≤ 640 px и боковая панель): плитки — строками «подпись · число» */
+@container (max-width: 620px) {
+  .st-tiles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 0 var(--st-card-pad);
+    border-radius: var(--r-l);
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+  }
+  .st-tile {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "l v" "s v";
+    align-items: center;
+    column-gap: 16px;
+    row-gap: 2px;
+    padding: 14px 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .st-tile + .st-tile {
+    border-top: 1px solid var(--border);
+  }
+  .st-tile-l {
+    grid-area: l;
+  }
+  .st-tile-s {
+    grid-area: s;
+  }
+  .st-tile-v {
+    grid-area: v;
+  }
+  .st-tile-v b {
+    font-size: 1.8rem;
+  }
+  .st-head h1 {
+    font-size: 1.45rem;
+  }
+  .st-bar h2 {
+    font-size: 1.2rem;
+  }
+  .st-nums,
+  .st-side .st-nums {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 440px) {
+  .st-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .st-range {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .st-range button {
+    padding: 0 8px;
+  }
+}
+
+body.embed .stats {
+  padding: 16px var(--pad) 28px;
+}

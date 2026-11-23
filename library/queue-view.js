@@ -257,7 +257,7 @@ export function onQueueGridClick(e) {
   const del = e.target.closest("[data-qdel]");
   if (del) {
     del.closest(".card")?.style.setProperty("opacity", ".4");
-    return void qmsg({ type: "queue:remove", ids: [del.dataset.qdel] });
+    return void qmsg({ type: "queue:remove", ids: [del.dataset.qdel], why: "drop" });
   }
   const play = e.target.closest("[data-play]");
   // обычный клик — в одной вкладке очереди; Ctrl/средний клик — как обычная ссылка

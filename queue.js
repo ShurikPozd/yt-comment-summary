@@ -95,7 +95,7 @@
     doneId = id;
     doneRec = rec;
     doneAt = queue.findIndex((x) => x.id === id);
-    await send({ type: "queue:remove", ids: [id] });
+    await send({ type: "queue:remove", ids: [id], why: "done" });
     if (choice) offer(choice);
     else if (next && after) go(after);
     schedule();
@@ -291,7 +291,7 @@
     const v = video();
     const len = v && Number.isFinite(v.duration) ? v.duration : 0;
     const t = v && len && v.currentTime < len - 15 ? v.currentTime : 0;
-    await send({ type: "queue:add", items: [{ ...doneRec, t }], at: doneAt });
+    await send({ type: "queue:add", items: [{ ...doneRec, t }], at: doneAt, undo: "done" });
     doneId = null;
     doneRec = null;
   }
@@ -339,7 +339,7 @@
   function onUrl() {
     const id = curId();
     if (id === lastId) return;
-    if (opts.removeWatched && nearEnd && nearEnd === lastId && inQueue(lastId)) void send({ type: "queue:remove", ids: [lastId] });
+    if (opts.removeWatched && nearEnd && nearEnd === lastId && inQueue(lastId)) void send({ type: "queue:remove", ids: [lastId], why: "done" });
     nearEnd = null;
     if (doneId && id !== doneId) {
       doneId = null;
