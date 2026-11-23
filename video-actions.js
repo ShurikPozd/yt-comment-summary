@@ -424,10 +424,33 @@
     return true;
   }
 
+  // Видимая часть элемента: обложка может быть внутри прокручиваемого блока (колонка очереди,
+  // лента в окне) — тогда её край прячется под шапкой блока. Пересекаем с каждым обрезающим
+  // предком, в том числе через границу shadow DOM.
+  function visibleRect(el) {
+    const r = el.getBoundingClientRect();
+    let top = r.top;
+    let bottom = r.bottom;
+    let left = r.left;
+    let right = r.right;
+    for (let n = el.parentElement || el.getRootNode()?.host; n && n !== document.documentElement; n = n.parentElement || n.getRootNode()?.host) {
+      const cs = getComputedStyle(n);
+      if (cs.overflowY === "visible" && cs.overflowX === "visible") continue;
+      const b = n.getBoundingClientRect();
+      top = Math.max(top, b.top);
+      bottom = Math.min(bottom, b.bottom);
+      left = Math.max(left, b.left);
+      right = Math.min(right, b.right);
+    }
+    return { top, bottom, left, right, height: bottom - top, width: right - left, full: r };
+  }
+
   function placeButtons() {
     if (!host || !$) return;
     const va = $(".va");
-    const r = target?.el?.isConnected ? target.el.getBoundingClientRect() : null;
+    const vis = target?.el?.isConnected ? visibleRect(target.el) : null;
+    // по ширине — вся обложка (раскладка кнопок), по высоте — только видимая её часть
+    const r = vis && { top: vis.top, bottom: vis.bottom, left: vis.full.left, right: vis.full.right, width: vis.full.width, height: vis.height };
     const info = r ? target.info() : null;
     const topLimit = mastheadBottom();
     if (!r || !info?.videoId || !VID_RE.test(info.videoId) || r.width < 90 || r.height < 50 || r.top < topLimit - r.height / 2 || r.top > innerHeight) {
