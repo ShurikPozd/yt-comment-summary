@@ -370,6 +370,7 @@
   if (alive()) {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg?.type === "yt:sleep-cycle") cycle();
+      if (msg?.type === "yt:sleep-set") set(msg.value); // меню правого клика: 15 / 30 / 60 / «в конце» / выкл
     });
   }
   // после перезагрузки (автопереход очереди) таймер продолжает идти — напоминаем
