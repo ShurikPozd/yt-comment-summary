@@ -859,6 +859,13 @@ chrome.commands.onCommand.addListener(async (command, cmdTab) => {
     if (tab?.id && /^https:\/\/www\.youtube\.com\//.test(tab.url || "")) chrome.tabs.sendMessage(tab.id, { type: "yt:queue-mode" }).catch(() => {});
     return;
   }
+  // таймер сна (sleep.js): следующий вариант по кругу — на YouTube и во встроенном плеере «Моей библиотеки»
+  if (command === "sleep-timer") {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const ours = (tab?.url || "").startsWith(chrome.runtime.getURL("library/"));
+    if (tab?.id && (ours || /^https:\/\/www\.youtube\.com\//.test(tab.url || ""))) chrome.tabs.sendMessage(tab.id, { type: "yt:sleep-cycle" }).catch(() => {});
+    return;
+  }
   if (command === "save-to-playlists") {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\//.test(tab.url || "")) {

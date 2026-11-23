@@ -1073,6 +1073,32 @@
     .ytcs-toast span { min-width: 0; white-space: normal; text-wrap: balance; }
     .ytcs-toast .ytcs-spin { animation: ytcs-spin .9s linear infinite; }
     @keyframes ytcs-spin { to { transform: rotate(360deg); } }
+    /* «Таймер сна» (sleep.js): пункт раскрывает варианты под собой — 15…90 мин, «В конце видео», «Выключить» */
+    .ytcs-item[data-act="sleep"] .ytcs-aside:empty { display: none; }
+    .ytcs-item .ytcs-chev { flex: none; width: 16px; height: 16px; margin-left: -6px; opacity: .55; transition: transform .2s ease; }
+    .ytcs-item[aria-expanded="true"] .ytcs-chev { transform: rotate(180deg); }
+    .ytcs-item[aria-expanded="true"] { background: rgba(255, 255, 255, .06); }
+    .ytcs-sleep-opts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; box-sizing: border-box; width: 100%;
+      padding: 6px 16px 10px; background: rgba(255, 255, 255, .06); }
+    .ytcs-sleep-opts[hidden] { display: none; }
+    .ytcs-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 0; height: 44px;
+      box-sizing: border-box; padding: 0 4px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .1); color: #f1f1f1;
+      font: 600 15px/1.1 "YouTube Noto", Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums; cursor: pointer;
+      transition: background-color .12s ease; }
+    .ytcs-chip small { font-size: 11px; font-weight: 500; opacity: .7; }
+    .ytcs-chip.wide { grid-column: span 3; height: 36px; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ytcs-chip.wide + .ytcs-chip.wide { grid-column: span 2; }
+    .ytcs-chip.wide.full { grid-column: 1 / -1; } /* таймер выключен — «Выключить» не нужен */
+    .ytcs-chip[hidden] { display: none; }
+    .ytcs-chip:hover, .ytcs-chip:focus-visible { background: rgba(255, 255, 255, .2); outline: none; }
+    .ytcs-chip:active { background: rgba(255, 255, 255, .28); }
+    .ytcs-chip[aria-pressed="true"] { background: #ff3b5c; color: #fff; }
+    .ytcs-chip[aria-pressed="true"]:hover, .ytcs-chip[aria-pressed="true"]:focus-visible { background: #e8002d; }
+    .ytcs-chip[aria-pressed="true"] small { opacity: .9; }
+    /* отметка на кнопке расширения в плеере, пока таймер сна идёт */
+    .ytcs-btn { position: relative; }
+    .ytcs-btn.ytcs-sleep-on::after { content: ""; position: absolute; top: 22%; right: 20%; width: 7px; height: 7px; border-radius: 50%;
+      background: #ff3b5c; box-shadow: 0 0 0 2px rgba(0, 0, 0, .55); pointer-events: none; }
     @media (prefers-reduced-motion: reduce) { .ytcs-menu, .ytcs-switch, .ytcs-switch::after, .ytcs-toast { transition: none; } .ytcs-toast .ytcs-spin { animation-duration: 2.4s; } }`;
 
   const SVG = (paths) =>
@@ -1112,6 +1138,9 @@
     // стрелка назад — «Скорость для канала: … · Сбросить»
     speedreset: SVG('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/>'),
     // видоискатель с точкой — «Без отвлечений» (тот же знак на карточках focus.js)
+    // луна со звёздочкой — «Таймер сна» (sleep.js); стрелка — раскрыть варианты
+    moon: SVG('<path d="M19.5 14.2A7.8 7.8 0 1 1 9.8 4.5a6.2 6.2 0 0 0 9.7 9.7z"/><path d="M17.5 3.8v2.6M16.2 5.1h2.6" opacity=".7"/>'),
+    chev: SVG('<path d="M7 10l5 5 5-5"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1157,6 +1186,12 @@
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitem" data-act="speedreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить скорость канала</span><span class="ytcs-aside">1×</span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitem" data-act="sleep" aria-expanded="false" hidden>${UI_ICONS.moon}<span class="ytcs-label ytcs-ellipsis">Таймер сна</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
+        <div class="ytcs-sleep-opts" role="group" aria-label="Остановить видео через" hidden>
+          ${[15, 30, 45, 60, 90].map((m) => `<button type="button" class="ytcs-chip" data-sleep="${m}" aria-pressed="false" aria-label="Через ${m} минут">${m}<small>мин</small></button>`).join("")}
+          <button type="button" class="ytcs-chip wide" data-sleep="end" aria-pressed="false">В конце видео</button>
+          <button type="button" class="ytcs-chip wide" data-sleep="off">Выключить</button>
+        </div>
       </div>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
@@ -1176,6 +1211,40 @@
       b.setAttribute("aria-checked", String(Boolean(playerPrefs[b.dataset.toggle])));
     });
     syncSpeedItem();
+    syncSleepItem();
+  }
+
+  // ---- «Таймер сна» (sleep.js): «осталось 23 мин» в пункте, выбранный вариант подсвечен ----
+  let sleepTick = 0;
+  function syncSleepItem() {
+    const item = uiMenu?.querySelector('[data-act="sleep"]');
+    const api = globalThis.__ytcsSleep;
+    if (!item) return;
+    item.hidden = !api;
+    if (!api) return;
+    const s = api.state();
+    item.querySelector(".ytcs-aside").textContent = s.label;
+    item.title = s.mode === "off" ? "Остановить видео через выбранное время" : `Таймер сна: ${s.label}`;
+    const opts = uiMenu.querySelector(".ytcs-sleep-opts");
+    for (const c of opts.querySelectorAll("[data-sleep]")) {
+      const v = c.dataset.sleep;
+      if (v === "off") {
+        c.hidden = s.mode === "off";
+        continue;
+      }
+      if (v === "end") c.classList.toggle("full", s.mode === "off");
+      c.setAttribute("aria-pressed", String(v === "end" ? s.mode === "end" : s.mode === "min" && String(s.preset) === v));
+    }
+  }
+  function expandSleep(open) {
+    const item = uiMenu?.querySelector('[data-act="sleep"]');
+    const opts = uiMenu?.querySelector(".ytcs-sleep-opts");
+    if (!item || !opts) return;
+    item.setAttribute("aria-expanded", String(open));
+    opts.hidden = !open;
+    // высоту строк не пересчитываем (меню не «прыгает»): не помещается — прокручиваем к вариантам
+    // (только само меню — scrollIntoView прокрутил бы и страницу)
+    if (open) uiMenu.scrollTop = Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight);
   }
 
   function setNote(text) {
@@ -1193,6 +1262,9 @@
       document.querySelector("#movie_player .ytcs-btn")?.focus({ preventScroll: true });
     }
     uiMenu.classList.toggle("open", open);
+    expandSleep(false);
+    clearInterval(sleepTick);
+    if (open) sleepTick = setInterval(syncSleepItem, 1000); // «осталось …» идёт, пока меню открыто
     if (open) fitMenu();
     if (open) syncQuickSave();
     if (open) syncArchiveItem();
@@ -1295,6 +1367,19 @@
   }
 
   async function onMenuClick(e) {
+    // «Таймер сна»: пункт раскрывает варианты, вариант — ставит таймер и закрывает меню
+    const chip = e.target.closest("[data-sleep]");
+    if (chip) {
+      if (!globalThis.__ytcsSleep) return setNote("Обновите страницу видео (F5).");
+      openMenu(false);
+      globalThis.__ytcsSleep.set(chip.dataset.sleep === "end" || chip.dataset.sleep === "off" ? chip.dataset.sleep : Number(chip.dataset.sleep));
+      return;
+    }
+    if (e.target.closest('[data-act="sleep"]')) {
+      syncSleepItem();
+      expandSleep(uiMenu.querySelector('[data-act="sleep"]').getAttribute("aria-expanded") !== "true");
+      return;
+    }
     const step = e.target.closest("[data-rate]");
     if (step) {
       // меню не закрываем — можно нажать несколько раз
