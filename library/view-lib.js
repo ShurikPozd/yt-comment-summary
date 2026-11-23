@@ -14,6 +14,7 @@ import "./sem-ui.js";
 import { subsResults } from "./subs.js";
 import "./subs-ui.js";
 import "./backup.js";
+import { updateDigest } from "./digest.js";
 
 // ---------- поиск и фильтры ----------
 export function durOk(v, dur) {
@@ -108,6 +109,7 @@ export function compute() {
 
 export function update({ keep = false } = {}) {
   if (state.view === "queue") return updateQueue({ keep });
+  if (state.view === "digest") return updateDigest({ keep });
   if (!state.cat) {
     state.list = [];
     state.shown = 0;

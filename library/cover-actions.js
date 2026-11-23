@@ -9,6 +9,11 @@ import { state } from "./state.js";
 const VA = () => globalThis.__ytcsVideoActions;
 
 function infoFor(card) {
+  const did = card.dataset.did; // «Подписки»
+  if (did) {
+    const r = state.digestById?.get(did);
+    return { videoId: did, title: r?.title || "", channel: r?.channel || "", len: r?.len || 0 };
+  }
   const qid = card.dataset.qid;
   const vid = card.dataset.vid;
   if (qid) {
@@ -24,13 +29,13 @@ function bind(root) {
   if (!va) return;
   for (const th of root.querySelectorAll(".card .thumb:not([data-va])")) {
     const card = th.closest(".card");
-    if (!card || !(card.dataset.qid || card.dataset.vid)) continue;
+    if (!card || !(card.dataset.qid || card.dataset.vid || card.dataset.did)) continue;
     th.dataset.va = "1";
     va.attach(th, { getInfo: () => infoFor(card), card });
   }
 }
 
-for (const sel of ["#grid", "#cont"]) {
+for (const sel of ["#grid", "#cont", "#digest"]) {
   const el = document.querySelector(sel);
   if (!el) continue;
   bind(el);

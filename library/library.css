@@ -2794,3 +2794,542 @@ body[data-view="queue"].q-none .filters {
     animation: none !important;
   }
 }
+
+/* =====================================================================
+   «Подписки» — дайджест новых видео из подписок (library/digest.js).
+   Отдельный раздел: правила других разделов здесь не меняются, только
+   дополняются для body[data-view="digest"].
+   ===================================================================== */
+body[data-view="digest"] .lib-only,
+body[data-view="digest"] .queue-only,
+body:not([data-view="digest"]) .digest-only {
+  display: none !important;
+}
+
+/* общие для «Плейлистов» и «Очереди» блоки — в «Подписках» свои */
+body[data-view="digest"] .filters > .seg:not(.d-seg),
+body[data-view="digest"] .filters > .sort:not(.digest-only),
+body[data-view="digest"] .main > :not(.digest) {
+  display: none !important;
+}
+
+/* разделов в шапке больше, чем помещается в колонку плейлистов, — колонка по ширине вкладок */
+.top {
+  grid-template-columns: minmax(var(--side), max-content) minmax(0, 1fr) auto auto;
+}
+
+/* статус обновления — как у «Плейлистов»: две строки, шапку не раздвигает */
+#d-sync-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  max-width: clamp(12rem, 18vw, 22rem);
+  line-height: 1.25;
+}
+
+#d-sync-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#d-sync-text.two .st-main {
+  color: var(--fg-2);
+  font-weight: 550;
+}
+
+#d-sync-text .st-sub {
+  font-size: 0.85rem;
+}
+
+/* ---------- строка фильтров ---------- */
+#d-read {
+  width: 100%;
+  justify-content: center;
+  height: 2.6rem;
+}
+
+.d-seg {
+  align-items: center;
+}
+
+.d-show,
+.d-grp {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+/* две группы кнопок — разделитель между ними */
+.d-grp {
+  padding-left: 16px;
+  margin-left: 8px;
+  border-left: 1px solid var(--border-strong);
+}
+
+.d-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.d-seg button .n {
+  min-width: 1.4rem;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--fg-2);
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.45rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.d-seg button .n:empty {
+  display: none;
+}
+
+.d-seg button[aria-checked="true"] .n {
+  background: color-mix(in srgb, var(--bg) 22%, transparent);
+  color: var(--bg);
+}
+
+.d-seg button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- колонка: сводка и каналы ---------- */
+.d-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.d-chlist {
+  flex: 1;
+  min-height: 0;
+}
+
+.d-chrow {
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+}
+
+.d-ava {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-3);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.d-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.d-ava.big {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.2rem;
+}
+
+.pl-count.fresh {
+  min-width: 1.6rem;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.5rem;
+  text-align: center;
+}
+
+/* ---------- группы и карточки ---------- */
+.digest {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.d-sum {
+  margin: 2px 0 -14px;
+}
+
+.d-gh,
+.d-chead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.d-chead {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: var(--r-l);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.d-gt {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
+  flex: 1;
+}
+
+.d-gt h2 {
+  margin: 0;
+  min-width: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.d-gc {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.d-gacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* имя канала — кнопка «только этот канал», выглядит как текст */
+button.d-ch {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.d-ch:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.d-gt h2 button.d-ch:hover {
+  color: var(--accent-ink);
+}
+
+.d-card {
+  transition: opacity var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.d-card.gone {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* «Новое» — в левом верхнем углу обложки (справа — «Превью» и «О чём видео») */
+.d-new {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.d-card.is-new .d-new {
+  display: block;
+}
+
+.dur.d-live {
+  background: var(--accent);
+}
+
+.dur.d-soon {
+  background: rgba(0, 0, 0, 0.78);
+}
+
+/* подпись: канал отдельной строкой, ниже — просмотры и «когда» (переносится, не режется) */
+.d-card .sub.d-meta {
+  white-space: normal;
+  overflow: visible;
+}
+
+.d-card .d-chline + .d-meta {
+  margin-top: -8px;
+}
+
+.d-chline button.d-ch {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.d-acts {
+  margin-top: 2px;
+}
+
+.chip.act.d-q.on {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+
+/* Shorts — вертикальные обложки, колонки уже */
+.d-sgrid {
+  grid-template-columns: repeat(auto-fill, minmax(clamp(160px, 10.5vw, 250px), 1fr));
+}
+
+.d-sgrid .thumb {
+  aspect-ratio: 9 / 16;
+}
+
+/* ---------- пусто, скрытые каналы, «Вернуть» ---------- */
+.d-empty {
+  min-height: 46vh;
+}
+
+.d-ebtns {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.d-hidden {
+  align-self: center;
+  width: min(100%, 34rem);
+}
+
+.d-hlist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.d-hrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 2.2rem;
+}
+
+.d-hname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 560;
+}
+
+.d-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 10px 10px 20px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  font-weight: 560;
+  transform: translate(-50%, 12px);
+  opacity: 0;
+  transition: opacity var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.d-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.d-toast > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- средняя ширина: правила «Плейлистов» здесь не нужны ---------- */
+@media (min-width: 1101px) and (max-width: 1580px) {
+  body[data-view="digest"] .filters .seg {
+    display: flex;
+  }
+  body[data-view="digest"] .side {
+    margin-top: 0;
+  }
+}
+
+/* ---------- узкое окно: каналы — лентой над видео ---------- */
+@media (max-width: 1100px) {
+  .top {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  #d-sync-text {
+    display: none;
+  }
+  #d-read {
+    width: auto;
+    justify-self: start;
+  }
+  .d-stats {
+    display: none;
+  }
+  .d-chrow {
+    grid-template-columns: auto auto auto;
+    padding: 0 12px 0 4px;
+    gap: 8px;
+  }
+  .d-chrow .d-ava {
+    width: 1.8rem;
+    height: 1.8rem;
+    font-size: 0.85rem;
+  }
+  .d-chrow .pl-count.fresh {
+    line-height: 1.35rem;
+  }
+}
+
+@media (max-width: 640px) {
+  body[data-view="digest"] .filters {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "read shorts" "seg seg";
+  }
+  body[data-view="digest"] #d-read {
+    grid-area: read;
+    width: 100%;
+  }
+  body[data-view="digest"] .filters .sort.digest-only {
+    grid-area: shorts;
+    justify-self: end;
+  }
+  body[data-view="digest"] .filters .d-seg {
+    grid-area: seg;
+  }
+  /* переключатели — двумя строками целиком, без ленты с обрезанным краем */
+  body[data-view="digest"] .filters .d-seg {
+    flex-wrap: wrap;
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+    margin: 0;
+    padding: 0;
+  }
+  .d-grp {
+    padding-left: 0;
+    margin-left: 0;
+    border-left: 0;
+  }
+  .d-show button,
+  .d-grp button {
+    flex: 1;
+    justify-content: center;
+  }
+  .d-show,
+  .d-grp {
+    flex: 1 1 100%;
+  }
+  .d-gh {
+    flex-wrap: wrap;
+  }
+  .d-gt h2 {
+    font-size: 1.22rem;
+  }
+  .d-gacts {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .d-sgrid {
+    grid-template-columns: repeat(auto-fill, minmax(min(46%, 170px), 1fr));
+  }
+  .d-toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    transform: translateY(12px);
+    justify-content: space-between;
+  }
+  .d-toast.show {
+    transform: none;
+  }
+}
+
+/* боковая панель: вкладок в шапке много — они строкой сверху во всю ширину,
+   а «Назад», «Обновить» и «Во вкладку» — справа от поиска */
+body.embed .top {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "views views" "search where";
+}
+
+body.embed .views {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+body.embed .views button {
+  flex: none;
+}
+
+/* узкое окно (≤640): вкладки — строкой сверху, под ними поиск и «Обновить» */
+@media (max-width: 640px) {
+  body:not(.embed) .top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "views views" "search sync";
+    row-gap: 12px;
+  }
+  body:not(.embed) .top .views {
+    grid-area: views;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  body:not(.embed) .top .views button {
+    flex: none;
+  }
+  body:not(.embed) .top .search {
+    grid-area: search;
+  }
+  body:not(.embed) .top .sync {
+    grid-area: sync;
+  }
+}
+
+/* ленты подписок ещё нет — сообщение по центру во всю ширину, без колонки и фильтров */
+body.d-none[data-view="digest"] .filters,
+body.d-none[data-view="digest"] .side {
+  display: none;
+}
+
+body.d-none[data-view="digest"] .body {
+  grid-template-columns: minmax(0, 1fr);
+}
