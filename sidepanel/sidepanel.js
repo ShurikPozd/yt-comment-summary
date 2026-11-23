@@ -672,6 +672,9 @@ async function loadSettings() {
     },
     obj.settings || {}
   );
+  // пустое поле не отменяет секрет и адрес из local-config.js (как в фоне — bot-settings.js)
+  if (!state.settings.token) state.settings.token = LOCAL_CONFIG.token || "";
+  if (!state.settings.baseUrl) state.settings.baseUrl = LOCAL_CONFIG.baseUrl || DEFAULTS.baseUrl;
   applyTheme();
 }
 

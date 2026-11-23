@@ -39,5 +39,9 @@ export async function serverSettings() {
     { baseUrl: lc.baseUrl || DEFAULTS.baseUrl, token: lc.token || "", model: lc.model || DEFAULTS.model, lang: DEFAULTS.lang },
     saved
   );
+  // пустое поле в настройках панели не отменяет секрет и адрес из local-config.js —
+  // иначе «В архив Telegram» и «О чём видео» считали бы бота ненастроенным
+  if (!s.token) s.token = lc.token || "";
+  if (!s.baseUrl) s.baseUrl = lc.baseUrl || DEFAULTS.baseUrl;
   return s;
 }
