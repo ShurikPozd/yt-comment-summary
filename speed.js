@@ -190,9 +190,39 @@
       const speedKey = e.key === ">" || e.key === "<" || (e.shiftKey && (e.code === "Period" || e.code === "Comma"));
       // в меню скорости стрелками и Enter
       if (speedKey || (e.target?.closest?.(MENU) && /^(Enter| |Arrow)/.test(e.key))) inputAt = Date.now();
+      // Быстрее 2×: YouTube на Shift+> дальше 2× не идёт — продолжаем сами шагом 0,25 до 4×;
+      // Shift+< выше 2× — тоже сами, чтобы шаг был ровный (2,5 → 2,25 → 2 → дальше YouTube)
+      if (!speedKey || e.ctrlKey || e.altKey || e.metaKey || typing(e)) return;
+      const v = mainVideo();
+      if (!v || adShowing()) return;
+      const up = e.key === ">" || (e.shiftKey && e.code === "Period");
+      const now = v.playbackRate;
+      if ((up && now >= YT_MAX - 0.001 && now < core.maxRate - 0.001) || (!up && now > YT_MAX + 0.001)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        userRate(now + (up ? STEP : -STEP));
+      }
     },
     true
   );
+  const STEP = 0.25;
+  const YT_MAX = 2; // дальше YouTube сам не ускоряет; видео (браузер) умеет до 16×, звук — до 4×
+  function typing(e) {
+    const t = e.composedPath?.()[0] || e.target;
+    return Boolean(t?.isContentEditable || /^(input|textarea|select)$/i.test(t?.tagName || ""));
+  }
+  // Скорость, выбранная вами (клавиши выше 2×, кнопки − / + в меню расширения):
+  // ставим и считаем вашим выбором — для канала она запомнится, как из меню YouTube
+  function userRate(rate) {
+    const r = core.cleanRate(rate);
+    const v = mainVideo();
+    if (r == null || !v) return;
+    inputAt = Date.now();
+    // до 2× — через плеер, чтобы и в меню YouTube была та же скорость
+    if (r <= YT_MAX) document.dispatchEvent(new CustomEvent("ytcs-speed:set", { detail: String(r) }));
+    if (!core.same(v.playbackRate, r)) v.playbackRate = r;
+    showNotice("rate");
+  }
 
   document.addEventListener(
     "ratechange",
@@ -358,6 +388,7 @@
       saved: [`Запомнено: <b>${rate}</b> для канала ${nm}`, "Отменить"],
       reset: [`Скорость канала ${nm} сброшена — <b>1×</b>`, ""],
       undone: [stored ? `Для канала ${nm} снова <b>${rate}</b>` : `Скорость канала ${nm} не запомнена`, ""],
+      rate: [`Скорость <b>${core.fmtRate(mainVideo()?.playbackRate)}</b>`, ""],
     }[kind];
     txt.innerHTML = text[0];
     btn.textContent = text[1];
@@ -392,6 +423,14 @@
       return e ? { channelId: cur.channelId, name: cur.name, rate: e.r, label: core.fmtRate(e.r) } : null;
     },
     reset,
+    // скорость открытого видео и шаг − / + (меню расширения в плеере)
+    rate: () => mainVideo()?.playbackRate || 1,
+    step(dir) {
+      const v = mainVideo();
+      if (!v) return;
+      const next = Math.round((v.playbackRate + (dir > 0 ? STEP : -STEP)) / STEP) * STEP; // 1,1× → 1,25×
+      userRate(Math.min(core.maxRate, Math.max(core.minRate, next)));
+    },
   };
 
   // ---------- Подписки ----------

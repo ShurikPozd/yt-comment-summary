@@ -1006,7 +1006,7 @@
     .ytcs-menu {
       position: absolute; right: 12px; bottom: 64px; z-index: 75;
       width: 300px; max-width: calc(100% - 24px); padding: 8px 0;
-      box-sizing: border-box; max-height: calc(100% - 76px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent; /* маленький плеер — меню прокручивается, а не обрезается */
+      box-sizing: border-box; max-height: calc(100% - 76px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent; /* маленький плеер — меню прокручивается, а не обрезается */
       background: rgba(28, 28, 30, .86);
       -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
@@ -1035,6 +1035,17 @@
     .ytcs-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .1); }
     .ytcs-head + .ytcs-group { margin-top: 0; padding-top: 0; border-top: 0; }
     .ytcs-group:not(:has(.ytcs-item:not([hidden]))) { display: none; }
+    /* «Скорость − 1,5× +»: строка-переключатель, сама не нажимается — только кнопки */
+    .ytcs-item.ytcs-rate { cursor: default; gap: 6px; box-sizing: border-box; } /* div, а не button: отступы — внутри ширины */
+    .ytcs-item.ytcs-rate > svg { margin-right: 8px; }
+    .ytcs-item.ytcs-rate:hover { background: none; }
+    .ytcs-step { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
+      background: rgba(255, 255, 255, .12); color: #fff; cursor: pointer; transition: background-color .12s ease; }
+    .ytcs-step:hover, .ytcs-step:focus-visible { background: rgba(255, 255, 255, .24); outline: none; }
+    .ytcs-step:active { background: rgba(255, 255, 255, .32); }
+    .ytcs-step svg { width: 16px; height: 16px; }
+    .ytcs-rv { flex: none; min-width: 3em; text-align: center; color: #ff6b85; font-weight: 700; font-variant-numeric: tabular-nums;
+      position: relative; top: -.075em; }
     .ytcs-gh { padding: 6px 16px 4px; font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .55); }
     .ytcs-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px;
       background: rgba(255, 255, 255, .25); transition: background-color .2s ease; }
@@ -1093,6 +1104,9 @@
     done: SVG('<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16.2 9.5"/>'),
     alert: SVG('<path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.5v.01"/>'),
     spin: '<svg class="ytcs-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" opacity=".25"/><path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5"/></svg>',
+    // − / + у строки «Скорость» в меню
+    minus: SVG('<path d="M6 12h12"/>'),
+    plus: SVG('<path d="M6 12h12"/><path d="M12 6v12"/>'),
     // спидометр — «Скорость по каналам» (speed.js)
     speed: SVG('<path d="M4.2 18.5a9 9 0 1 1 15.6 0"/><path d="M12 14.5l4.2-4.6"/><circle cx="12" cy="14.5" r="1.4"/><path d="M12 6.2v1.6M6.3 9l1.2 1M17.7 9l-1.2 1" opacity=".6"/>'),
     // стрелка назад — «Скорость для канала: … · Сбросить»
@@ -1136,6 +1150,7 @@
       </div>
       <div class="ytcs-group">
         <div class="ytcs-gh">Плеер</div>
+        <div class="ytcs-item ytcs-rate" role="group" aria-label="Скорость воспроизведения">${UI_ICONS.speed}<span class="ytcs-label">Скорость</span><button type="button" class="ytcs-step" data-rate="-1" title="Медленнее — Shift+&lt;" aria-label="Медленнее">${UI_ICONS.minus}</button><span class="ytcs-rv">1×</span><button type="button" class="ytcs-step" data-rate="1" title="Быстрее — Shift+&gt;, до 4×" aria-label="Быстрее">${UI_ICONS.plus}</button></div>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="noAutoplay">${UI_ICONS.pause}<span class="ytcs-label">Не запускать видео само</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
@@ -1259,7 +1274,17 @@
   }
 
   // «Сбросить скорость канала · 1,5×» — когда у канала видео она запомнена (speed.js)
+  // «Скорость − 1,5× +» — текущая скорость видео
+  const fmtRate = (r) => `${Math.round(r * 100) / 100}`.replace(".", ",") + "×";
+  function syncRateRow() {
+    const rv = uiMenu?.querySelector(".ytcs-rv");
+    const v = document.querySelector("#movie_player video");
+    if (rv && v) rv.textContent = fmtRate(v.playbackRate);
+  }
+  document.addEventListener("ratechange", () => uiMenu?.classList.contains("open") && syncRateRow(), true);
+
   function syncSpeedItem() {
+    syncRateRow();
     const item = uiMenu?.querySelector('[data-act="speedreset"]');
     if (!item) return;
     const sp = playerPrefs.channelSpeed ? globalThis.__ytcsSpeed?.current?.() : null;
@@ -1270,8 +1295,16 @@
   }
 
   async function onMenuClick(e) {
+    const step = e.target.closest("[data-rate]");
+    if (step) {
+      // меню не закрываем — можно нажать несколько раз
+      if (!alive() || !globalThis.__ytcsSpeed?.step) return setNote("Расширение обновилось — обновите страницу (F5).");
+      globalThis.__ytcsSpeed.step(Number(step.dataset.rate));
+      syncRateRow();
+      return;
+    }
     const item = e.target.closest(".ytcs-item");
-    if (!item) return;
+    if (!item || item.classList.contains("ytcs-rate")) return;
     if (!alive()) return setNote("Расширение обновилось — обновите страницу (F5).");
     const key = item.dataset.toggle;
     if (key) {

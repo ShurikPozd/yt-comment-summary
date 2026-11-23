@@ -104,5 +104,5 @@
       .sort((a, b) => b.t - a.t);
   }
 
-  globalThis.__ytcsSpeedCore = { storeKey, LIMIT, isChannelId, cleanRate, same, fmtRate, entryOf, remember, forget, touch, plan, list };
+  globalThis.__ytcsSpeedCore = { storeKey, LIMIT, minRate: MIN, maxRate: MAX, isChannelId, cleanRate, same, fmtRate, entryOf, remember, forget, touch, plan, list };
 })();
