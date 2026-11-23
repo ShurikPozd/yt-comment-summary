@@ -105,6 +105,7 @@ const TOGGLES = [
   ["hideProgress", "Скрыть полосу прогресса и длительность", false],
   ["sponsorSkip", "Пропускать рекламные вставки", true],
   ["focusMode", "Без отвлечений", false], // что именно прячется — focus.js, настройки — в панели
+  ["silenceSkip", "Пропускать тишину", false], // паузы в речи быстрее — silence.js
 ];
 const toggleOn = (s, key) => {
   const t = TOGGLES.find(([k]) => k === key);

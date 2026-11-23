@@ -65,6 +65,10 @@
   const mainVideo = () => player()?.querySelector("video.html5-main-video") || document.querySelector("video.html5-main-video");
   const adShowing = () => Boolean(player()?.classList.contains("ad-showing"));
   const isMain = (e) => e.target instanceof HTMLVideoElement && e.target.classList.contains("html5-main-video");
+  // «Пропуск тишины» (silence.js) на паузах ненадолго ускоряет видео: такие смены не
+  // ваши (не запоминаем и не «чиним»), а скорость видео для нас — та, что без ускорения
+  const silence = () => globalThis.__ytcsSilence;
+  const rateOf = (v) => silence()?.baseRate?.(v) ?? v.playbackRate;
 
   function videoIdNow() {
     if (location.pathname === "/watch") return new URLSearchParams(location.search).get("v");
@@ -118,8 +122,8 @@
     // YouTube, и её не трогаем. Эфир цепочку не рвёт.
     const v = mainVideo();
     if (vid && v && !cur.live) {
-      if (cur.userChose || cur.target != null) carried = v.playbackRate;
-      else if (carried != null && !core.same(v.playbackRate, carried)) carried = null;
+      if (cur.userChose || cur.target != null) carried = rateOf(v);
+      else if (carried != null && !core.same(rateOf(v), carried)) carried = null;
     }
     vid = id;
     cur = fresh(id);
@@ -154,9 +158,9 @@
       map = core.touch(map, cur.channelId, cur.name);
       save();
     }
-    const step = core.plan({ enabled, stored: entry?.r, current: v.playbackRate, carried, userChose: cur.userChose, live: cur.live });
+    const step = core.plan({ enabled, stored: entry?.r, current: rateOf(v), carried, userChose: cur.userChose, live: cur.live });
     if (!step) {
-      if (entry && core.same(entry.r, v.playbackRate)) cur.target = entry.r;
+      if (entry && core.same(entry.r, rateOf(v))) cur.target = entry.r;
       return;
     }
     cur.target = step.rate;
@@ -196,7 +200,7 @@
       const v = mainVideo();
       if (!v || adShowing()) return;
       const up = e.key === ">" || (e.shiftKey && e.code === "Period");
-      const now = v.playbackRate;
+      const now = rateOf(v);
       if ((up && now >= YT_MAX - 0.001 && now < core.maxRate - 0.001) || (!up && now > YT_MAX + 0.001)) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -229,6 +233,7 @@
     (e) => {
       if (!isMain(e) || !alive()) return;
       const rate = e.target.playbackRate;
+      if (silence()?.owns?.(rate)) return; // временное ускорение паузы
       const now = Date.now();
       if (self.rate != null && core.same(rate, self.rate) && now - self.at < 2500) return; // наша же смена
       if (now - inputAt > 1500 || adShowing()) {
@@ -424,11 +429,11 @@
     },
     reset,
     // скорость открытого видео и шаг − / + (меню расширения в плеере)
-    rate: () => mainVideo()?.playbackRate || 1,
+    rate: () => (mainVideo() ? rateOf(mainVideo()) : 1),
     step(dir) {
       const v = mainVideo();
       if (!v) return;
-      const next = Math.round((v.playbackRate + (dir > 0 ? STEP : -STEP)) / STEP) * STEP; // 1,1× → 1,25×
+      const next = Math.round((rateOf(v) + (dir > 0 ? STEP : -STEP)) / STEP) * STEP; // 1,1× → 1,25×
       userRate(Math.min(core.maxRate, Math.max(core.minRate, next)));
     },
   };
@@ -447,7 +452,7 @@
     const ad = adShowing();
     if (adWas && !ad && enabled && cur.target != null && !cur.userChose) {
       const v = mainVideo();
-      if (v && !core.same(v.playbackRate, cur.target)) {
+      if (v && !core.same(rateOf(v), cur.target)) {
         cur.appliedAt = Date.now();
         setRate(cur.target);
       }

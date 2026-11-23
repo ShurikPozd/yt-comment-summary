@@ -28,6 +28,7 @@
           channelId: vd.channelId || "",
           name: vd.author || "",
           live: Boolean(vd.isLive || vd.isUpcoming || resp?.playabilityStatus?.liveStreamability),
+          category: resp?.microformat?.playerMicroformatRenderer?.category || "", // «Music» — пропуск тишины не трогает
         };
       }
     } catch (e) {

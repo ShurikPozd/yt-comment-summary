@@ -558,5 +558,141 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(P({ stored: 1, current: 1.5, carried: 1.5 }) === JSON.stringify({ rate: 1, why: "channel" }), "музыка 1× после лекций 1,5×");
 }
 
+// ---------- пропуск тишины (silence-core.js) ----------
+{
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(new URL("../silence-core.js", import.meta.url), "utf8"), ctx);
+  const S = ctx.__ytcsSilenceCore;
+  // Синтетическая «речь»: слоги 5/с от −20 до −32 дБ, через каждые 0,6 с провал между
+  // словами 100 мс (−45 дБ); паузы — шум комнаты около −60 дБ. Кадр — 20 мс видео.
+  const DT = 20;
+  function run(parts, det = S.createDetector()) {
+    let t = 0;
+    const silentAt = [];
+    let n = 0;
+    for (const [kind, ms, lvl] of parts) {
+      for (let i = 0; i < ms; i += DT, t += DT) {
+        let db;
+        if (kind === "speech") db = i % 600 >= 500 ? -45 : -20 - 12 * (0.5 + 0.5 * Math.cos((2 * Math.PI * 5 * i) / 1000));
+        else if (kind === "music") db = -14 - 8 * Math.abs(Math.sin(i / 170)); // громко без провалов
+        else db = (lvl ?? -60) + ((n++ * 7919) % 20) / 10; // шум ±1 дБ
+        if (det.push(db, DT)) silentAt.push(t);
+      }
+    }
+    return { det, segs: segments(silentAt) };
+  }
+  const segments = (ts) => {
+    const out = [];
+    for (const t of ts) {
+      const last = out[out.length - 1];
+      if (last && t - last[1] <= DT) last[1] = t;
+      else out.push([t, t]);
+    }
+    return out;
+  };
+  const inside = (seg, a, b) => seg[0] >= a && seg[1] < b;
+
+  ok(S.levelDb(new Float32Array(1024)) === -90 && Math.abs(S.levelDb(new Float32Array(1024).fill(0.1)) + 20) < 0.01, "уровень кадра в дБ");
+
+  // речь 3 с, пауза 0,8 с, речь 2 с, пауза 0,2 с, речь 2 с, пауза 1,5 с, речь 1 с
+  let r = run([["speech", 3000], ["pause", 800], ["speech", 2000], ["pause", 200], ["speech", 2000], ["pause", 1500], ["speech", 1000]]);
+  ok(r.segs.length === 2, "две паузы ускоряются, короткая (0,2 с) — нет");
+  ok(r.segs[1] && r.segs[1][0] - 8000 >= 230 && r.segs[1][0] - 8000 <= 300, "ускорение — через 250 мс тишины");
+  ok(r.segs[1] && r.segs[1][1] === 9480, "речь вернулась — скорость сразу обычная");
+  ok(r.segs.every((g) => inside(g, 3000, 3800) || inside(g, 8000, 9500)), "речь не ускоряется");
+  ok(r.det.ready() && r.det.state().floor < -55 && r.det.state().speech > -24, "порог под громкость ролика");
+
+  // провалы между словами (100 мс) — никогда
+  r = run([["speech", 20000]]);
+  ok(r.segs.length === 0, "сплошная речь с провалами между словами — без ускорения");
+
+  // тихая запись (на 20 дБ тише) — порог сдвигается следом
+  {
+    const det = S.createDetector();
+    let t = 0;
+    const silent = [];
+    const parts = [["s", 4000], ["p", 1000], ["s", 3000], ["p", 1000], ["s", 1000]];
+    for (const [k, ms] of parts) {
+      for (let i = 0; i < ms; i += DT, t += DT) {
+        const db = k === "s" ? (i % 600 >= 500 ? -65 : -40 - 12 * (0.5 + 0.5 * Math.cos((2 * Math.PI * 5 * i) / 1000))) : -80 + (i % 3);
+        if (det.push(db, DT)) silent.push(t);
+      }
+    }
+    const segs = segments(silent);
+    ok(segs.length === 2 && inside(segs[1], 8000, 9000), "тихая запись: паузы тоже находятся");
+  }
+
+  // музыка: громко без пауз — ничего; шумная запись (речь лишь на 10 дБ громче шума) — ничего
+  r = run([["music", 30000]]);
+  ok(r.segs.length === 0, "музыка без пауз — без ускорения");
+  {
+    const det = S.createDetector();
+    let hit = 0;
+    for (let t = 0; t < 20000; t += DT) {
+      const phrase = t % 3000 < 2200;
+      if (det.push(phrase ? -20 - (t % 200) / 40 : -30 + (t % 3), DT)) hit++;
+    }
+    ok(hit === 0, "шумная запись (мало разницы с речью) — не трогаем");
+  }
+
+  // цифровая тишина в начале ролика не считается паузой: ещё не слышали речи
+  r = run([["pause", 2000, -90], ["speech", 1000], ["pause", 600]]);
+  ok(r.segs.length === 0, "начало ролика: пока не разогрелись — не ускоряем");
+
+  // перемотка: незаконченная пауза начинается заново
+  {
+    const det = S.createDetector();
+    run([["speech", 4000]], det);
+    for (let i = 0; i < 200; i += DT) det.push(-60, DT);
+    det.interrupt();
+    let first = -1;
+    for (let i = 0; i < 400; i += DT) if (det.push(-60, DT) && first < 0) first = i;
+    ok(first >= 230, "после перемотки 250 мс тишины считаются заново");
+  }
+
+  // на реальных отсчётах: гармоники с огибающей слогов и пауза с тихим шумом
+  {
+    const det = S.createDetector();
+    const SR = 48000;
+    const N = 1024;
+    const frame = new Float32Array(N);
+    let pos = 0;
+    let seed = 3;
+    const noise = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648 - 0.5) * 0.002;
+    const silent = [];
+    const plan = [["s", 4], ["p", 1], ["s", 2], ["p", 0.15], ["s", 2]];
+    let t0 = 0;
+    for (const [k, sec] of plan) {
+      const end = t0 + sec;
+      for (; pos / SR < end; pos += 960) {
+        for (let i = 0; i < N; i++) {
+          const t = (pos + i) / SR;
+          const syl = 0.5 - 0.5 * Math.cos(2 * Math.PI * 5 * t);
+          let x = 0;
+          for (let h = 1; h <= 6; h++) x += Math.sin(2 * Math.PI * 140 * h * t) / h;
+          frame[i] = k === "s" ? 0.18 * x * syl + noise() : noise();
+        }
+        if (det.push(S.levelDb(frame), 20)) silent.push(Math.round((pos / SR) * 1000));
+      }
+      t0 = end;
+    }
+    const segs = segments(silent.map((x) => Math.round(x / DT) * DT));
+    ok(segs.length === 1 && segs[0][0] >= 4200 && segs[0][1] < 5050, "по отсчётам звука: секундная пауза — да, 150 мс — нет");
+  }
+
+  ok(S.boostRate(1) === 2.5 && S.boostRate(1.5) === 3.75 && S.boostRate(2) === 4 && S.boostRate(1.25) === 3.25, "скорость паузы: в 2,5 раза, до 4×");
+  ok(S.boostRate(3.5) === null && S.boostRate(4) === null && S.boostRate(0) === null && S.boostRate("x") === null, "вы и так на 3,5× — не ускоряем");
+  ok(Math.abs(S.savedSec(1, 2.5, 1) - 1.5) < 1e-9 && S.savedSec(1, 1, 1) === 0, "сэкономлено: секунда на 2,5× = 1,5 с");
+  ok(S.fmtSaved(40) === "40 с" && S.fmtSaved(185) === "3 мин" && S.fmtSaved(3900) === "1 ч 5 мин" && S.fmtSaved(7200) === "2 ч", "сэкономлено по-русски");
+  let saved = S.addSaved(null, 12.34, "2026-11-22");
+  saved = S.addSaved(saved, 10, "2026-11-23");
+  ok(saved.sec === 22.3 && saved.day === "2026-11-23" && saved.daySec === 10 && saved.days["2026-11-22"] === 12.3, "итог: всего и по дням");
+  ok(S.todaySaved(saved, "2026-11-23") === 10 && S.todaySaved(saved, "2026-11-24") === 0 && S.todaySaved(null) === 0, "за сегодня — со сменой дня");
+  let many = null;
+  for (let d = 1; d <= 100; d++) many = S.addSaved(many, 1, `2026-${String(1 + Math.floor(d / 28)).padStart(2, "0")}-${String(1 + (d % 28)).padStart(2, "0")}`);
+  ok(Object.keys(many.days).length === 90 && many.sec === 100, "по дням — последние 90 дней, итог целиком");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);
