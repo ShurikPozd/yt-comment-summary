@@ -1162,5 +1162,50 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(sent2.length === 3 && sent2.every((m) => m.name === "playlists"), "lazy.js: на Shorts плейлисты грузятся сами, после 3 неудач — хватит");
 }
 
+// ---------- «Что умеет расширение»: когда открывать (welcome-bg.js) ----------
+{
+  const store = {};
+  const tabs = [];
+  const badge = { text: "" };
+  let onInstalled = null;
+  const changed = [];
+  globalThis.chrome = {
+    runtime: { getManifest: () => ({ version: "0.27.0", action: { default_title: "T" } }), getURL: (p) => "ext://" + p, onInstalled: { addListener: (f) => (onInstalled = f) } },
+    storage: {
+      local: {
+        get: async (k) => (k in store ? { [k]: store[k] } : {}),
+        set: async (o) => (Object.assign(store, o), changed.forEach((f) => f(Object.fromEntries(Object.keys(o).map((x) => [x, { newValue: o[x] }])), "local"))),
+        remove: async (k) => (delete store[k], changed.forEach((f) => f({ [k]: {} }, "local"))),
+      },
+      onChanged: { addListener: (f) => changed.push(f) },
+    },
+    tabs: { create: async (o) => tabs.push(o.url) },
+    action: {
+      getBadgeText: async () => badge.text,
+      setBadgeText: async (o) => (badge.text = o.text),
+      setBadgeBackgroundColor: async () => {},
+      setTitle: async () => {},
+    },
+  };
+  const { paintWhatsNew } = await import("../welcome-bg.js?t=" + Date.now());
+  await onInstalled({ reason: "install" });
+  ok(tabs.length === 1 && tabs[0] === "ext://welcome/welcome.html" && !store.whatsNew, "приветствие: при установке — страница, без метки");
+  await onInstalled({ reason: "update", previousVersion: "0.27.0" });
+  await onInstalled({ reason: "update", previousVersion: "0.27.1" });
+  ok(tabs.length === 1 && !store.whatsNew && badge.text === "", "приветствие: перезапуск той же минорной версии — ничего");
+  await onInstalled({ reason: "update", previousVersion: "0.25.3" });
+  ok(tabs.length === 1 && store.whatsNew?.from === "0.25.3" && store.whatsNew.to === "0.27.0" && badge.text === "NEW", "приветствие: крупное обновление — без вкладки, метка и «NEW»");
+  await onInstalled({ reason: "update", previousVersion: "0.26.0" });
+  ok(store.whatsNew.from === "0.25.3", "приветствие: метку не смотрели — «новое» от самой старой версии");
+  badge.text = "!";
+  await paintWhatsNew();
+  ok(badge.text === "!", "приветствие: «!» самопроверки важнее «NEW»");
+  badge.text = "NEW";
+  await chrome.storage.local.remove("whatsNew");
+  await new Promise((r) => setTimeout(r, 0));
+  ok(badge.text === "", "приветствие: метку сняли — значок гаснет");
+  delete globalThis.chrome;
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

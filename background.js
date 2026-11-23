@@ -5,6 +5,7 @@ import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адр�
 import { saveVideo } from "./archive-bg.js"; // «В архив Telegram»: видео в бот-архив
 import { statsAdd } from "./stats-bg.js"; // статистика просмотра: прибавки от вкладок, счётчики очереди
 import { createLoader } from "./lazy-bg.js"; // клип, плейлисты, превью — во вкладку по требованию
+import { paintWhatsNew } from "./welcome-bg.js"; // «Что умеет расширение»: при установке, «NEW» после крупного обновления
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
@@ -964,6 +965,7 @@ async function showSelfCheckBadge(report) {
   await chrome.action
     .setTitle({ title: bad.length ? `${ACTION_TITLE} — проверка нашла неполадки: ${names.join(", ")}` : ACTION_TITLE })
     .catch(() => {});
+  if (!bad.length) await paintWhatsNew(); // поломок нет — вернуть «NEW», если обновление ещё не смотрели
 }
 
 function startSelfCheck(opts) {

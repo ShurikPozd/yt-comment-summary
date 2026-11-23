@@ -4027,3 +4027,26 @@ body.d-none[data-view="digest"] .side {
 body.d-none[data-view="digest"] .body {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* ---------- «Что умеет расширение» — кнопка «?» в шапке (welcome/link.js) ---------- */
+button.welcome-btn {
+  position: relative;
+}
+
+/* после крупного обновления — точка «новое» */
+button.welcome-btn.has-new::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--accent);
+}
+
+/* в боковой панели ссылка есть в её настройках — шапку не загромождаем */
+body.embed button.welcome-btn {
+  display: none;
+}

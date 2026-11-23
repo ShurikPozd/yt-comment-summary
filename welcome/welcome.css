@@ -1,0 +1,580 @@
+/* =====================================================================
+   «Что умеет расширение». Та же система, что у библиотеки и панели:
+   поверхности --bg → --bg-2 → --bg-3, акцент — только на главном, шрифт
+   крупнеет на больших экранах. Сетки — по 3 / 2 / 1 карточке в ряд, число
+   карточек в разделах подобрано так, чтобы ряды заполнялись без пустот.
+   ===================================================================== */
+
+:root {
+  --bg: #0e0e10;
+  --bg-2: #17171a;
+  --bg-3: #212125;
+  --bg-hover: #2a2a2f;
+  --fg: #f4f4f5;
+  --fg-2: #d0d0d6;
+  --muted: #94949c;
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --accent: #ff3b5c;
+  --accent-hover: #ff2149;
+  --accent-soft: rgba(255, 59, 92, 0.14);
+  --accent-ink: #ff6b85;
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --t-fast: 0.14s;
+  --gap: 20px;
+  --pad: 28px;
+  --card-pad: clamp(18px, 1.35rem, 28px);
+  color-scheme: dark;
+  /* крупнее на больших экранах: 15px на ноутбуке → 19px на 2K/4K (как в библиотеке) */
+  font-size: clamp(15px, 0.35vw + 9.5px, 19px);
+}
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-2: #f6f6f8;
+  --bg-3: #ececf0;
+  --bg-hover: #e3e3e8;
+  --fg: #141416;
+  --fg-2: #3c3c43;
+  --muted: #66666e;
+  --border: rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.13);
+  --accent: #e8002d;
+  --accent-hover: #c80027;
+  --accent-soft: rgba(232, 0, 45, 0.08);
+  --accent-ink: #d1002a;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #ffffff;
+    --bg-2: #f6f6f8;
+    --bg-3: #ececf0;
+    --bg-hover: #e3e3e8;
+    --fg: #141416;
+    --fg-2: #3c3c43;
+    --muted: #66666e;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-strong: rgba(0, 0, 0, 0.13);
+    --accent: #e8002d;
+    --accent-hover: #c80027;
+    --accent-soft: rgba(232, 0, 45, 0.08);
+    --accent-ink: #d1002a;
+    color-scheme: light;
+  }
+}
+
+@media (min-width: 1800px) {
+  :root {
+    --gap: 24px;
+    --pad: 36px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-hover) transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Segoe UI Variable Text", "Segoe UI", Roboto, system-ui, -apple-system, sans-serif;
+  font-size: 1rem;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  display: block;
+  flex: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--fg);
+  text-wrap: balance;
+}
+
+/* ---------- шапка страницы ---------- */
+.hero {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: clamp(40px, 6vw, 84px) var(--pad) 0;
+  text-align: center;
+}
+
+.hero-icon {
+  display: block;
+  width: 4.6rem;
+  height: 4.6rem;
+  margin: 0 auto 20px;
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 1.3rem + 1.8vw, 3.1rem);
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+.lead {
+  max-width: 50ch;
+  margin: 16px auto 0;
+  color: var(--fg-2);
+  font-size: 1.16rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* после крупного обновления: «Расширение обновилось: 0.24 → 0.26 · Что нового» */
+.hero-update {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  margin-top: 22px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.hero-update a {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.hu-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* переходы по разделам — пилюли, все одной высоты */
+.jump {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.jump a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.6rem;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.jump a:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* ---------- разделы ---------- */
+.page {
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 0 var(--pad);
+}
+
+.sec {
+  padding-top: clamp(44px, 5vw, 76px);
+  scroll-margin-top: 8px;
+}
+
+.sec-head {
+  margin-bottom: clamp(20px, 1.8rem, 34px);
+  text-align: center;
+}
+
+.sec-head h2 {
+  font-size: clamp(1.6rem, 1.2rem + 0.9vw, 2.15rem);
+  font-weight: 720;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+/* короткая черта под заголовком — заголовок сразу виден как заголовок */
+.sec-head h2::after {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 3px;
+  margin: 14px auto 0;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.sec-head p {
+  max-width: 54ch;
+  margin: 14px auto 0;
+  color: var(--muted);
+  font-size: 1.04rem;
+  text-wrap: pretty;
+}
+
+/* ---------- карточки возможностей ---------- */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: var(--card-pad);
+  border-radius: var(--r-l);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.card-ic {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: var(--r-m);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.card h3 {
+  font-size: 1.2rem;
+  font-weight: 680;
+  line-height: 1.25;
+}
+
+.card p {
+  flex: 1; /* низ карточек в ряду — на одной линии */
+  margin: 0;
+  color: var(--fg-2);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  min-height: 2.6rem;
+}
+
+/* кнопка «Попробовать»: значок и подпись ровно по центру */
+button.try {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 2.6rem;
+  padding: 0 14px 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-3);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+button.try:hover {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+button.try:active {
+  transform: scale(0.97);
+}
+
+/* «где найти» — тихой строкой со стрелкой */
+.where {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 550;
+}
+
+.where svg {
+  color: var(--accent-ink);
+}
+
+/* ---------- клавиши плашками (как в «Разобрать завалы») ---------- */
+.key {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 1.95rem;
+  height: 1.95rem;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 3px;
+  background: var(--bg-3);
+  color: var(--fg);
+  font: 650 0.84rem/1 "Segoe UI", "Segoe UI Symbol", Roboto, sans-serif;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.plus,
+.or {
+  margin: 0 5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kword {
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+.foot-keys,
+.kkeys {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.key-none {
+  display: inline-grid;
+  place-items: center;
+  height: 1.95rem;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.kcard {
+  padding: var(--card-pad);
+  border-radius: var(--r-l);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.kcard h3 {
+  margin-bottom: 10px;
+  font-size: 1.16rem;
+  font-weight: 680;
+}
+
+.klist {
+  display: grid;
+}
+
+/* строка: подпись слева, плашки справа; между строками — тонкая черта */
+.krow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 3rem;
+  border-top: 1px solid var(--border);
+}
+
+.klabel {
+  min-width: 0;
+  color: var(--fg-2);
+}
+
+.klist-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 44px;
+}
+
+.krow-btn {
+  justify-content: center;
+}
+
+.krow-btn button.try {
+  padding: 0 20px 0 16px;
+}
+
+.cards-keys {
+  margin-top: var(--gap);
+}
+
+/* ---------- что нового ---------- */
+.news {
+  display: grid;
+  gap: 12px;
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.nitem {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  padding: 18px var(--card-pad);
+  border-radius: var(--r-l);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.nv {
+  display: inline-grid;
+  place-items: center;
+  justify-self: start;
+  min-width: 4.4rem;
+  height: 2.3rem;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.nbody h3 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 680;
+}
+
+.nnew {
+  display: inline-grid;
+  place-items: center;
+  height: 1.6rem;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.nbody ul {
+  margin: 6px 0 0;
+  padding-left: 1.15em;
+  color: var(--fg-2);
+}
+
+.nbody li + li {
+  margin-top: 2px;
+}
+
+.news-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.foot {
+  padding: clamp(40px, 5vw, 64px) var(--pad) 36px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+/* ---------- ширины ---------- */
+/* 2 в ряд: раздел из трёх карточек — первая во всю ширину, без дыры в конце */
+@media (max-width: 1100px) {
+  :root {
+    --pad: 20px;
+    --gap: 16px;
+  }
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cards[data-n="3"] > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .klist-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* телефон и узкое окно: всё в одну колонку */
+@media (max-width: 640px) {
+  :root {
+    --pad: 16px;
+    --gap: 12px;
+  }
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jump a {
+    padding: 0 16px;
+  }
+  .nitem {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .hero-update {
+    flex-wrap: wrap;
+    justify-content: center;
+    border-radius: var(--r-l);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
