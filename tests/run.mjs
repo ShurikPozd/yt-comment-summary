@@ -687,11 +687,12 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(S.fmtSaved(40) === "40 с" && S.fmtSaved(185) === "3 мин" && S.fmtSaved(3900) === "1 ч 5 мин" && S.fmtSaved(7200) === "2 ч", "сэкономлено по-русски");
   let saved = S.addSaved(null, 12.34, "2026-11-22");
   saved = S.addSaved(saved, 10, "2026-11-23");
-  ok(saved.sec === 22.3 && saved.day === "2026-11-23" && saved.daySec === 10 && saved.days["2026-11-22"] === 12.3, "итог: всего и по дням");
+  ok(saved.sec === 10 && saved.day === "2026-11-23" && saved.total === 22.3 && saved.days["2026-11-22"] === 12.3, "итог: sec — за день, total — всего, по дням");
+  ok(S.addSaved(saved, 5, "2026-11-23").sec === 15 && S.addSaved(saved, 5, "2026-11-24").sec === 5, "с новым днём sec — с нуля");
   ok(S.todaySaved(saved, "2026-11-23") === 10 && S.todaySaved(saved, "2026-11-24") === 0 && S.todaySaved(null) === 0, "за сегодня — со сменой дня");
   let many = null;
   for (let d = 1; d <= 100; d++) many = S.addSaved(many, 1, `2026-${String(1 + Math.floor(d / 28)).padStart(2, "0")}-${String(1 + (d % 28)).padStart(2, "0")}`);
-  ok(Object.keys(many.days).length === 90 && many.sec === 100, "по дням — последние 90 дней, итог целиком");
+  ok(Object.keys(many.days).length === 90 && many.total === 100, "по дням — последние 90 дней, итог целиком");
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);

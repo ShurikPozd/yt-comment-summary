@@ -117,8 +117,9 @@
   }
 
   // Итог в хранилище: chrome.storage.local.silenceSaved =
-  //   { sec: всего, day: "2026-11-23", daySec: за этот день, days: { "2026-11-23": сек, … } }
-  // (days — последние 90 дней, для статистики просмотра)
+  //   { sec: за день day, day: "2026-11-23" (местная дата), total: за всё время,
+  //     days: { "2026-11-23": сек, … } — последние 90 дней }
+  // С новым днём sec начинается с нуля. Читает и статистика просмотра (stats.js).
   const DAYS = 90;
   function dayKey(d = new Date()) {
     const p = (n) => String(n).padStart(2, "0");
@@ -131,7 +132,7 @@
     days[day] = Math.round(((Number(days[day]) || 0) + add) * 10) / 10;
     const keys = Object.keys(days).sort();
     for (const old of keys.slice(0, Math.max(0, keys.length - DAYS))) delete days[old];
-    return { sec: Math.round(((Number(o.sec) || 0) + add) * 10) / 10, day, daySec: days[day], days };
+    return { sec: days[day], day, total: Math.round(((Number(o.total) || 0) + add) * 10) / 10, days };
   }
   // за сегодня (запись могла остаться со вчера)
   const todaySaved = (o, day = dayKey()) => Number(o?.days?.[day]) || 0;

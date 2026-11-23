@@ -100,6 +100,7 @@
   function restore(v = mainVideo()) {
     if (!boosted) return;
     boosted = false;
+    sendStats(); // пауза кончилась
     if (v && same(v.playbackRate, boostR)) setOwn(v, base);
   }
   function owns(rate) {
@@ -267,10 +268,21 @@
   // ---------- Сэкономленное время ----------
   function addPending(sec) {
     pending += sec;
+    statsSec += sec;
     if (pending >= 30) flush();
+  }
+  // Статистике просмотра (stats.js, тот же кадр) — по событию на каждую паузу,
+  // сколько секунд реального времени она сберегла (дни раскладывает сама)
+  let statsSec = 0;
+  function sendStats() {
+    if (statsSec < 0.05) return;
+    const sec = Math.round(statsSec * 100) / 100;
+    statsSec = 0;
+    document.dispatchEvent(new CustomEvent("ytcs-stats:saved", { detail: JSON.stringify({ kind: "silence", sec }) }));
   }
   let writing = Promise.resolve();
   function flush() {
+    sendStats();
     const add = pending;
     if (add < 0.05 || !alive()) return;
     pending = 0;
@@ -290,7 +302,7 @@
     owns,
     baseRate: (v) => (boosted && v && v === mainVideo() && same(v.playbackRate, boostR) ? base : v?.playbackRate),
     // { on, state, today, total } — today/total в секундах, с ещё не записанным
-    status: () => ({ on: enabled, state, today: core.todaySaved(stored) + pending, total: (Number(stored?.sec) || 0) + pending }),
+    status: () => ({ on: enabled, state, today: core.todaySaved(stored) + pending, total: (Number(stored?.total) || 0) + pending }),
   };
 
   // ---------- Настройки ----------
