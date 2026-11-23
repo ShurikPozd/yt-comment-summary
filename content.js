@@ -1020,9 +1020,10 @@
     }
     /* закрытое меню невидимо и для клавиатуры (visibility) — после анимации исчезновения */
     .ytcs-menu.open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition-delay: 0s; }
-    .ytcs-head { display: flex; align-items: center; gap: 8px; padding: 6px 16px 10px; font-size: 12px; font-weight: 600;
+    /* значок и подпись шапки — на одной линии со значками и подписями пунктов (20 px + 14 px) */
+    .ytcs-head { display: flex; align-items: center; gap: 14px; padding: 6px 16px 10px; font-size: 12px; font-weight: 600;
       letter-spacing: .02em; color: rgba(255, 255, 255, .6); }
-    .ytcs-head svg { width: 16px; height: 16px; color: #ff4e6a; }
+    .ytcs-head svg { width: 16px; height: 16px; margin: 0 2px; flex: none; color: #ff4e6a; }
     .ytcs-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: var(--ytcs-ih, 40px); padding: 0 16px;
       background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
       transition: background-color .12s ease; }
