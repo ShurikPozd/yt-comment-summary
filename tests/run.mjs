@@ -17,6 +17,7 @@ import { countOf, dayOf, fullDue, listsOf, readPlaylist, sameList, splice, syncS
 import { buildData, describe, escapeXml, fingerprint, parseInput, suggest, videoIdOf, videoUrl } from "../omnibox-core.js";
 import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
 import * as ST from "../stats-core.js";
+import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRead, mergeFeed, newCount, queueable, visible } from "../library/digest-core.js";
 import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
@@ -216,6 +217,95 @@ ok(em2.ok && em2.data === 2 && sentActions[0].action === "ACTION_ADD_VIDEO" && s
 const ri = await call2("removeItems", { playlistId: "PL1", items: [{ setId: "ABCDEF123456" }, { videoId: "aaaaaaaaaaa" }, { setId: "плохо" }] });
 ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && sentActions[0].setVideoId === "ABCDEF123456" && sentActions[1].removedVideoId === "aaaaaaaaaaa", "убрать конкретные записи (повторы) и все копии");
 
+// ---------- «Дайджест подписок»: лента FEsubscriptions (playlists-main.js) ----------
+// Образцы — настоящие куски ответов YouTube (поиск, вкладки канала: videoRenderer,
+// lockupViewModel, shortsLockupViewModel) без тяжёлых полей, собранные в форму ленты
+// «Подписки»: сетка с полкой Shorts, продолжение, вид «Список» с полками по дням.
+{
+  const fx = (n) => JSON.parse(readFileSync(new URL(`./fixtures/${n}`, import.meta.url), "utf8"));
+  const agoV = (id, t) => ({ videoRenderer: { videoId: id, title: run(t), publishedTimeText: { simpleText: t } } });
+  const agoPage = { contents: [agoV("ago00000001", "Трансляция закончилась 2 дня назад"), agoV("ago00000002", "Streamed 5 hours ago"), agoV("ago00000003", "1 неделю назад"), agoV("ago00000004", "45 минут назад"), agoV("ago00000005", "Премьера состоялась 1 час назад"), agoV("ago00000006", "вчера")] };
+  const feed = { "": fx("subs-grid.json"), "SUBS-T1": fx("subs-cont.json"), "SUBS-LIST": fx("subs-list.json"), AGO: agoPage };
+  let asked = null;
+  const callF = loadMain((url, body) => {
+    asked = body;
+    return feed[body.continuation || ""] || {};
+  });
+  const t0 = Date.now();
+  const p1 = await callF("subsFeed");
+  const it = p1.data?.items || [];
+  const byId = (id) => it.find((x) => x.id === id);
+  ok(p1.ok && asked.browseId === "FEsubscriptions" && !asked.continuation, "дайджест: первая страница — FEsubscriptions");
+  ok(p1.data.next === "SUBS-T1", "дайджест: токен продолжения");
+  ok(!it.some((x) => /^NOISE/.test(x.id)), "дайджест: видео из шапки и боковых панелей не берём");
+  ok(it.filter((x) => x.id === "FYyZgMNo3H4").length === 1, "дайджест: повтор в ленте — один раз");
+  const v = byId("FYyZgMNo3H4");
+  ok(v && v.title.length > 5 && v.channel === "Вкусные идеи от Натали" && /^UC[\w-]{22}$/.test(v.channelId) && v.len === 217, "videoRenderer: название, канал, id канала, длительность");
+  ok(v && v.ago === "3 года назад" && /просмотр/.test(v.views) && /^https:\/\/yt\d?\.ggpht\.com\//.test(v.avatar), "videoRenderer: когда, просмотры, аватар");
+  ok(v && Math.abs(t0 - v.at - 3 * 31536e6) < 60000, "videoRenderer: «3 года назад» → время");
+  const lv = byId("rFZHOHl-L8A");
+  ok(lv?.live && lv.channel === "Lofi Girl" && !lv.short, "videoRenderer: прямой эфир");
+  const l = byId("q6fgVVmdpgY");
+  ok(l && l.channel === "MrBeast" && l.channelId === "UCX6OQ3DkcsbYNE6H8uQQuVA" && l.len === 2038 && l.ago === "8 дней назад" && /просмотр/.test(l.views), "lockupViewModel: строки подписи узнаются по смыслу");
+  ok(l && l.avatar.startsWith("https://yt3.ggpht.com/") && Math.abs(t0 - l.at - 8 * 864e5) < 60000, "lockupViewModel: аватар и время");
+  ok(byId("LIVExLIVE01")?.live && byId("LIVExLIVE01").channel === "MrBeast" && byId("LIVExLIVE01").len === 0, "lockupViewModel: эфир (значок, «смотрят» — не канал)");
+  ok(/Премьера/.test(byId("UPCOMING001")?.upText || "") && byId("UPCOMING001").channel === "MrBeast" && !byId("UPCOMING001").at, "lockupViewModel: премьера");
+  ok(byId("UPCOMING002")?.upAt === 1795600000000 && !byId("UPCOMING002").len, "videoRenderer: запланированный эфир");
+  const shorts = it.filter((x) => x.short);
+  ok(shorts.length === 3 && shorts[0].id === "dnbLdUyozKM" && shorts[0].title.length > 3, "полка Shorts (shortsLockupViewModel)");
+  ok(it.findIndex((x) => x.short) > it.findIndex((x) => x.id === "UPCOMING002"), "дайджест: порядок ленты сохраняется");
+
+  const p2 = await callF("subsFeed", { token: "SUBS-T1" });
+  ok(p2.ok && asked.continuation === "SUBS-T1" && p2.data.items.length === 3 && p2.data.next === "SUBS-T2", "дайджест: продолжение (appendContinuationItemsAction, continuationItemViewModel)");
+  ok(p2.data.items[0].channel === "MrBeast" && p2.data.items[0].ago === "3 недели назад", "дайджест: lockup в продолжении");
+
+  const p3 = await callF("subsFeed", { token: "SUBS-LIST" });
+  const reel = p3.data.items.find((x) => x.id === "REELold0001");
+  ok(p3.data.items.length === 3 && p3.data.next === "SUBS-LIST2" && reel?.short && reel.title === "Старая плитка", "вид «Список»: полки по дням + старая плитка Shorts");
+  const ag = (await callF("subsFeed", { token: "AGO" })).data.items.map((x) => (x.at ? Math.round((Date.now() - x.at) / 6e4) : 0));
+  ok(JSON.stringify(ag) === JSON.stringify([2880, 300, 10080, 45, 60, 0]), "«когда»: эфиры, премьеры, английский, неделя; непонятное — без времени");
+  const bad = await callF("subsFeed", { token: "нет такого" });
+  ok(bad.ok && bad.data.items.length === 0 && bad.data.next === null, "пустой ответ — пусто, без ошибки");
+}
+
+// ---------- «Дайджест подписок»: слияние, «новое», группы (library/digest-core.js) ----------
+{
+  const now = new Date(2026, 10, 23, 15, 0).getTime(); // понедельник, 15:00
+  const H = 36e5;
+  const V = (id, o = {}) => ({ id, title: "Видео " + id, channel: "Канал А", channelId: "UCaaaaaaaaaaaaaaaaaaaaaa", len: 300, at: now - H, ...o });
+  const old = [V("old00000001", { at: now - 30 * H, seenAt: now - 29 * H }), V("old00000002", { at: now - 8 * 24 * H, seenAt: now - 8 * 24 * H }), V("keep0000001", { at: now - 2 * 24 * H, seenAt: now - 47 * H })];
+  const fresh = [V("new00000001", { at: now - 2 * H }), V("old00000001", { at: now - 24 * H }), V("short000001", { short: true, at: 0, channel: "", channelId: "" }), V("live0000001", { live: true, at: 0 }), V("soon0000001", { upText: "Премьера: завтра", at: 0 })];
+  const mg = mergeFeed(old, fresh, now);
+  const ids = mg.map((x) => x.id);
+  ok(!ids.includes("old00000002"), "дайджест: старше недели — убираем");
+  ok(ids.includes("keep0000001"), "дайджест: пропавшее из ленты, но свежее — держим");
+  ok(mg.find((x) => x.id === "old00000001").at === now - 30 * H && mg.find((x) => x.id === "old00000001").seenAt === now - 29 * H, "дайджест: у знакомого видео — первое (точное) время");
+  ok(mg.find((x) => x.id === "new00000001").seenAt === now && mg.find((x) => x.id === "short000001").seenAt === now, "дайджест: когда впервые увидели");
+  ok(ids.indexOf("new00000001") < ids.indexOf("old00000001") && ids.indexOf("old00000001") < ids.indexOf("keep0000001"), "дайджест: новые сверху");
+  ok(mergeFeed([], Array.from({ length: 400 }, (_, i) => V(`m${String(i).padStart(10, "0")}`, { at: now - i * 60e3 })), now).length === MAX, "дайджест: не больше 300 видео");
+  ok(!enough([V("a0000000001")], now) && enough([V("a0000000001", { at: now - WEEK - H })], now) && !enough([V("s0000000001", { short: true, at: now - WEEK - H })], now), "дайджест: страниц хватит, когда дошли до недели (Shorts не в счёт)");
+
+  const marks = { read: ["old00000001"], hidden: ["keep0000001"], hiddenCh: [] };
+  ok(newCount(mg, marks, {}) === 4 && newCount(mg, marks, { shorts: "hide" }) === 3, "дайджест: число новых (прочитанное, скрытое и Shorts по настройке — не в счёт)");
+  const other = V("othr0000001", { channel: "Канал Б", channelId: "UCbbbbbbbbbbbbbbbbbbbbbb", at: now - 3 * H });
+  const all = [...mg, other];
+  ok(visible(all, { hiddenCh: [{ id: "UCbbbbbbbbbbbbbbbbbbbbbb", name: "Канал Б" }] }, {}).every((x) => x.id !== "othr0000001"), "дайджест: скрытый канал не показываем");
+  ok(visible(all, {}, {}, { ch: "UCbbbbbbbbbbbbbbbbbbbbbb" }).map((x) => x.id).join() === "othr0000001", "дайджест: только выбранный канал");
+  const rd = markAllRead(marks, all, now);
+  ok(newCount(all, rd, {}) === 0 && rd.readAt === now && rd.hidden.has("keep0000001"), "дайджест: «Всё просмотрено»");
+
+  const gd = groupItems(visible(all, {}, {}), "day", {}, now);
+  ok(gd.map((g) => g.kind).join() === "day,day,day,shorts", "по дням: дни, Shorts — полкой внизу");
+  ok(gd[0].items[0].live && gd[0].items[1].upText && !gd[0].items[2].live, "по дням: эфир и премьера — в начале «Сегодня»");
+  ok(gd[0].title === "Сегодня" && gd[1].title === "Вчера" && gd[2].title === "Суббота, 21 ноября", "по дням: подписи дней");
+  ok(dayLabel(dayKey(new Date(2026, 0, 5).getTime()), now) === "Понедельник, 5 января", "по дням: дата с днём недели");
+  const gc = groupItems(visible(all, {}, {}), "channel", { read: ["othr0000001"] }, now);
+  ok(gc.length === 3 && gc[0].title === "Канал А" && gc[1].title === "Канал Б" && gc[2].kind === "shorts", "по каналам: где больше нового — выше; Shorts без канала — полкой");
+  ok(gc[0].items.some((x) => x.upText) && gc[0].items.some((x) => x.live), "по каналам: эфиры и премьеры — у своего канала");
+  const chs = channelsOf(visible(all, {}, {}), { read: ["othr0000001"] });
+  ok(chs.length === 2 && chs[0].name === "Канал А" && chs[0].fresh === 5 && chs[1].fresh === 0, "каналы слева: сколько нового");
+  ok(queueable(gc[0].items).every((x) => !x.live && !x.upText) && queueable(gc[0].items)[0].id === "keep0000001", "«Все видео канала — в очередь»: без эфиров и премьер, старые первыми");
+}
 
 // ---------- шапка плейлиста и число видео (playlists-main.js) ----------
 {

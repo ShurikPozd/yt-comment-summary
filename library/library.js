@@ -17,19 +17,20 @@ import { more, renderSide, renderSync, update } from "./view-lib.js";
 import { closeWatch, openWatch, watchHere } from "./watch.js";
 import { yt } from "./youtube.js";
 import "./cover-actions.js"; // «Превью» и «О чём видео» на обложках
+import "./digest.js"; // «Подписки» — дайджест новых видео из подписок
 
 // ---------- адрес страницы: #q=…&pl=… (можно добавить в закладки) ----------
 export function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
   state.q = h.get("q") || "";
   state.pl = h.get("pl") || "";
-  setView(h.get("v") === "queue" ? "queue" : "lib", { silent: true });
+  setView(VIEWS.includes(h.get("v")) ? h.get("v") : "lib", { silent: true });
   if (Number(h.get("collected"))) state.justCollected = Number(h.get("collected")); // пришли сюда после «Собрать вкладки»
   $("#q").value = state.q;
 }
 export function saveHash() {
   const h = new URLSearchParams();
-  if (state.view === "queue") h.set("v", "queue");
+  if (state.view !== "lib") h.set("v", state.view);
   if (state.q.trim()) h.set("q", state.q.trim());
   if (state.pl && state.view === "lib") h.set("pl", state.pl);
   const s = h.toString();
@@ -37,6 +38,12 @@ export function saveHash() {
 }
 
 // ---------- переключение разделов ----------
+export const VIEWS = ["queue", "digest"]; // разделы кроме «Плейлистов» (#v=…)
+const TITLES = {
+  lib: "Моя библиотека — плейлисты YouTube",
+  queue: "Очередь — Моя библиотека",
+  digest: "Подписки — Моя библиотека",
+};
 export function setView(v, { silent = false } = {}) {
   const changed = state.view !== v;
   if (changed && !silent) closeWatch();
@@ -48,7 +55,7 @@ export function setView(v, { silent = false } = {}) {
     state.sort = "auto";
     $("#sort").value = "auto";
   }
-  document.title = v === "queue" ? "Очередь — Моя библиотека" : "Моя библиотека — плейлисты YouTube";
+  document.title = TITLES[v] || TITLES.lib;
   if (v === "queue") void refreshTabsCount();
   if (silent) return;
   if (changed) {
@@ -184,13 +191,13 @@ export function setupWhere() {
   b.addEventListener("click", async () => {
     void chrome.storage.local.set({ libraryWhere: EMBED ? "tab" : "panel" });
     if (EMBED) {
-      await chrome.runtime.sendMessage({ type: "lib:open", forceTab: true, view: state.view === "queue" ? "queue" : "", q: state.q }).catch(() => {});
+      await chrome.runtime.sendMessage({ type: "lib:open", forceTab: true, view: state.view === "lib" ? "" : state.view, q: state.q }).catch(() => {});
       parent.postMessage({ ytcsLib: "tab" }, location.origin);
     } else {
       // панель открывается только сразу в ответ на клик — без ожиданий до вызова
       const ok = await chrome.sidePanel.open({ windowId: myWindowId }).then(() => true, () => false);
       if (!ok) return; // не открылась — вкладку не закрываем
-      await chrome.storage.session.set({ panelLibrary: { at: Date.now(), q: state.q, view: state.view === "queue" ? "queue" : "" } });
+      await chrome.storage.session.set({ panelLibrary: { at: Date.now(), q: state.q, view: state.view === "lib" ? "" : state.view } });
       window.close();
     }
   });
@@ -250,5 +257,5 @@ update();
 state.cached = cached;
 maybeSync();
 const startW = new URLSearchParams(location.hash.slice(1)).get("w");
-if (startW && !EMBED) openWatch(startW, state.view === "queue" ? "queue" : "lib");
+if (startW && !EMBED) openWatch(startW, state.view);
 $("#q").focus();

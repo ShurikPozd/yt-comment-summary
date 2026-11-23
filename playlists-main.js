@@ -306,6 +306,154 @@
     return out;
   }
 
+  // ---------- «Дайджест подписок» для «Моей библиотеки» ----------
+  // Лента «Подписки» (FEsubscriptions) — только чтение, страница за страницей.
+  // YouTube отдаёт видео то старым videoRenderer, то новым lockupViewModel,
+  // Shorts — плитками shortsLockupViewModel / reelItemRenderer (полкой), в виде
+  // «Список» — полками shelfRenderer по дням. Ищем всё это в глубину, где бы оно
+  // ни лежало, и сводим к одному виду.
+
+  // «3 часа назад», «Трансляция закончилась 2 дня назад», «5 hours ago»,
+  // «Streamed 1 week ago» → сколько миллисекунд назад (null — не время)
+  const UNIT = [
+    [/^(?:сек|second)/, 1e3],
+    [/^(?:мин|minute)/, 6e4],
+    [/^(?:час|hour)/, 36e5],
+    [/^(?:дн|ден|day)/, 864e5],
+    [/^(?:недел|week)/, 6048e5],
+    [/^(?:месяц|month)/, 2592e6],
+    [/^(?:год|лет|year)/, 31536e6],
+  ];
+  function agoMs(s) {
+    const m = String(s || "")
+      .toLowerCase()
+      .match(/(\d+)?\s*([a-zа-яё]+)\s+(?:назад|ago)/);
+    if (!m) return null;
+    const unit = UNIT.find(([re]) => re.test(m[2]));
+    return unit ? (Number(m[1]) || 1) * unit[1] : null;
+  }
+  const isAgo = (s) => agoMs(s) != null;
+  const isViews = (s) => /просмотр|зрител|смотрят|view|watching/i.test(String(s || ""));
+  const isUpcoming = (s) => /премьер|запланир|начнётся|начнется|ожидается|scheduled|premieres|upcoming/i.test(String(s || ""));
+  const isLive = (s) => /^(?:в эфире|live|live now|прямой эфир)$/i.test(String(s || "").trim());
+  const avatarIn = (o) => (JSON.stringify(o || {}).match(/https:\/\/yt\d?\.(?:ggpht|googleusercontent)\.com\/[^"]+/) || [])[0] || "";
+  const chanIn = (o) => (JSON.stringify(o || {}).match(/"browseId":"(UC[\w-]{22})"/) || [])[1] || "";
+
+  function feedItem(base, when) {
+    const ms = agoMs(base.ago);
+    return { ...base, at: ms != null ? when - ms : 0 };
+  }
+
+  // старый вид: videoRenderer (сетка подписок, вид «Список», поиск)
+  function feedRenderer(v, when) {
+    const by = v.ownerText || v.shortBylineText || v.longBylineText;
+    const overlays = v.thumbnailOverlays || [];
+    const style = overlays.map((o) => o.thumbnailOverlayTimeStatusRenderer?.style || "").join(" ");
+    const badges = (v.badges || []).map((b) => b.metadataBadgeRenderer?.style || "").join(" ");
+    const lenText = text(v.lengthText) || overlays.map((o) => text(o.thumbnailOverlayTimeStatusRenderer?.text)).find((t) => /^\d+(:\d+)+$/.test(t)) || "";
+    const up = Number(v.upcomingEventData?.startTime) || 0;
+    return feedItem(
+      {
+        id: v.videoId,
+        title: text(v.title),
+        channel: text(by),
+        channelId: by?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || chanIn(by),
+        avatar: avatarIn(v.channelThumbnailSupportedRenderers || v.channelThumbnail),
+        len: SEC(lenText),
+        views: text(v.shortViewCountText) || text(v.viewCountText),
+        ago: text(v.publishedTimeText),
+        short: Boolean(v.navigationEndpoint?.reelWatchEndpoint) || /SHORTS/.test(style),
+        live: /LIVE_NOW/.test(badges) || /\bLIVE\b/.test(style),
+        upAt: up ? up * 1000 : 0,
+      },
+      when
+    );
+  }
+
+  // новый вид: lockupViewModel. Строки подписи — [канал] и [просмотры, «когда»];
+  // на странице канала строки с каналом нет — узнаём строки по смыслу, а не по месту.
+  function feedLockup(l, when) {
+    const meta = l.metadata?.lockupMetadataViewModel || {};
+    const parts = (meta.metadata?.contentMetadataViewModel?.metadataRows || []).flatMap((r) => (r.metadataParts || []).map((p) => p.text?.content || "").filter(Boolean));
+    const badges = [];
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      if (typeof o.thumbnailBadgeViewModel?.text === "string") badges.push(o.thumbnailBadgeViewModel);
+      for (const k in o) walk(o[k]);
+    })(l.contentImage);
+    const lenB = badges.find((b) => /^\d+(:\d+)+$/.test(b.text));
+    const live = badges.some((b) => /LIVE/.test(b.badgeStyle || "") || isLive(b.text));
+    const up = parts.find(isUpcoming) || badges.map((b) => b.text).find(isUpcoming) || "";
+    const ago = parts.find(isAgo) || "";
+    const views = parts.find(isViews) || "";
+    const channel = parts.find((p) => p !== ago && p !== views && p !== up) || "";
+    const s = JSON.stringify(l.rendererContext || {}) + JSON.stringify(meta);
+    return feedItem(
+      {
+        id: l.contentId,
+        title: meta.title?.content || "",
+        channel,
+        channelId: chanIn(meta) || chanIn(l.rendererContext),
+        avatar: avatarIn(meta.image),
+        len: lenB ? SEC(lenB.text) : 0,
+        views,
+        ago,
+        short: /SHORTS?\b/.test(l.contentType || "") || /reelWatchEndpoint/.test(s),
+        live,
+        upAt: 0,
+        upText: up,
+      },
+      when
+    );
+  }
+
+  // Shorts: плитка нового вида (shortsLockupViewModel) или старого (reelItemRenderer)
+  function feedShort(o, when) {
+    if (o.shortsLockupViewModel) {
+      const s = fromShorts(o.shortsLockupViewModel, 0);
+      return { id: s.id, title: s.title, channel: "", channelId: "", avatar: "", len: 0, views: s.info, ago: "", short: true, live: false, upAt: 0, at: 0 };
+    }
+    const r = o.reelItemRenderer;
+    return { id: r.videoId, title: text(r.headline), channel: "", channelId: "", avatar: "", len: 0, views: text(r.viewCountText), ago: "", short: true, live: false, upAt: 0, at: 0 };
+  }
+
+  const VID = /^[A-Za-z0-9_-]{11}$/;
+  const SKIP = new Set(["topbar", "header", "sidebar", "menu", "engagementPanels", "frameworkUpdates", "overlay"]);
+  function feedParse(j, when = Date.now()) {
+    const items = [];
+    const seen = new Set();
+    let next = null;
+    const push = (it) => {
+      if (!it || !VID.test(it.id || "") || seen.has(it.id)) return;
+      seen.add(it.id);
+      items.push(it);
+    };
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      if (o.videoRenderer?.videoId) return void push(feedRenderer(o.videoRenderer, when));
+      if (o.gridVideoRenderer?.videoId) return void push(feedRenderer(o.gridVideoRenderer, when));
+      if (o.lockupViewModel?.contentId) {
+        if (/VIDEO|SHORT/.test(o.lockupViewModel.contentType || "VIDEO")) push(feedLockup(o.lockupViewModel, when));
+        return;
+      }
+      if (o.shortsLockupViewModel?.onTap || o.shortsLockupViewModel?.entityId) return void push(feedShort(o, when));
+      if (o.reelItemRenderer?.videoId) return void push(feedShort(o, when));
+      const cont = o.continuationItemRenderer || o.continuationItemViewModel;
+      if (cont) {
+        next ||= contToken(cont);
+        return;
+      }
+      // меню, шапка и боковые панели — мимо (там бывают чужие видео)
+      for (const k in o) if (!SKIP.has(k)) walk(o[k]);
+    })(j);
+    return { items, next };
+  }
+
+  async function subsFeed(token) {
+    const j = token ? await post("browse", { continuation: token }) : await post("browse", { browseId: "FEsubscriptions" });
+    return feedParse(j);
+  }
+
   const ops = {
     list: (r) => list(r.videoIds),
     edit: (r) => edit(r.playlistId, r.videoId, r.add),
@@ -319,6 +467,7 @@
     library: () => library(),
     playlists: () => playlists(),
     page: (r) => page(r.playlistId, r.token || null, Number(r.from) || 0),
+    subsFeed: (r) => subsFeed(typeof r.token === "string" ? r.token : null),
   };
 
   document.addEventListener(EV, (e) => {

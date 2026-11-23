@@ -19,27 +19,31 @@ export function watchHere() {
   return state.watchHere && !EMBED; // в узкой боковой панели плеер негде показать
 }
 
+// откуда видео: очередь, «Подписки» (показанный дайджест) или каталог плейлистов
+const pool = (source) => (source === "queue" ? state.queue : source === "digest" ? state.digestList || [] : state.cat?.videos || []);
+
 export function watchList() {
   // что показывать в «Дальше»: очередь (по её порядку) или текущий список результатов
-  if (watch.source === "queue") return state.queue;
+  if (watch.source === "queue" || watch.source === "digest") return pool(watch.source);
   return state.list.map(({ d }) => state.cat?.videos[d]).filter(Boolean);
 }
 
 export function watchRec(id = watch.id) {
-  return (watch.source === "queue" ? state.queue : state.cat?.videos || []).find((x) => x.id === id) || watch.rec || null;
+  return pool(watch.source).find((x) => x.id === id) || watch.rec || null;
 }
 
 // at — с какой секунды (фрагмент из субтитров); без него — с места, где остановились в очереди
 export function openWatch(id, source, at = null) {
-  const rec = (source === "queue" ? state.queue : state.cat?.videos || []).find((x) => x.id === id);
+  const rec = pool(source).find((x) => x.id === id);
   if (!rec) return;
   saveWatchPos();
   Object.assign(watch, { on: true, id, source, rec, t: at ?? (source === "queue" ? state.qpos[id] || 0 : 0), len: rec.len || 0, heard: false, saved: -1, ended: false });
   document.body.dataset.watch = "1";
+  document.dispatchEvent(new CustomEvent("ytcs-lib:watch", { detail: { id, source } })); // «Подписки» отмечают просмотренным
   $("#watch").hidden = false;
   renderWatch();
   window.scrollTo({ top: 0 });
-  history.replaceState(null, "", location.pathname + location.search + `#${new URLSearchParams({ ...(state.view === "queue" ? { v: "queue" } : {}), w: id })}`);
+  history.replaceState(null, "", location.pathname + location.search + `#${new URLSearchParams({ ...(state.view !== "lib" ? { v: state.view } : {}), w: id })}`);
 }
 
 export function closeWatch() {
@@ -89,7 +93,7 @@ export function renderWatch() {
 
 export function watchSideHtml(upNext) {
   return `<aside class="w-next" aria-label="Дальше">
-      <div class="w-h">${watch.source === "queue" ? "Дальше в очереди" : "Дальше в списке"}<span>${nf.format(upNext.length)}</span></div>
+      <div class="w-h">${watch.source === "queue" ? "Дальше в очереди" : watch.source === "digest" ? "Дальше в подписках" : "Дальше в списке"}<span>${nf.format(upNext.length)}</span></div>
       <div class="w-list">${upNext
         .slice(0, 60)
         .map((x) => {

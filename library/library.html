@@ -14,6 +14,8 @@
         <span class="brand-icon" data-icon="library" data-size="22" title="Моя библиотека"></span>
         <button type="button" role="tab" data-view="lib" aria-selected="true">Плейлисты</button>
         <button type="button" role="tab" data-view="queue" aria-selected="false">Очередь<span id="q-badge" class="badge"></span></button>
+        <!-- «Подписки» — дайджест новых видео из подписок (library/digest.js) -->
+        <button type="button" role="tab" data-view="digest" aria-selected="false" title="Новые видео из ваших подписок с прошлого раза">Подписки<span id="d-badge" class="badge" aria-label="новых видео"></span></button>
       </nav>
       <label class="search">
         <span class="search-icon" data-icon="search" data-size="20"></span>
@@ -24,6 +26,7 @@
         <!-- «Статистика» — library/stats-view.js -->
         <button id="st-tab" type="button" class="icon-btn st-tab" aria-pressed="false" title="Статистика просмотра: сколько смотрели и сколько сэкономили" aria-label="Статистика просмотра"><span class="st-tab-ic"></span><span class="st-tab-label">Статистика</span></button>
         <button id="where-back" type="button" class="icon-btn embed-only" title="Назад к сводке" aria-label="Назад к сводке"><span data-icon="chevron" data-size="18"></span></button>
+        <button id="d-sync-embed" type="button" class="icon-btn embed-only digest-only" title="Обновить дайджест" aria-label="Обновить дайджест"><span data-icon="refresh" data-size="18"></span></button>
         <button id="where" type="button" class="icon-btn" title="" aria-label=""><span data-icon="external" data-size="18"></span></button>
       </div>
       <div class="sync lib-only">
@@ -33,6 +36,11 @@
       <div class="sync queue-only">
         <span id="tabs-text" class="sync-text"></span>
         <button id="collect" class="ghost" type="button" title="Все вкладки с видео YouTube — в очередь, вкладки закрыть (текущая и закреплённые останутся)"><span data-icon="download" data-size="16"></span><span class="label">Собрать вкладки</span></button>
+      </div>
+      <!-- «Подписки»: когда обновлялось и «Обновить» -->
+      <div class="sync digest-only">
+        <span id="d-sync-text" class="sync-text" role="status"></span>
+        <button id="d-sync" class="ghost" type="button" title="Перечитать ленту подписок"><span data-icon="refresh" data-size="16"></span><span class="label">Обновить</span></button>
       </div>
       <div id="progress" class="progress" hidden><div class="progress-fill"></div></div>
     </header>
@@ -61,12 +69,31 @@
         <span>Порядок</span>
         <select id="sort"></select>
       </label>
+      <!-- «Подписки»: «Всё просмотрено», что показывать, как группировать, Shorts -->
+      <button id="d-read" type="button" class="primary digest-only" title="Отметить все видео просмотренными — счётчик новых обнулится"><span data-icon="check" data-size="16"></span>Всё просмотрено</button>
+      <div class="seg d-seg digest-only">
+        <span class="d-show" id="d-show" role="radiogroup" aria-label="Какие видео">
+          <button type="button" role="radio" data-dshow="new" aria-checked="true">Новые<span class="n"></span></button>
+          <button type="button" role="radio" data-dshow="all" aria-checked="false">Вся неделя<span class="n"></span></button>
+        </span>
+        <span class="d-grp" id="d-grp" role="radiogroup" aria-label="Группировать">
+          <button type="button" role="radio" data-dgrp="day" aria-checked="true">По дням</button>
+          <button type="button" role="radio" data-dgrp="channel" aria-checked="false">По каналам</button>
+        </span>
+      </div>
+      <label class="sort digest-only">
+        <select id="d-shorts" aria-label="Shorts в дайджесте">
+          <option value="shelf">Shorts полкой</option>
+          <option value="hide">Без Shorts</option>
+        </select>
+      </label>
     </div>
 
     <div class="body">
       <aside class="side" aria-label="Плейлисты">
         <nav id="pl-list" class="pl-list lib-only"></nav>
         <div id="q-side" class="q-side queue-only"></div>
+        <div id="d-side" class="d-side digest-only"></div>
       </aside>
 
       <main class="main">
@@ -79,6 +106,7 @@
         <div id="grid" class="grid"></div>
         <div id="more" class="more" aria-hidden="true"></div>
         <div id="empty" class="empty" hidden></div>
+        <div id="digest" class="digest digest-only" aria-label="Новые видео из подписок"></div>
       </main>
     </div>
 
