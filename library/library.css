@@ -4391,3 +4391,39 @@ body.embed .sel-bar.stack {
     transition: none;
   }
 }
+
+/* ---------- Центровка подписей по вертикали ----------
+   В Segoe UI Variable заглавные сидят ниже середины строки (над буквами места
+   больше, чем под ними) — подписи в кнопках и плашках выглядели «упавшими».
+   Поднимаем строку асимметричным отступом снизу, а значки опускаем на столько же,
+   чтобы они остались в центре кнопки и на одной высоте с заглавными.
+   Величины подобраны замером по пикселям на экранах 100/125/150/200%. */
+button.ghost,
+.seg button,
+.chip,
+.sem-btn {
+  padding-bottom: 0.11em;
+}
+
+button.ghost > svg,
+.sem-btn > svg,
+.chip > svg,
+:is(button.ghost, .sem-btn) > span:has(> svg:only-child) {
+  position: relative;
+  top: 0.055em;
+}
+
+/* в пустых состояниях кнопки крупнее (2.9rem) — там подпись и так по центру (замер) */
+:is(.empty, .d-ebtns) button.ghost {
+  padding-bottom: 0;
+}
+
+:is(.empty, .d-ebtns) button.ghost > :is(svg, span) {
+  top: 0;
+}
+
+/* строка плейлиста: значок в плашке слева, название — по центру строки */
+.pl-name {
+  position: relative;
+  top: -0.03em;
+}

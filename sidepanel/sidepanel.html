@@ -170,6 +170,11 @@
         </div>
 
         <div id="view-settings" class="view">
+          <!-- выход из настроек — сверху и всегда на виду; всё на странице сохраняется само -->
+          <div class="settings-top">
+            <button type="button" id="btn-settings-close" class="settings-back"><span data-icon="chevron" data-size="18"></span>Назад</button>
+            <span id="settings-status" class="settings-saved" aria-live="polite">Сохраняется автоматически</span>
+          </div>
           <!-- страница «Что умеет расширение» (../welcome/link.js) -->
           <button type="button" id="btn-welcome" class="welcome-row" data-welcome>
             <span class="wr-ic" data-icon="help" data-size="20"></span>
@@ -293,12 +298,6 @@
             <p class="hint">Расширение зовёт <code>{URL}/api/chat</code> с заголовком <code>X-Sec-Token</code>. Ключ Groq хранится на сервере и не попадает в браузер.</p>
             <button id="btn-test" class="ghost">Проверить связь</button>
             <span id="test-result"></span>
-          </div>
-
-          <div class="settings-block settings-actions">
-            <button id="btn-save-settings" class="primary">Сохранить</button>
-            <button id="btn-settings-back" class="ghost">Назад</button>
-            <span id="settings-status"></span>
           </div>
 
           <div class="settings-block selfcheck" id="selfcheck-block">

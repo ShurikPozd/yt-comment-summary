@@ -6,7 +6,7 @@
 }
 
 .cs-list.off {
-  opacity: 0.45;
+  opacity: 0.6;
   pointer-events: none;
 }
 
@@ -16,20 +16,33 @@
   list-style: none;
 }
 
+/* шапка списка и строки — с одинаковым отступом слева; число каналов — заметной плашкой
+   над столбцом крестиков */
 .cs-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+  padding: 0 6px 8px 10px;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 650;
   line-height: 1.25;
 }
 
 .cs-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .cs-row {
@@ -38,7 +51,7 @@
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  padding: 0 0 0 2px;
+  padding: 0 0 0 10px;
   border-top: 1px solid var(--border);
   border-radius: var(--r-s);
   transition: background-color var(--t-fast) ease;

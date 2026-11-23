@@ -2075,18 +2075,8 @@ input[type="search"]::-webkit-search-cancel-button {
   font-size: 11.5px;
 }
 
-.settings-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  background: none;
-  border: 0;
-}
-
 #test-result,
-#history-status,
-#settings-status {
+#history-status {
   margin-left: 8px;
   font-size: 12.5px;
 }
@@ -2181,10 +2171,16 @@ body[data-theme="light"] .selfcheck {
   font-weight: 600;
 }
 
+/* режимы поиска: по замеру хватает 1px (с 0.15em подпись на 1px выше центра) */
+.search-modes label {
+  padding-bottom: 1px;
+}
+
 button.primary.sc-run {
   width: 100%;
   height: 40px;
   font-size: 14px;
+  padding-bottom: 1px; /* замер: при общем 0.15em подпись была на 1px выше центра */
 }
 
 button.primary.sc-run:disabled {
@@ -2885,25 +2881,34 @@ kbd {
 }
 
 /* =====================================================================
-   Оптическая центровка текста.
-   В Segoe UI Variable заглавные сидят ниже центра строки на ~0.075em
-   (по метрикам шрифта: ascent 15, descent 3, cap 10 при 13.5px) — текст
-   в кнопках выглядел «упавшим». Поднимаем текст на 0.075em асимметричным
-   отступом, а иконки возвращаем на геометрический центр.
+   Центровка подписей по вертикали.
+   В Segoe UI Variable заглавные сидят ниже середины строки на ~0.075em
+   (над буквами места больше, чем под ними) — текст в кнопках выглядел
+   «упавшим». Поднимаем строку на 0.075em асимметричным отступом снизу,
+   а значки опускаем на столько же — они остаются в центре кнопки и
+   на одной высоте с заглавными. Значения подобраны замером по пикселям
+   на экранах 100/125/150/200%.
+   Обёртка значка из разметки (<span data-icon>) — inline-flex: иначе под
+   svg остаётся «хвост» строки и значок сидит выше подписи.
    ===================================================================== */
+:where(span[data-icon]) {
+  display: inline-flex; /* :where — нулевой вес, чтобы свои правила обёрток (.wr-ic: grid) не перебивались */
+}
+
 button.primary,
 button.ghost,
 .chip,
 .tc-big,
-.search-modes label,
 .more-toggle,
 .reply-toggle,
 .more-replies {
   padding-bottom: 0.15em;
 }
 
-button.primary .ic,
-button.ghost .ic,
+button.primary > .ic,
+button.ghost > .ic,
+button.primary > span[data-icon],
+button.ghost > span[data-icon],
 .chip .ic,
 .tc-big .ic,
 .more-toggle .ic,
@@ -3374,14 +3379,6 @@ button.ghost,
   padding-right: 9px;
 }
 
-/* Кнопки и режимы поиска: по замеру середины заглавных подъём на 0,15em был
-   великоват (заглавные на 0,7px выше середины) — хватает 1px. */
-button.primary,
-button.ghost,
-.search-modes label {
-  padding-bottom: 1px;
-}
-
 /* «Ещё N комментариев» / «Свернуть» — кнопка во всю ширину, текст и
    стрелка по центру; стрелка вниз — раскрыть, вверх — свернуть */
 .moment .more-toggle {
@@ -3681,4 +3678,63 @@ button.primary.collecting:disabled {
   .tab-badge {
     display: none;
   }
+}
+
+/* «‹ Назад» и отметка автосохранения сверху настроек: прилипают к верху при прокрутке */
+.settings-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: sticky;
+  /* #content прокручивается с отступом 16px сверху — прилипаем к самому краю, а не ниже него */
+  top: -16px;
+  z-index: 5;
+  margin: -16px 0 8px;
+  padding: 16px 0 10px;
+  background: var(--bg);
+}
+
+.settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.settings-back:hover {
+  background: var(--bg-hover);
+}
+
+/* отметка автосохранения справа: тихая, при сохранении — зелёная */
+.settings-saved {
+  min-width: 0;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: right;
+  transition: color var(--t-fast) ease;
+}
+
+.settings-saved.ok {
+  color: var(--pos);
+}
+
+.settings-saved.err {
+  color: var(--neg-ink);
+}
+
+.settings-back svg {
+  flex: none;
+  transform: rotate(180deg); /* стрелка влево */
 }

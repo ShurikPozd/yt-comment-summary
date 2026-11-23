@@ -716,7 +716,8 @@ function fillSettingsFields() {
 
 function readSettingsFromFields() {
   state.settings.baseUrl = normalizeBaseUrl($("set-base-url").value) || DEFAULTS.baseUrl;
-  $("set-base-url").value = state.settings.baseUrl;
+  // пока в поле печатают, его не переписываем (иначе курсор прыгнет); приведём к виду при уходе из поля
+  if (document.activeElement !== $("set-base-url")) $("set-base-url").value = state.settings.baseUrl;
   state.settings.token = $("set-token").value.trim();
   state.settings.model = $("set-model").value.trim() || DEFAULTS.model;
   state.settings.maxComments = Math.min(2000, Math.max(10, parseInt($("set-max").value, 10) || DEFAULTS.maxComments));
@@ -754,26 +755,50 @@ function serverAllowed(url) {
   }
 }
 
+let autoTimer = 0;
+let savedTimer = 0;
+function scheduleAutoSave(delay = 600) {
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(() => {
+    autoTimer = 0;
+    void saveSettings(true);
+  }, delay);
+}
+function flushAutoSave() {
+  if (!autoTimer) return;
+  clearTimeout(autoTimer);
+  autoTimer = 0;
+  void saveSettings(true);
+}
+
 async function saveSettings(showFeedback = true) {
   readSettingsFromFields();
   applyTheme();
   await chrome.storage.local.set({ settings: state.settings });
+  const serverChanged = proxy.baseUrl !== state.settings.baseUrl || proxy.token !== state.settings.token;
   proxy.baseUrl = state.settings.baseUrl;
   proxy.token = state.settings.token;
   proxy.model = state.settings.model;
-  server.checkedAt = 0;
-  if (server.status !== "waking") server.status = "unknown";
-  void wakeServer();
+  if (serverChanged) {
+    // будим сервер, только если сменился адрес или пароль, а не на каждое сохранение
+    server.checkedAt = 0;
+    if (server.status !== "waking") server.status = "unknown";
+    void wakeServer();
+  }
   if (showFeedback) {
     const el = $("settings-status");
+    clearTimeout(savedTimer);
     if (!serverAllowed(state.settings.baseUrl)) {
-      el.textContent = "Сохранено, но этот адрес расширению не разрешён: нужен *.onrender.com или localhost:8080 (иначе — добавить его в host_permissions манифеста).";
-      el.className = "err";
+      el.textContent = "Адрес не разрешён: нужен *.onrender.com";
+      el.className = "settings-saved err";
       return;
     }
     el.textContent = "Сохранено";
-    el.className = "ok";
-    setTimeout(() => (el.textContent = ""), 1800);
+    el.className = "settings-saved ok";
+    savedTimer = setTimeout(() => {
+      el.textContent = "Сохраняется автоматически";
+      el.className = "settings-saved";
+    }, 1800);
   }
 }
 
@@ -2942,7 +2967,10 @@ function bindEvents() {
     fillSettingsFields();
     setTab("settings");
   });
-  $("btn-settings-back").addEventListener("click", () => setTab("summary"));
+  $("btn-settings-close").addEventListener("click", () => {
+    flushAutoSave();
+    setTab("summary");
+  });
   async function openLibraryFromPanel() {
     const { libraryWhere } = await chrome.storage.local.get("libraryWhere");
     if (libraryWhere === "panel") return showLibraryPane({});
@@ -3329,7 +3357,14 @@ function bindEvents() {
   $("search-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") runSearch();
   });
-  $("btn-save-settings").addEventListener("click", () => saveSettings(true));
+  // Кнопки «Сохранить» нет: списки и числа сохраняются сразу, текстовые поля — через
+  // полсекунды после ввода (и при уходе из поля). Переключатели сохраняются своими обработчиками.
+  for (const id of ["set-max", "set-lang", "set-theme", "set-mode", "set-thumb-template", "set-base-url", "set-token", "set-model"]) {
+    const el = $(id);
+    if (el.tagName === "INPUT") el.addEventListener("input", () => scheduleAutoSave());
+    el.addEventListener("change", () => scheduleAutoSave(0));
+  }
+  addEventListener("pagehide", flushAutoSave);
   $("btn-test").addEventListener("click", async () => {
     const el = $("test-result");
     el.textContent = "…";
