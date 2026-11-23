@@ -1062,13 +1062,16 @@
     .ytcs-pane > .ytcs-group:first-child, .ytcs-back + .ytcs-group { margin-top: 0; padding-top: 0; border-top: 0; }
     .ytcs-item.ytcs-nav > svg:last-child { width: 18px; height: 18px; opacity: .6; margin-right: -4px; }
     .ytcs-nav .ytcs-aside:empty { display: none; }
-    /* «‹ Плеер»: стрелка и подпись — на одной линии со значками и подписями пунктов ниже */
-    .ytcs-back { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; min-height: 40px;
-      margin: -2px 0 6px; padding: 0 16px 6px 16px; border: 0; border-bottom: 1px solid rgba(255, 255, 255, .1);
-      background: none; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+    /* «‹ Назад» в разделе: подсветка — как у пунктов и ровно по высоте строки (без отступа
+       внутри под текстом), линия-разделитель — нижней границей строки */
+    .ytcs-back { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; min-height: 41px;
+      margin: 0 0 6px; padding: 0 16px; border: 0; border-bottom: 1px solid rgba(255, 255, 255, .1);
+      background: none; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer;
+      transition: background-color .12s ease; }
     .ytcs-back svg { width: 20px; height: 20px; flex: none; }
     .ytcs-back span { line-height: 1.2; }
-    .ytcs-back:hover, .ytcs-back:focus-visible { background: rgba(255, 255, 255, .06); outline: none; }
+    .ytcs-back:hover, .ytcs-back:focus-visible { background: rgba(255, 255, 255, .1); outline: none; }
+    .ytcs-back:active { background: rgba(255, 255, 255, .16); }
     .ytcs-gh { padding: 6px 16px 4px; font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .55); }
     .ytcs-switch { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px;
       background: rgba(255, 255, 255, .25); transition: background-color .2s ease; }
