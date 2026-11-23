@@ -433,7 +433,8 @@
     let bottom = r.bottom;
     let left = r.left;
     let right = r.right;
-    for (let n = el.parentElement || el.getRootNode()?.host; n && n !== document.documentElement; n = n.parentElement || n.getRootNode()?.host) {
+    // body и html не берём: у YouTube у body прокрутка при нулевой высоте, а окно и так обрезает
+    for (let n = el.parentElement || el.getRootNode()?.host; n && n !== document.body && n !== document.documentElement; n = n.parentElement || n.getRootNode()?.host) {
       const cs = getComputedStyle(n);
       if (cs.overflowY === "visible" && cs.overflowX === "visible") continue;
       const b = n.getBoundingClientRect();
