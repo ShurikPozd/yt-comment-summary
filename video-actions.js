@@ -992,16 +992,21 @@
       name: `${vid}.jpg`,
     };
     let payload = fallback;
+    // окно превью на YouTube грузится по требованию (lazy.js) — заодно с вопросом к фону;
+    // на страницах расширения thumb-preview.js уже подключён
+    const ready = globalThis.__ytcsPreview ? null : globalThis.__ytcsLazy?.load("preview");
     try {
       const r = alive() ? await chrome.runtime.sendMessage({ type: "ui:preview-info", videoId: vid, title: info.title || "", channel: info.channel || "" }) : null;
       if (r?.ok && Array.isArray(r.urls)) payload = { urls: r.urls, title: r.title || fallback.title, name: r.name || fallback.name };
     } catch (e) {
       /* фон не ответил — качаем под именем по id */
     }
+    if (ready) await ready;
     if (seq !== previewSeq) return false; // за это время открыли другое
     const api = globalThis.__ytcsPreview;
     if (!api) {
       console.warn("[ytcs] thumb-preview.js не подключён — окна превью нет");
+      toast(alive() ? "Не получилось открыть превью — обновите страницу (F5)" : "Расширение обновилось — обновите страницу (F5)", "err", 4200);
       return false;
     }
     return api.open(payload);

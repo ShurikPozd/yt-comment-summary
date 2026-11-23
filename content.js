@@ -1314,7 +1314,7 @@
   // «Сохранить в «…»» — последний плейлист, куда вы сохраняли в окне
   function syncQuickSave() {
     const item = uiMenu?.querySelector('[data-act="quicksave"]');
-    const last = globalThis.__ytcsPlaylists?.last;
+    const last = globalThis.__ytcsPlaylists?.last || globalThis.__ytcsLazy?.lastPlaylist; // окно плейлистов грузится по требованию
     if (!item || !last) return;
     last()
       .then((p) => {
@@ -1449,15 +1449,13 @@
     // плейлисты — окно рисует playlists.js здесь же, на странице
     if (act === "playlists") {
       openMenu(false);
-      if (!globalThis.__ytcsPlaylists?.open) setNote("Обновите страницу видео (F5).");
-      else void globalThis.__ytcsPlaylists.open();
+      void withModule("playlists", (m) => m.open());
       return;
     }
     // в последний плейлист — одним нажатием, итог — сообщением на странице
     if (act === "quicksave") {
       openMenu(false);
-      if (!globalThis.__ytcsPlaylists?.quickSave) setNote("Обновите страницу видео (F5).");
-      else void globalThis.__ytcsPlaylists.quickSave();
+      void withModule("playlists", (m) => m.quickSave());
       return;
     }
     // в архив Telegram — запрос к боту делает фон, итог — плашкой в плеере
@@ -1475,8 +1473,7 @@
     // клип — окно рисует clip.js здесь же, на странице
     if (act === "clip") {
       openMenu(false);
-      if (!globalThis.__ytcsClip?.open) setNote("Обновите страницу видео (F5).");
-      else void globalThis.__ytcsClip.open();
+      void withModule("clip", (m) => m.open());
       return;
     }
     let r = null;
@@ -1514,6 +1511,21 @@
     t.classList.add("show");
     clearTimeout(toastTimer);
     if (ms > 0) toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+
+  // ---------------- Окна по требованию ----------------
+  // Клип, «Сохранить в плейлисты» и превью не грузятся с каждой страницей: их
+  // вставляет фон в момент нажатия (lazy.js → lazy-bg.js, десятки мс). fn получает
+  // готовый модуль; не вышло — плашка. Есть только в верхней рамке YouTube (как
+  // раньше сами окна); во встроенном плеере withModule не вызывается.
+  const LAZY_GLOBALS = { clip: "__ytcsClip", playlists: "__ytcsPlaylists", preview: "__ytcsPreview" };
+  const canLazy = (name) => Boolean(globalThis[LAZY_GLOBALS[name]] || globalThis.__ytcsLazy);
+  async function withModule(name, fn) {
+    const g = LAZY_GLOBALS[name];
+    const ok = Boolean(globalThis[g]) || (await (globalThis.__ytcsLazy?.load(name) ?? false));
+    if (ok && globalThis[g]) return fn(globalThis[g]);
+    showPageToast(alive() ? "Не получилось открыть окно — обновите страницу (F5)" : "Обновите страницу (F5): расширение обновилось");
+    return false;
   }
 
   // ---------------- Превью поверх страницы ----------------
@@ -1583,16 +1595,16 @@
       }
       case "yt:preview":
         // окна нет (встроенный плеер) — молчим: ответит другая рамка, иначе фон откроет вкладку
-        if (!globalThis.__ytcsPreview) return;
+        if (!canLazy("preview")) return;
         sendResponse({ ok: true });
-        void openPreviewOverlay(msg);
+        void withModule("preview", () => openPreviewOverlay(msg));
         return;
       case "yt:clip": {
         // из панели приходит отрезок вокруг момента — только для того же видео
         const other = msg.videoId && msg.videoId !== videoIdFromUrl();
-        sendResponse({ ok: Boolean(globalThis.__ytcsClip) && isWatchPage() && !other });
+        sendResponse({ ok: canLazy("clip") && isWatchPage() && !other });
         if (!isWatchPage()) showPageToast("Откройте видео, чтобы вырезать из него клип", UI_ICONS.clip);
-        else if (!other) void globalThis.__ytcsClip?.open(Number.isFinite(msg.start) ? { start: msg.start, end: msg.end } : null);
+        else if (!other && canLazy("clip")) void withModule("clip", (m) => m.open(Number.isFinite(msg.start) ? { start: msg.start, end: msg.end } : null));
         return;
       }
       case "yt:defer": {
@@ -1603,12 +1615,14 @@
       }
       case "yt:playlists": {
         // своё видео страницы или ролик, по превью которого щёлкнули правой кнопкой
-        const ok = Boolean(globalThis.__ytcsPlaylists);
+        const ok = canLazy("playlists");
         sendResponse({ ok });
         if (ok) {
-          void globalThis.__ytcsPlaylists.open({ videoId: msg.videoId || null, title: msg.title || "" }).then((opened) => {
-            if (!opened) showPageToast("Откройте видео или щёлкните правой кнопкой по превью ролика", UI_ICONS.save);
-          });
+          void withModule("playlists", (m) =>
+            m.open({ videoId: msg.videoId || null, title: msg.title || "" }).then((opened) => {
+              if (!opened) showPageToast("Откройте видео или щёлкните правой кнопкой по превью ролика", UI_ICONS.save);
+            })
+          );
         }
         return;
       }

@@ -18,6 +18,7 @@ import { buildData, describe, escapeXml, fingerprint, parseInput, suggest, video
 import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
 import * as ST from "../stats-core.js";
 import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRead, mergeFeed, newCount, queueable, visible } from "../library/digest-core.js";
+import { MODULES, createLoader } from "../lazy-bg.js";
 import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
@@ -1017,6 +1018,148 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   await statsAdd({ w: 100 });
   ok(store.watchStats.days[today].w === 30, "фон: сбор выключен — не пишем");
   delete globalThis.chrome;
+}
+
+// ---------- подгрузка окон по требованию (lazy-bg.js) ----------
+{
+  // поддельный chrome.scripting: у каждой рамки свои «миры» (vm-контексты);
+  // функции выполняются по тексту — как в Chrome, файлы «создают» глобальный объект модуля
+  const GLOBAL_OF = {};
+  for (const m of Object.values(MODULES)) for (const f of m.files) GLOBAL_OF[f] = m.global;
+  const frames = new Map();
+  const frame = (tabId, fid) => {
+    const k = `${tabId}:${fid}`;
+    if (!frames.has(k)) frames.set(k, { iso: vm.createContext({}), main: vm.createContext({}), files: [] });
+    return frames.get(k);
+  };
+  const calls = [];
+  let failNext = 0;
+  let brokenFile = null;
+  const scripting = {
+    async executeScript({ target, world, files, func, args = [] }) {
+      calls.push({ world: world || "ISOLATED", files: files || null, func: func?.name || null });
+      await new Promise((r) => setTimeout(r, 2));
+      if (failNext > 0) {
+        failNext--;
+        throw new Error("Cannot access contents of the page");
+      }
+      const f = frame(target.tabId, target.frameIds[0]);
+      const ctx = world === "MAIN" ? f.main : f.iso;
+      if (func) {
+        ctx.__args = args;
+        return [{ frameId: target.frameIds[0], result: vm.runInContext(`globalThis.globalThis = globalThis; (${func.toString()})(...__args)`, ctx) }];
+      }
+      for (const file of files) {
+        f.files.push(`${world || "ISOLATED"}:${file}`);
+        if (world === "MAIN") ctx[`main:${file}`] = true;
+        else if (file !== brokenFile && GLOBAL_OF[file] && !ctx[GLOBAL_OF[file]])
+          ctx[GLOBAL_OF[file]] = {
+            closed: 0,
+            close() {
+              this.closed++;
+            },
+          };
+      }
+      return [{ frameId: target.frameIds[0], result: undefined }];
+    },
+  };
+  const mkSession = () => {
+    const data = {};
+    return { data, get: async (k) => (k in data ? { [k]: data[k] } : {}), set: async (o) => Object.assign(data, o) };
+  };
+  const session = mkSession();
+  const L = createLoader({ scripting, session });
+
+  let r = await L.ensureModule(1, 0, "clip");
+  ok(r.ok && !r.cached && frame(1, 0).iso.__ytcsClip, "подгрузка: клип вставлен");
+  ok(JSON.stringify(frame(1, 0).files) === JSON.stringify(["MAIN:clip-main.js", "ISOLATED:clip.js"]), "подгрузка: сначала мир страницы, потом окно");
+  calls.length = 0;
+  r = await L.ensureModule(1, 0, "clip");
+  ok(r.ok && r.cached && calls.length === 1 && calls[0].func === "probeModule", "подгрузка: повторно не вставляется (одна проверка)");
+
+  const [a, b, c] = await Promise.all([L.ensureModule(1, 0, "playlists"), L.ensureModule(1, 0, "playlists"), L.ensureModule(1, 0, "playlists")]);
+  ok(a.ok && b.ok && c.ok && frame(1, 0).files.filter((x) => x.endsWith(":playlists.js")).length === 1, "подгрузка: одновременные запросы — одна вставка");
+  ok(frame(1, 0).main["main:playlists-main.js"] === true, "подгрузка: playlists-main.js — в мире страницы");
+
+  await L.ensureModule(1, 0, "preview");
+  ok(!frame(1, 0).files.some((x) => x.startsWith("MAIN:thumb")) && frame(1, 0).iso.__ytcsPreview, "подгрузка: превью — без мира страницы");
+
+  await L.ensureModule(1, 3, "clip");
+  ok(frame(1, 3).iso.__ytcsClip && frame(1, 0).files.filter((x) => x.endsWith(":clip.js")).length === 1, "подгрузка: каждая рамка — своя");
+
+  // фон перезапустился (токен в storage.session тот же) — не вставляем заново
+  const L2 = createLoader({ scripting, session });
+  r = await L2.ensureModule(1, 0, "clip");
+  ok(r.ok && r.cached, "подгрузка: перезапуск фона не вставляет повторно");
+
+  // обновление расширения: Chrome очистил storage.session — новый токен, старая копия закрывается
+  const old = frame(1, 0).iso.__ytcsClip;
+  const L3 = createLoader({ scripting, session: mkSession() });
+  r = await L3.ensureModule(1, 0, "clip");
+  ok(r.ok && !r.cached && old.closed === 1 && frame(1, 0).iso.__ytcsClip !== old, "подгрузка: после обновления — вставляется заново, старая копия закрыта");
+  ok(frame(1, 0).files.filter((x) => x.endsWith(":clip.js")).length === 2, "подгрузка: после обновления — файл вставлен ещё раз");
+
+  // ошибка вставки (страница не YouTube, вкладку закрыли) — понятный ответ, следующий раз пробуем снова
+  failNext = 1;
+  r = await L.ensureModule(2, 0, "clip");
+  ok(!r.ok && r.error === "inject" && /Cannot access/.test(r.message), "подгрузка: ошибка вставки — ok:false");
+  r = await L.ensureModule(2, 0, "clip");
+  ok(r.ok, "подгрузка: после ошибки — повторная попытка проходит");
+
+  brokenFile = "thumb-preview.js";
+  r = await L.ensureModule(3, 0, "preview");
+  ok(!r.ok && r.error === "init", "подгрузка: файл не создал окно — init");
+  brokenFile = null;
+  ok((await L.ensureModule(1, 0, "nope")).error === "unknown" && (await L.ensureModule(undefined, 0, "clip")).error === "notab", "подгрузка: неизвестный модуль и нет вкладки");
+  ok(typeof session.data.ytcsModToken === "string" && session.data.ytcsModToken.length > 6, "подгрузка: токен в storage.session");
+}
+{
+  // сторона страницы (lazy.js): один запрос к фону на модуль, готовый — мгновенно, «последний плейлист»
+  const sent = [];
+  const ctx = vm.createContext({
+    location: { pathname: "/watch" },
+    setInterval: () => 0,
+    chrome: {
+      runtime: {
+        id: "ext",
+        sendMessage: async (m) => {
+          sent.push(m);
+          await new Promise((r) => setTimeout(r, 5));
+          if (m.name === "clip") ctx.__ytcsClip = { open() {} };
+          return { ok: m.name === "clip" };
+        },
+      },
+      storage: { local: { get: async () => ({ plRecent: ["PL1", "PL2"], plNames: { PL1: "Музыка" } }) } },
+    },
+  });
+  ctx.globalThis = ctx;
+  const LAZY_SRC = readFileSync(new URL("../lazy.js", import.meta.url), "utf8");
+  vm.runInContext(LAZY_SRC, ctx);
+  const lz = ctx.__ytcsLazy;
+  const [x, y] = await Promise.all([lz.load("clip"), lz.load("clip")]);
+  ok(x === true && y === true && sent.length === 1 && sent[0].type === "mod:load", "lazy.js: два нажатия — один запрос к фону");
+  ok((await lz.load("clip")) === true && sent.length === 1, "lazy.js: готовый модуль — без запроса");
+  ok((await lz.load("preview")) === false, "lazy.js: фон не смог — false (плашку покажет вызвавший)");
+  ok((await lz.load("bogus")) === false && sent.length === 2, "lazy.js: неизвестное имя — без запроса");
+  const lp = await lz.lastPlaylist();
+  ok(lp?.id === "PL1" && lp.title === "Музыка", "lazy.js: последний плейлист без загрузки окна");
+
+  // Shorts: окно плейлистов (кнопка «Сохранить» в колонке ролика) подгружается само
+  const sent2 = [];
+  let tick = null;
+  const ctx2 = vm.createContext({
+    location: { pathname: "/shorts/abc" },
+    setInterval: (f) => (tick = f),
+    chrome: { runtime: { id: "e", sendMessage: async (m) => (sent2.push(m), { ok: false }) } },
+  });
+  ctx2.globalThis = ctx2;
+  vm.runInContext(LAZY_SRC, ctx2);
+  await new Promise((r) => setTimeout(r, 5));
+  for (let i = 0; i < 6; i++) {
+    await tick();
+    await new Promise((r) => setTimeout(r, 2));
+  }
+  ok(sent2.length === 3 && sent2.every((m) => m.name === "playlists"), "lazy.js: на Shorts плейлисты грузятся сами, после 3 неудач — хватит");
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);

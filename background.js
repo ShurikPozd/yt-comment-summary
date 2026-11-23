@@ -4,6 +4,7 @@ import "./tldr-bg.js"; // окно «О чём видео» на ленте: п�
 import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адресной строке — поиск по библиотеке
 import { saveVideo } from "./archive-bg.js"; // «В архив Telegram»: видео в бот-архив
 import { statsAdd } from "./stats-bg.js"; // статистика просмотра: прибавки от вкладок, счётчики очереди
+import { createLoader } from "./lazy-bg.js"; // клип, плейлисты, превью — во вкладку по требованию
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
 // Старые версии при переполнении session складывали кэш комментариев в
@@ -280,6 +281,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   if (action === "quicksave") {
     if (tab?.id) {
+      await ensureInTab(tab, "playlists");
       const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:quicksave" }).catch(() => null);
       if (!r?.ok) chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text: "Откройте видео на YouTube (или обновите страницу — F5)" }).catch(() => {});
     }
@@ -315,6 +317,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // по превью в ленте — тот ролик, иначе видео страницы
     const vid = videoIdFrom(info.linkUrl || "") || videoIdFrom(tab?.url || "");
     if (tab?.id) {
+      await ensureInTab(tab, "playlists");
       const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:playlists", videoId: vid }).catch(() => null);
       if (!r?.ok) chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text: "Обновите страницу (F5)" }).catch(() => {});
     }
@@ -323,6 +326,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   if (action === "clip") {
     if (tab?.id) {
+      await ensureInTab(tab, "clip");
       const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:clip" }).catch(() => null);
       if (!r?.ok) chrome.tabs.sendMessage(tab.id, { type: "yt:toast", text: "Обновите страницу видео (F5)" }).catch(() => {});
     }
@@ -364,6 +368,7 @@ async function archiveFromMenu(tab, id) {
 async function openPreview(tab, id) {
   const { file, title } = await thumbFileName(tab, id);
   const payload = { urls: thumbUrls(id), title: title || id, name: file };
+  await ensureInTab(tab, "preview");
   try {
     const r = await chrome.tabs.sendMessage(tab.id, { type: "yt:preview", ...payload });
     if (r?.ok) return;
@@ -482,6 +487,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     .executeScript({ target: { tabId: sender.tab.id, frameIds: [sender.frameId ?? 0] }, files: ["vendor/mediabunny.js"] })
     .then(() => sendResponse({ ok: true }))
     .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+  return true;
+});
+
+// Редкие окна (клип, «Сохранить в плейлисты», превью) не грузятся с каждой
+// страницей YouTube: их просит страница (lazy.js) или фон перед командой.
+const { ensureModule } = createLoader({ scripting: chrome.scripting, session: chrome.storage.session });
+const LAZY_URL_RE = /^https:\/\/(www|m)\.youtube\.com\//;
+// Перед командой во вкладку: модуль — в верхнюю рамку страницы YouTube (как
+// раньше по манифесту). Не вышло (не YouTube, вкладку закрыли) — команда уйдёт
+// как раньше, и вкладка сама ответит, что не может.
+async function ensureInTab(tab, name) {
+  if (!tab?.id || !LAZY_URL_RE.test(tab.url || "")) return false;
+  return (await ensureModule(tab.id, 0, name)).ok;
+}
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "mod:load" || !sender.tab?.id || !LAZY_URL_RE.test(sender.url || sender.tab.url || "")) return;
+  ensureModule(sender.tab.id, sender.frameId ?? 0, String(msg.name || "")).then(sendResponse);
   return true;
 });
 
@@ -860,7 +882,10 @@ chrome.commands.onCommand.addListener(async (command, cmdTab) => {
   }
   if (command === "save-to-last-playlist") {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\//.test(tab.url || "")) chrome.tabs.sendMessage(tab.id, { type: "yt:quicksave" }).catch(() => {});
+    if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\//.test(tab.url || "")) {
+      await ensureInTab(tab, "playlists");
+      chrome.tabs.sendMessage(tab.id, { type: "yt:quicksave" }).catch(() => {});
+    }
     return;
   }
   if (command === "toggle-queue-mode") {
@@ -878,6 +903,7 @@ chrome.commands.onCommand.addListener(async (command, cmdTab) => {
   if (command === "save-to-playlists") {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id && /^https:\/\/(www|m)\.youtube\.com\//.test(tab.url || "")) {
+      await ensureInTab(tab, "playlists");
       chrome.tabs.sendMessage(tab.id, { type: "yt:playlists" }).catch(() => {});
     }
     return;
