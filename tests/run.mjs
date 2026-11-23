@@ -558,5 +558,57 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(P({ stored: 1, current: 1.5, carried: 1.5 }) === JSON.stringify({ rate: 1, why: "channel" }), "музыка 1× после лекций 1,5×");
 }
 
+// ---------- таймер сна (sleep-core.js) ----------
+{
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL("../sleep-core.js", import.meta.url), "utf8"), ctx);
+  const S = ctx.__ytcsSleepCore;
+  const J = (o) => JSON.stringify(o);
+  ok(J(S.make(30)) === J({ mode: "min", left: 1800000, preset: 30 }) && S.make("end").mode === "end", "выбор: 30 мин и «в конце видео»");
+  ok(S.make(17).mode === "off" && S.make("off").mode === "off" && S.make("abc").mode === "off", "чужие варианты — выключено");
+  // горячая клавиша по кругу
+  const seq = [];
+  let c = S.make("off");
+  for (let i = 0; i < 8; i++) {
+    c = S.next(c);
+    seq.push(c.mode === "min" ? c.preset : c.mode);
+  }
+  ok(J(seq) === J([15, 30, 45, 60, 90, "end", "off", 15]), "клавиша: 15 → … → 90 → в конце → выкл.");
+  ok(S.next({ mode: "min", left: 5000, preset: 0 }).mode === "end", "после «ещё 15 мин» клавиша ведёт к «в конце видео»");
+  // время идёт по часам и только пока видео играет
+  let t = S.make(15);
+  t = S.advance(t, 60000, true);
+  ok(t.left === 14 * 60000, "минута воспроизведения — минус минута");
+  ok(S.advance(t, 60000, false).left === t.left, "на паузе таймер стоит");
+  ok(S.advance(t, 5 * 3600000, true).left === t.left - S.MAX_GAP_MS, "компьютер спал — большой разрыв не считаем целиком");
+  ok(S.advance(S.make(15), 20 * 60000, true).left === 15 * 60000 - S.MAX_GAP_MS && S.advance({ mode: "min", left: 1000, preset: 15 }, 5000, true).left === 0, "не уходит ниже нуля");
+  ok(S.advance(S.make("end"), 60000, true).mode === "end", "«в конце видео» от часов не зависит");
+  // «в конце видео»: остаток ролика по реальному времени, скорость учитывается
+  const end = S.make("end");
+  ok(S.remaining(end, { duration: 600, currentTime: 540, playbackRate: 1 }) === 60000, "конец через минуту при 1×");
+  ok(S.remaining(end, { duration: 600, currentTime: 540, playbackRate: 2 }) === 30000, "при 2× — вдвое быстрее");
+  ok(S.remaining(end, { duration: Infinity, currentTime: 50, playbackRate: 1 }) === null && S.remaining(end, { duration: NaN, currentTime: 0 }) === null, "эфир и незагруженное — неизвестно");
+  ok(S.remaining(S.make(30), { duration: 10, currentTime: 9, playbackRate: 4 }) === 1800000, "минуты не зависят от видео и скорости");
+  ok(S.remaining(S.make("off"), {}) === null, "выключено — нет остатка");
+  // затухание: 1 до последних 20 с, дальше плавно к нулю
+  ok(S.fadeFactor(60000) === 1 && S.fadeFactor(20000) === 1 && S.fadeFactor(null) === 1, "до затухания — полная громкость");
+  ok(S.fadeFactor(10000) === 0.25 && S.fadeFactor(0) === 0 && S.fadeFactor(-5) === 0, "середина затухания — четверть, в конце — тишина");
+  ok(S.fadeFactor(15000) > S.fadeFactor(10000) && S.fadeFactor(10000) > S.fadeFactor(5000), "громкость только убывает");
+  ok(S.fadeFactor(2500, 5000) === 0.25, "короткое затухание, если до конца меньше 20 с");
+  // подписи
+  ok(S.fmtLeft(23 * 60000) === "23 мин" && S.fmtLeft(22 * 60000 + 1) === "23 мин" && S.fmtLeft(90 * 60000) === "90 мин", "минуты — вверх до целой");
+  ok(S.fmtLeft(40000) === "40 с" && S.fmtLeft(38000) === "40 с" && S.fmtLeft(59000) === "1 мин" && S.fmtLeft(200) === "5 с", "меньше минуты — секунды по 5");
+  ok(S.label(S.make(30), null) === "осталось 30 мин" && S.label(S.make("end"), 300000) === "в конце видео" && S.label(S.make("end"), 15000) === "осталось 15 с", "подпись в меню");
+  ok(S.label(S.make("off"), null) === "", "выключено — без подписи");
+  // переживает перезагрузку (автопереход очереди)
+  const now = 1_700_000_000_000;
+  const back = S.unpack(S.pack({ mode: "min", left: 754321, preset: 45 }, now), now + 3000);
+  ok(J(back) === J({ mode: "min", left: 754321, preset: 45 }), "сохранить и восстановить таймер минут");
+  ok(S.unpack(S.pack(S.make("end"), now), now).mode === "end", "сохранить «в конце видео»");
+  ok(S.pack(S.make("off"), now) === null, "выключенный не сохраняется");
+  ok(S.unpack(S.pack(S.make(15), now), now + 4 * 3600000).mode === "off", "давний таймер забывается");
+  ok(S.unpack("{oops", now).mode === "off" && S.unpack(null, now).mode === "off" && S.unpack('{"m":"min","l":-5,"at":1}', 2).mode === "off", "битые данные — выключено");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

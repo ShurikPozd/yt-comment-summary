@@ -121,6 +121,17 @@
       ],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "sleep-core.js",
+        "sleep.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "omnibox": {
@@ -189,6 +200,9 @@
     },
     "toggle-focus": {
       "description": "Вкл/выкл «Без отвлечений»: без Shorts, рекомендаций и заставок в конце"
+    },
+    "sleep-timer": {
+      "description": "Таймер сна: 15 → 30 → 45 → 60 → 90 мин → в конце видео → выкл."
     }
   },
   "content_security_policy": {
