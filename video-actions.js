@@ -150,7 +150,8 @@
   const ICON = {
     // строки текста с искрой — «коротко о чём»
     eye: SVG('<path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>'),
-    tldr: SVG('<path d="M4 6.5h9"/><path d="M4 11.5h12"/><path d="M4 16.5h8"/><path d="M18.5 3.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>'),
+    // рисунки сдвинуты переносом (translate) так, чтобы рамка рисунка была ровно в центре 24×24 (замер по пикселям)
+    tldr: SVG('<g transform="translate(-.75 1.95)"><path d="M4 6.5h9"/><path d="M4 11.5h12"/><path d="M4 16.5h8"/><path d="M18.5 3.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></g>'),
     close: SVG('<path d="M6 6l12 12"/><path d="M18 6L6 18"/>', 2.2),
     play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
     copy: SVG('<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>'),
@@ -160,8 +161,8 @@
     plug: SVG('<path d="M9 3v5"/><path d="M15 3v5"/><path d="M6.5 8h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 16.5V21"/>'),
     stop: SVG('<rect x="6" y="6" width="12" height="12" rx="2.5"/>'),
     // бумажный самолётик Telegram — «В архив Telegram» (как в меню плеера, content.js)
-    archive: SVG('<path d="M20.4 4.3L3.7 10.8c-.9.35-.85 1.6.06 1.88l4.04 1.25 1.6 5.03c.25.8 1.25 1 1.83.4l2.2-2.25 4.3 3.17c.7.5 1.7.12 1.88-.72l2.73-12.6c.2-.92-.7-1.67-1.58-1.33z"/><path d="M7.8 13.93l9.7-6.43-6.6 7.4-.5 4.4"/>', 1.8),
-    done: SVG('<path d="M5.5 12.5l4.2 4.2L18.5 7.8"/>', 2.2),
+    archive: SVG('<g transform="translate(-.75 -.4)"><path d="M20.4 4.3L3.7 10.8c-.9.35-.85 1.6.06 1.88l4.04 1.25 1.6 5.03c.25.8 1.25 1 1.83.4l2.2-2.25 4.3 3.17c.7.5 1.7.12 1.88-.72l2.73-12.6c.2-.92-.7-1.67-1.58-1.33z"/><path d="M7.8 13.93l9.7-6.43-6.6 7.4-.5 4.4"/></g>', 1.8),
+    done: SVG('<path d="M5.5 12.25l4.2 4.2L18.5 7.55"/>', 2.2),
     spin: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8" opacity=".3"/><path d="M12 4a8 8 0 0 1 8 8"/></svg>',
     ok: SVG('<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.7 2.7L16.2 9.5"/>', 1.8),
   };

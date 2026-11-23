@@ -140,7 +140,46 @@
     offerResize = null;
     offerHost?.remove();
     offerHost = null;
+    hidePill();
     document.querySelector("#movie_player")?.classList.remove("ytcs-offering");
+  }
+
+  // «Не сейчас» — подборка прячется, а в углу плеера остаётся кнопка вернуть её.
+  // Кнопка уходит, когда видео снова запустили или ушли на другое.
+  let pillHost = null;
+  let pillPlay = null;
+  function hidePill() {
+    pillHost?.remove();
+    pillHost = null;
+    if (pillPlay) video()?.removeEventListener("play", pillPlay);
+    pillPlay = null;
+  }
+  function showPill() {
+    const player = document.querySelector("#movie_player");
+    if (!player || !offerItems?.length) return;
+    hidePill();
+    pillHost = document.createElement("div");
+    pillHost.id = "ytcs-queue-pill";
+    pillHost.attachShadow({ mode: "open" }).innerHTML = `<style>
+      button { position: absolute; top: 16px; right: 16px; display: inline-flex; align-items: center; gap: 8px; height: 40px;
+        padding: 0 18px 0 14px; border: 0; border-radius: 20px; background: rgba(10,10,10,.82); color: #f1f1f1;
+        box-shadow: 0 2px 12px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.16);
+        -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font: 500 14px Roboto, Arial, sans-serif;
+        cursor: pointer; white-space: nowrap; animation: in .2s ease-out; transition: background-color .15s ease; }
+      button:hover { background: #ff3b5c; }
+      button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+      svg { flex: none; color: #ff6b85; }
+      button:hover svg { color: #fff; }
+      @keyframes in { from { opacity: 0; transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { button { animation: none; } }
+    </style><button type="button" title="Снова показать подборку из очереди">${svg("list", 18)}Что дальше из очереди</button>`;
+    pillHost.shadowRoot.querySelector("button").addEventListener("click", (e) => {
+      e.stopPropagation();
+      drawOffer(offerItems);
+    });
+    player.appendChild(pillHost);
+    pillPlay = () => hidePill();
+    video()?.addEventListener("play", pillPlay, { once: true });
   }
   // пока видна наша подборка — своя сетка рекомендаций YouTube в конце видео не нужна
   function offerPageStyle() {
@@ -149,7 +188,7 @@
     st.id = "ytcs-offer-css";
     st.textContent =
       "#movie_player.ytcs-offering .ytp-fullscreen-grid,#movie_player.ytcs-offering .html5-endscreen,#movie_player.ytcs-offering .ytp-autonav-endscreen-countdown-overlay{display:none!important}" +
-      "#ytcs-queue-offer{position:absolute;inset:0;z-index:1000}";
+      "#ytcs-queue-offer{position:absolute;inset:0;z-index:1000}#ytcs-queue-pill{position:absolute;inset:0 0 auto auto;z-index:1001}";
     (document.head || document.documentElement).appendChild(st);
   }
   // Раскладка под размер плеера: сколько колонок и какой ширины карточки, чтобы
@@ -267,7 +306,11 @@
     </div>`;
     const root = offerHost.shadowRoot;
     root.addEventListener("click", (e) => {
-      if (e.target.closest("[data-no]")) return hideOffer();
+      if (e.target.closest("[data-no]")) {
+        hideOffer();
+        offerPageStyle();
+        return showPill();
+      }
       const c = e.target.closest("[data-go]");
       const rec = c && items.find((r) => r.id === c.dataset.go);
       if (rec) go(rec);
@@ -360,11 +403,11 @@
   const ICON = {
     prev: '<path d="M15 6l-6 6 6 6"/>',
     next: '<path d="M9 6l6 6-6 6"/>',
-    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-    list: '<path d="M4 6h11"/><path d="M4 12h11"/><path d="M4 18h7"/><path d="M17 15l4 3-4 3z"/>',
-    undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+    check: '<path d="M5 12.25l4.5 4.5L19 7.25"/>',
+    list: '<path d="M3.5 4.5h11"/><path d="M3.5 10.5h11"/><path d="M3.5 16.5h7"/><path d="M16.5 13.5l4 3-4 3z"/>',
+    undo: '<path d="M9 14.5L4 9.5l5-5"/><path d="M4 9.5h11a5 5 0 0 1 0 10h-3"/>',
     x: '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
-    pick: '<path d="M4 7l2 2 3.5-3.5"/><path d="M13 7h7"/><path d="M4 16l2 2 3.5-3.5"/><path d="M13 16h7"/>',
+    pick: '<path d="M4 7.25l2 2 3.5-3.5"/><path d="M13 7.25h7"/><path d="M4 16.25l2 2 3.5-3.5"/><path d="M13 16.25h7"/>',
   };
   const svg = (k, s = 20) =>
     `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
@@ -455,8 +498,10 @@
     /* на обложке слева сверху: крестик «Убрать из очереди» (при наведении), в режиме выбора — кружок-отметка */
     .row { user-select: none; }
     .x, .pk { position: absolute; left: 8px; top: 8px; z-index: 2; display: grid; place-items: center; box-sizing: border-box;
-      width: 30px; height: 30px; border-radius: 50%; color: #fff; }
-    .x { background: rgba(0,0,0,.72); opacity: 0; transition: opacity .15s ease, background-color .15s ease; }
+      width: 34px; height: 34px; border-radius: 50%; color: #fff; }
+    /* крестик — как круглые кнопки «Отправить / Превью» на той же обложке */
+    .x { background: rgba(0,0,0,.62); box-shadow: 0 1px 6px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.18);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); opacity: 0; transition: opacity .15s ease, background-color .15s ease; }
     .row:hover .x, .row:focus-visible .x { opacity: 1; }
     .x:hover { background: #e8002d; }
     .pk { display: none; border: 2px solid rgba(255,255,255,.95); background: rgba(0,0,0,.4); }
@@ -547,7 +592,7 @@
       const pct = r.len ? Math.min(100, Math.round((p / r.len) * 100)) : 0;
       const sub = [r.channel, r.len && p > 5 ? `осталось ${fmtDur(left(r))}` : r.short ? "Shorts" : ""].filter(Boolean).join(" · ");
       return `<button class="row${k === 0 ? " hero" : ""}${sel.has(r.id) ? " on" : ""}" data-go="${esc(r.id)}" title="${esc(r.title)}"${selMode ? ` aria-pressed="${sel.has(r.id)}"` : ""}>
-        <span class="th"><span class="x" data-drop="${esc(r.id)}" title="Убрать из очереди" aria-hidden="true">${svg("x", 16)}</span><span class="pk" aria-hidden="true">${svg("check", 16)}</span><img loading="lazy" alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/${k === 0 ? "hqdefault" : "mqdefault"}.jpg">${r.len ? `<span class="len">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${k === 0 ? `<span class="now">Дальше</span>` : ""}</span>
+        <span class="th"><span class="x" data-drop="${esc(r.id)}" title="Убрать из очереди" aria-hidden="true">${svg("x", 18)}</span><span class="pk" aria-hidden="true">${svg("check", 18)}</span><img loading="lazy" alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/${k === 0 ? "hqdefault" : "mqdefault"}.jpg">${r.len ? `<span class="len">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${k === 0 ? `<span class="now">Дальше</span>` : ""}</span>
         <span class="rt"><b>${esc(r.title || "Видео")}</b><span>${esc(sub)}</span></span>
       </button>`;
     };
@@ -583,8 +628,9 @@
     if (list) list.scrollTop = host.dataset.cur !== id ? 0 : keepScroll;
     host.dataset.cur = id;
     // на обложках галереи — те же «Превью» и «О чём видео», что на карточках YouTube
+    // в режиме выбора клик по обложке — отметка, кнопки «Отправить / Превью» только мешали бы
     const VA = globalThis.__ytcsVideoActions;
-    if (VA && list) {
+    if (VA && list && !selMode) {
       for (const th of list.querySelectorAll(".row .th")) {
         const rowEl = th.closest(".row");
         const r = queue.find((x) => x.id === rowEl.dataset.go);
