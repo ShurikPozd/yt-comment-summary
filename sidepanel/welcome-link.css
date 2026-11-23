@@ -77,6 +77,10 @@
 }
 
 /* плашка сверху панели — как «Сломалось: …», но в цвет акцента */
+.wn-strip[hidden] {
+  display: none; /* display: flex ниже иначе перебил бы hidden — пустая рамка */
+}
+
 .wn-strip {
   display: flex;
   align-items: center;

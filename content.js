@@ -1058,10 +1058,11 @@
     .ytcs-pane > .ytcs-group:first-child, .ytcs-back + .ytcs-group { margin-top: 0; padding-top: 0; border-top: 0; }
     .ytcs-item.ytcs-nav > svg:last-child { width: 18px; height: 18px; opacity: .6; margin-right: -4px; }
     .ytcs-nav .ytcs-aside:empty { display: none; }
-    .ytcs-back { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; min-height: 40px;
-      margin: -2px 0 6px; padding: 0 16px 6px 12px; border: 0; border-bottom: 1px solid rgba(255, 255, 255, .1);
+    /* «‹ Плеер»: стрелка и подпись — на одной линии со значками и подписями пунктов ниже */
+    .ytcs-back { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; min-height: 40px;
+      margin: -2px 0 6px; padding: 0 16px 6px 16px; border: 0; border-bottom: 1px solid rgba(255, 255, 255, .1);
       background: none; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
-    .ytcs-back svg { width: 22px; height: 22px; flex: none; }
+    .ytcs-back svg { width: 20px; height: 20px; flex: none; }
     .ytcs-back span { position: relative; top: -.075em; }
     .ytcs-back:hover, .ytcs-back:focus-visible { background: rgba(255, 255, 255, .06); outline: none; }
     .ytcs-gh { padding: 6px 16px 4px; font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, .55); }
@@ -1326,6 +1327,14 @@
     }
   }
 
+  function closeYtSettings() {
+    const menu = document.querySelector("#movie_player .ytp-settings-menu");
+    if (!menu || menu.style.display === "none" || !menu.offsetParent) return;
+    const btn = document.querySelector("#movie_player .ytp-settings-button");
+    if (btn?.getAttribute("aria-expanded") === "true") btn.click();
+    else menu.style.display = "none";
+  }
+
   function openMenu(open) {
     if (!uiMenu) return;
     syncMenuToggles();
@@ -1335,8 +1344,12 @@
     if (!open && uiMenu.contains(document.activeElement)) {
       document.querySelector("#movie_player .ytcs-btn")?.focus({ preventScroll: true });
     }
+    // открываем — закрываем меню настроек самого YouTube (⚙), чтобы окна не наложились
+    if (open) closeYtSettings();
     uiMenu.classList.toggle("open", open);
-    showPane("main"); // каждый раз — с первого экрана
+    // с первого экрана — при открытии; при закрытии экран не меняем, иначе во время
+    // исчезновения меню мелькает первый экран
+    if (open) showPane("main");
     expandSleep(false);
     clearInterval(sleepTick);
     if (open) sleepTick = setInterval(syncSleepItem, 1000); // «осталось …» идёт, пока меню открыто
