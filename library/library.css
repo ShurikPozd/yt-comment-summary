@@ -4005,13 +4005,17 @@ body.embed .views button {
   flex: none;
 }
 
-/* узкое окно (до 1000 px — с тремя вкладками шапке тесно): вкладки — строкой сверху, под ними
-   поиск, «Обновить»/«Собрать вкладки» и «Статистика» — одной строкой, без пустых мест */
+/* узкое окно (до 1000 px — с тремя вкладками шапке тесно): шапка в две строки */
 @media (max-width: 1000px) {
+  /* первая строка — вкладки и значки справа (без пустоты), вторая — поиск и «Обновить» /
+     «Собрать вкладки» */
   body:not(.embed) .top {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "views views views" "search sync where";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "views where" "search sync";
     row-gap: 12px;
+  }
+  body:not(.embed) .top .where {
+    justify-self: end;
   }
   body:not(.embed) .top .where {
     grid-area: where;
@@ -4029,6 +4033,14 @@ body.embed .views button {
   }
   body:not(.embed) .top .sync {
     grid-area: sync;
+  }
+}
+
+/* совсем узко (≤520): вкладкам нужна вся строка — значки уходят во вторую, к поиску */
+@media (max-width: 520px) {
+  body:not(.embed) .top {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "views views views" "search sync where";
   }
 }
 
