@@ -656,6 +656,29 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(P({ stored: 1, current: 1.5, carried: 1.5 }) === JSON.stringify({ rate: 1, why: "channel" }), "музыка 1× после лекций 1,5×");
 }
 
+// ---------- с того же места после обновления (resume-core.js) ----------
+{
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL("../resume-core.js", import.meta.url), "utf8"), ctx);
+  const R = ctx.__ytcsResumeCore;
+  const now = 1795500000000;
+  const rec = R.pack({ id: "dQw4w9WgXcQ", t: 612.345, d: 1800.04, now });
+  ok(rec.t === 612.3 && rec.d === 1800 && rec.at === now, "запись: секунда и длина с точностью 0,1 с");
+  ok(R.pack({ id: "x", t: 5, d: Infinity, now }) === null && R.pack({ id: "", t: 5, d: 60, now }) === null && R.pack({ id: "x", t: NaN, d: 60, now }) === null, "эфир, пустое — не пишем");
+  ok(JSON.stringify(R.unpack(JSON.stringify(rec))) === JSON.stringify(rec) && R.unpack("{oops") === null && R.unpack(null) === null && R.unpack('{"id":1}') === null, "чтение: своё — да, мусор — нет");
+  const P = (o) => R.plan(rec, { id: "dQw4w9WgXcQ", nav: "reload", now: now + 60000, ...o });
+  ok(P({}) === 612.3, "после F5 — то же место");
+  ok(P({ nav: "back_forward" }) === 612.3, "после «Назад» и восстановления вкладок — тоже");
+  ok(P({ nav: "navigate" }) === null, "обычный переход по ссылке — как решит YouTube (и метка &t=)");
+  ok(P({ id: "jNQXAC9IVRw" }) === null, "другое видео — не трогаем");
+  ok(P({ now: now + R.TTL_MS + 1 }) === null && P({ now: now - 1000 }) === null, "старая запись (или часы ушли назад) — не наша");
+  ok(R.plan({ ...rec, t: 3 }, { id: rec.id, nav: "reload", now }) === null, "первые секунды — не о чем жалеть");
+  ok(R.plan({ ...rec, t: 1797 }, { id: rec.id, nav: "reload", now }) === null, "у самого конца — досмотрено");
+  ok(R.plan(null, { id: rec.id, nav: "reload", now }) === null, "записи нет — ничего");
+  ok(R.sameVideo(rec, 1800.3) && !R.sameVideo(rec, 15) && !R.sameVideo(rec, NaN), "реклама (другая длина) и незагруженное — ждём сам ролик");
+  ok(R.needSeek(612.3, 590) && !R.needSeek(612.3, 611) && !R.needSeek(612.3, NaN), "откат на 20 с — возвращаем, мелочь — нет");
+}
+
 // ---------- таймер сна (sleep-core.js) ----------
 {
   const ctx = vm.createContext({});
