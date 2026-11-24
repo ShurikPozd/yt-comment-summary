@@ -33,13 +33,16 @@
     .title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
       font-size: 15px; font-weight: 600; }
     button { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center;
-      justify-content: center; gap: 6px; height: 36px; padding: 0 14px 1px; border-radius: 10px;
+      justify-content: center; gap: 6px; height: 36px; padding: 3px 14px 0; border-radius: 10px;
       font: inherit; font-weight: 600; color: #f1f1f1; background: rgba(255, 255, 255, .1);
       transition: background-color .14s ease, transform .1s ease-out; white-space: nowrap; }
     button:hover { background: rgba(255, 255, 255, .18); }
     button:active { transform: scale(.97); }
     button:focus-visible { outline: 2px solid rgba(255, 255, 255, .7); outline-offset: 2px; }
     button svg { width: 18px; height: 18px; flex: none; }
+    /* Roboto сидит в строке высоко: подписи опущены отступом сверху, значки
+       подняты обратно — по замеру (tools/align), иначе текст выше середины на 2px */
+    .acts svg { position: relative; top: -1.5px; }
     .x { width: 36px; padding: 0; border-radius: 50%; }
     .pri { background: #ff3b5c; color: #fff; }
     .pri:hover { background: #ff2149; }
@@ -48,7 +51,7 @@
       border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, .55); background: #111; }
     .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .q { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, .08); }
-    .q button { height: 30px; padding: 0 12px 1px; border-radius: 9px; background: none; color: #bdbdc4; font-size: 13px; }
+    .q button { height: 30px; padding: 1px 12px 0; border-radius: 9px; background: none; color: #bdbdc4; font-size: 13px; }
     .q button:hover { color: #fff; background: none; }
     .q button[aria-pressed="true"] { background: rgba(255, 255, 255, .16); color: #fff; }
     .meta { flex: 1; min-width: 120px; color: #a6a6ad; font-size: 13px; font-variant-numeric: tabular-nums;

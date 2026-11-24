@@ -4,8 +4,12 @@
 # в package.json Node парсит .js как CommonJS и пропускает настоящие ошибки ESM
 # (лишняя скобка в sidepanel.js держала панель мёртвой и не показывалась).
 # Копируем в .mjs - это принудительно включает разбор как модуль.
+# Флаг --align — ещё и автотест центровки подписей по пикселям (tools/align/check.sh:
+# безоконный Chrome, ~3 мин). Отдельно: bash tools/align/check.sh
 set -u
 cd "$(dirname "$0")"
+align=0
+for a in "$@"; do [ "$a" = "--align" ] && align=1; done
 echo "== синтаксис ES-модулей =="
 node check-exports.mjs . && echo "= экспорты на месте ="
 echo "== константы верхнего регистра =="
@@ -42,8 +46,12 @@ echo "== автопроверки (поиск, разбор ответов YouTu
 tfail=0
 if out=$(node tests/run.mjs 2>&1); then echo "OK   $out"; else echo "FAIL tests/run.mjs"; printf '%s
 ' "$out"; tfail=1; fi
-if [ "$fail" -eq 0 ] && [ "$cfail" -eq 0 ] && [ "$tfail" -eq 0 ]; then
-  echo "всё чисто: модули разбираются как ESM, необъявленных констант нет"
+afail=0
+if [ "$align" -eq 1 ]; then
+  bash tools/align/check.sh || afail=1
+fi
+if [ "$fail" -eq 0 ] && [ "$cfail" -eq 0 ] && [ "$tfail" -eq 0 ] && [ "$afail" -eq 0 ]; then
+  echo "всё чисто: модули разбираются как ESM, необъявленных констант нет$([ "$align" -eq 1 ] && echo ", подписи по центру")"
   exit 0
 fi
 exit 1

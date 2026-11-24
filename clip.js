@@ -254,7 +254,8 @@
       font: inherit; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; }
     input:focus { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); }
     input.bad { box-shadow: inset 0 0 0 2px #ff6b85; }
-    .now { padding: 0 11px 1px; color: #d6d6dc; font-size: 13px; }
+    .now { padding: 1px 11px 0; color: #d6d6dc; font-size: 13px; }
+    .now svg { position: relative; top: -1px; }
 
     .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; border-radius: 12px;
       background: rgba(255, 255, 255, .08); }
@@ -272,8 +273,11 @@
     .dlg.busy .info { display: none; }
 
     .acts { display: flex; gap: 10px; }
-    .go { flex: 1; min-width: 0; height: 44px; font-size: 15px; background: #ff3b5c; color: #fff; }
-    .link { flex: none; height: 44px; padding: 0 16px 1px 14px; }
+    /* Roboto сидит в строке высоко: подписи опущены отступом сверху, значки подняты
+       обратно (замер tools/align; дробные сдвиги Chrome округляет до целых px) */
+    .go { flex: 1; min-width: 0; height: 44px; padding: 1px 14px 0; font-size: 15px; background: #ff3b5c; color: #fff; }
+    .link { flex: none; height: 44px; padding: 2px 16px 0 14px; }
+    .link svg { position: relative; top: -2px; }
     .go:hover { background: #ff2149; }
     .dlg.busy .go { background: rgba(255, 255, 255, .12); }
     .dlg.busy .go:hover { background: rgba(255, 255, 255, .2); }

@@ -23,3 +23,6 @@ __pycache__/
 vendor/transformers/*.js
 vendor/transformers/*.mjs
 vendor/transformers/*.wasm
+
+# кэш Python инструментов (tools/align)
+__pycache__/

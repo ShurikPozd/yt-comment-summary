@@ -4427,3 +4427,65 @@ button.ghost > svg,
   position: relative;
   top: -0.03em;
 }
+
+/* Окна поверх библиотеки — тот же принцип, величины — по замеру tools/align
+   (bash tools/align/check.sh lib-sel-queue lib-triage lib-backup). Сдвиги — целыми
+   пикселями: дробные Chrome всё равно округляет. Высоты в rem — через round(),
+   иначе кнопка встаёт на полпикселя и подпись «прыгает» на разных масштабах. */
+
+/* полоса «Выбрано: N» (multi.js) */
+.sel-btn {
+  height: round(2.9rem, 1px);
+  padding-bottom: 1px;
+}
+
+/* «Разобрать завалы»: крупные кнопки решений — подпись в span, line-height: 1 */
+.t-btn > :is(span, svg) {
+  position: relative;
+  top: -1px;
+}
+
+/* «Закончить» в шапке разбора: общая добавка .ghost здесь лишняя (текст был на 1px выше) */
+.t-top button.ghost {
+  padding-bottom: 0;
+}
+
+.t-top button.ghost > :is(svg, span) {
+  top: 0;
+}
+
+/* клавиши-плашки: целые высота, кегль и строка — середина «лица» над толстой нижней рамкой */
+.key {
+  min-width: round(1.85rem, 1px);
+  height: round(1.85rem, 1px);
+  padding-bottom: 1px;
+  font-size: round(0.8rem, 1px);
+  line-height: calc(round(0.8rem, 1px) + 1px);
+}
+
+/* плашка на красной кнопке («Пересказать · Пробел») стоит на дробной высоте кнопки;
+   кегль — как у остальных плашек (иначе его перебивает .tt-empty kbd) */
+button.primary .key {
+  padding-bottom: 3px;
+  font-size: round(0.8rem, 1px);
+  line-height: calc(round(0.8rem, 1px) + 1px);
+}
+
+/* резервная копия: «Выбрать файл…» — значок был на 0,7px выше подписи */
+.bk-pick > svg {
+  position: relative;
+  top: 1px;
+}
+
+/* счётчик очереди «24»: целая высота, строка на 2px ниже — цифры были на 1px ниже середины */
+.badge {
+  height: round(1.5rem, 1px);
+  line-height: calc(round(1.5rem, 1px) - 2px);
+}
+
+/* «Статистика» в шапке (с подписью — на широком окне): подпись была на 0,7px ниже */
+@media (min-width: 1101px) {
+  body:not(.embed) button.st-tab {
+    padding-bottom: 2px;
+  }
+}

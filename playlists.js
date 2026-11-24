@@ -194,7 +194,7 @@
     .foot { display: flex; align-items: center; gap: 10px; }
     .info { flex: 1; min-width: 0; color: #a6a6ad; font-size: 13px; }
     .info.err { color: #ff8095; }
-    .go { height: 42px; padding: 0 20px 1px; background: #ff3b5c; color: #fff; font-size: 15px; }
+    .go { height: 42px; padding: 1px 20px 0; background: #ff3b5c; color: #fff; font-size: 15px; }
     .go:hover { background: #ff2149; }
 
     .msg { position: absolute; left: 50%; bottom: 24px; z-index: 3; padding: 9px 16px 10px; border-radius: 999px;
@@ -385,9 +385,10 @@
     t.id = "ytcs-pl-toast";
     t.textContent = text;
     t.setAttribute("role", "status");
+    // отступ сверху больше, чем снизу: Roboto сидит в строке высоко (замер tools/align)
     t.style.cssText =
       "position:fixed;left:50%;top:72px;z-index:2147483001;transform:translateX(-50%);max-width:calc(100vw - 32px);" +
-      "padding:11px 20px 12px;border-radius:999px;background:rgba(28,28,30,.94);color:#f1f1f1;" +
+      "padding:13px 20px 10px;border-radius:999px;background:rgba(28,28,30,.94);color:#f1f1f1;" +
       "font:500 15px/1.3 Roboto,Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" +
       "box-shadow:0 8px 30px rgba(0,0,0,.4);transition:opacity .2s ease;pointer-events:none";
     (document.fullscreenElement || document.documentElement).appendChild(t);

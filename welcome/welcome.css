@@ -315,13 +315,17 @@ button.try {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  /* целая высота при любом корневом кегле (он плавает с шириной окна) — иначе
+     кнопка встаёт на полпикселя и подпись «прыгает» (замер tools/align) */
   height: 2.6rem;
+  height: round(2.6rem, 1px);
   padding: 0 14px 0 18px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   background: var(--bg-3);
   font-weight: 600;
   line-height: 1;
+  line-height: round(1em, 1px);
   white-space: nowrap;
   cursor: pointer;
   transition: background-color var(--t-fast) ease, color var(--t-fast) ease, border-color var(--t-fast) ease;
@@ -356,15 +360,21 @@ button.try:active {
   display: inline-grid;
   place-items: center;
   box-sizing: border-box;
+  /* целые высота, кегль и строка: подпись — по середине «лица» над толстой нижней
+     рамкой (замер tools/align на ширинах 1200 и 1920) */
   min-width: 1.95rem;
+  min-width: round(1.95rem, 1px);
   height: 1.95rem;
-  padding: 0 8px;
+  height: round(1.95rem, 1px);
+  padding: 0 8px 1px;
   border-radius: 7px;
   border: 1px solid var(--border-strong);
   border-bottom-width: 3px;
   background: var(--bg-3);
   color: var(--fg);
   font: 650 0.84rem/1 "Segoe UI", "Segoe UI Symbol", Roboto, sans-serif;
+  font-size: round(0.84rem, 1px);
+  line-height: calc(round(0.84rem, 1px) + 1px);
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -452,7 +462,13 @@ button.try:active {
 }
 
 .krow-btn button.try {
-  padding: 0 20px 0 16px;
+  padding: 0 20px 2px 16px;
+}
+
+/* значок клавиатуры был на 1px выше подписи */
+.krow-btn button.try svg {
+  position: relative;
+  top: 1px;
 }
 
 .cards-keys {
