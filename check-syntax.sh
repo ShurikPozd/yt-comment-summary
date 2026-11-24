@@ -11,7 +11,8 @@ cd "$(dirname "$0")"
 align=0
 for a in "$@"; do [ "$a" = "--align" ] && align=1; done
 echo "== синтаксис ES-модулей =="
-node check-exports.mjs . && echo "= экспорты на месте ="
+efail=0
+if node check-exports.mjs .; then echo "= экспорты на месте ="; else efail=1; fi
 echo "== константы верхнего регистра =="
 cstmp=$(mktemp)
 cfail=0
@@ -50,7 +51,7 @@ afail=0
 if [ "$align" -eq 1 ]; then
   bash tools/align/check.sh || afail=1
 fi
-if [ "$fail" -eq 0 ] && [ "$cfail" -eq 0 ] && [ "$tfail" -eq 0 ] && [ "$afail" -eq 0 ]; then
+if [ "$efail" -eq 0 ] && [ "$fail" -eq 0 ] && [ "$cfail" -eq 0 ] && [ "$tfail" -eq 0 ] && [ "$afail" -eq 0 ]; then
   echo "всё чисто: модули разбираются как ESM, необъявленных констант нет$([ "$align" -eq 1 ] && echo ", подписи по центру")"
   exit 0
 fi
