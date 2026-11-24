@@ -1,6 +1,8 @@
 # Проверки расширения на каждый пуш и PR в main (бесплатно: публичный репозиторий).
 #   «Проверки»  — bash check-syntax.sh: экспорты, необъявленные константы, разбор как ESM,
 #                 автотесты tests/run.mjs. Linux, ~1 мин.
+#   «Сквозной тест» — bash tools/e2e/run.sh: расширение в безоконном Chrome на снимках
+#                 страниц YouTube, сеть подменена (tools/e2e/README.md). Linux, ~1 мин.
 #   «Центровка» — bash tools/align/check.sh: пиксельный автотест подписей (tools/align/README.md).
 #                 Windows: панель и библиотека рисуются шрифтом Segoe UI Variable, а его есть
 #                 только в Windows — на Linux вместо него встал бы другой шрифт с другими
@@ -37,6 +39,49 @@ jobs:
           node-version: 24
       - name: Синтаксис, ESM, автотесты
         run: bash check-syntax.sh
+
+  e2e:
+    name: Сквозной тест
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then
+            echo "::error::На раннере нет Google Chrome"
+            exit 1
+          fi
+          echo "CHROME=$chrome" >> "$GITHUB_ENV"
+          "$chrome" --version
+          echo "E2E_OUT=$RUNNER_TEMP/e2e" >> "$GITHUB_ENV"
+      - name: Расширение в Chrome на снимках YouTube
+        id: e2e
+        run: |
+          set -o pipefail
+          mkdir -p "$E2E_OUT"
+          bash tools/e2e/run.sh 2>&1 | tee "$E2E_OUT/itog.txt"
+      - name: Итог в сводку
+        if: ${{ !cancelled() && steps.e2e.outcome != 'skipped' }}
+        run: |
+          {
+            if [ "${{ steps.e2e.outcome }}" = "success" ]; then echo "### Сквозной тест: всё работает"; else echo "### Сквозной тест: есть ошибки"; fi
+            echo
+            echo '```'
+            cat "$E2E_OUT/itog.txt" 2>/dev/null
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Снимки экрана в артефакты
+        if: ${{ !cancelled() && steps.e2e.outcome == 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-${{ github.run_number }}
+          path: ${{ runner.temp }}/e2e
+          retention-days: 14
 
   align:
     name: Центровка

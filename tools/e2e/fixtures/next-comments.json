@@ -1,0 +1,294 @@
+{
+ "responseContext": {},
+ "onResponseReceivedEndpoints": [
+  {
+   "reloadContinuationItemsCommand": {
+    "targetId": "comments-section",
+    "continuationItems": [
+     {
+      "commentThreadRenderer": {
+       "commentViewModel": {
+        "commentViewModel": {
+         "commentKey": "e2e-key-1"
+        }
+       },
+       "renderingPriority": "RENDERING_PRIORITY_UNKNOWN"
+      }
+     },
+     {
+      "commentThreadRenderer": {
+       "commentViewModel": {
+        "commentViewModel": {
+         "commentKey": "e2e-key-2"
+        }
+       },
+       "renderingPriority": "RENDERING_PRIORITY_UNKNOWN"
+      }
+     },
+     {
+      "commentThreadRenderer": {
+       "commentViewModel": {
+        "commentViewModel": {
+         "commentKey": "e2e-key-3"
+        }
+       },
+       "renderingPriority": "RENDERING_PRIORITY_UNKNOWN"
+      }
+     },
+     {
+      "commentThreadRenderer": {
+       "commentViewModel": {
+        "commentViewModel": {
+         "commentKey": "e2e-key-4"
+        }
+       },
+       "renderingPriority": "RENDERING_PRIORITY_UNKNOWN"
+      }
+     },
+     {
+      "commentThreadRenderer": {
+       "commentViewModel": {
+        "commentViewModel": {
+         "commentKey": "e2e-key-5"
+        }
+       },
+       "renderingPriority": "RENDERING_PRIORITY_UNKNOWN"
+      }
+     },
+     {
+      "commentThreadRenderer": {
+       "commentViewModel": {
+        "commentViewModel": {
+         "commentKey": "e2e-key-6"
+        }
+       },
+       "renderingPriority": "RENDERING_PRIORITY_UNKNOWN"
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "frameworkUpdates": {
+  "entityBatchUpdate": {
+   "mutations": [
+    {
+     "entityKey": "e2e-key-1",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "commentEntityPayload": {
+       "key": "e2e-key-1",
+       "properties": {
+        "commentId": "Ugxe2e0001",
+        "content": {
+         "content": "Наконец-то понятное объяснение, спасибо!"
+        },
+        "publishedTime": "1 дн. назад",
+        "toolbarStateKey": "e2e-state-1"
+       },
+       "author": {
+        "displayName": "@zritel1",
+        "avatarThumbnailUrl": "",
+        "isCreator": false
+       },
+       "toolbar": {
+        "likeCountNotliked": "42",
+        "replyCount": ""
+       }
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-state-1",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "engagementToolbarStateEntityPayload": {
+       "key": "e2e-state-1",
+       "heartState": "TOOLBAR_HEART_STATE_HEARTED"
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-key-2",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "commentEntityPayload": {
+       "key": "e2e-key-2",
+       "properties": {
+        "commentId": "Ugxe2e0002",
+        "content": {
+         "content": "На 3:15 самый полезный момент, пересмотрел дважды."
+        },
+        "publishedTime": "2 дн. назад",
+        "toolbarStateKey": "e2e-state-2"
+       },
+       "author": {
+        "displayName": "@zritel2",
+        "avatarThumbnailUrl": "",
+        "isCreator": false
+       },
+       "toolbar": {
+        "likeCountNotliked": "35",
+        "replyCount": "2"
+       }
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-state-2",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "engagementToolbarStateEntityPayload": {
+       "key": "e2e-state-2",
+       "heartState": "TOOLBAR_HEART_STATE_UNHEARTED"
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-key-3",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "commentEntityPayload": {
+       "key": "e2e-key-3",
+       "properties": {
+        "commentId": "Ugxe2e0003",
+        "content": {
+         "content": "Звук в середине тише, чем в начале."
+        },
+        "publishedTime": "3 дн. назад",
+        "toolbarStateKey": "e2e-state-3"
+       },
+       "author": {
+        "displayName": "@zritel3",
+        "avatarThumbnailUrl": "",
+        "isCreator": false
+       },
+       "toolbar": {
+        "likeCountNotliked": "28",
+        "replyCount": ""
+       }
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-state-3",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "engagementToolbarStateEntityPayload": {
+       "key": "e2e-state-3",
+       "heartState": "TOOLBAR_HEART_STATE_UNHEARTED"
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-key-4",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "commentEntityPayload": {
+       "key": "e2e-key-4",
+       "properties": {
+        "commentId": "Ugxe2e0004",
+        "content": {
+         "content": "А будет продолжение про утепление крыши?"
+        },
+        "publishedTime": "4 дн. назад",
+        "toolbarStateKey": "e2e-state-4"
+       },
+       "author": {
+        "displayName": "@zritel4",
+        "avatarThumbnailUrl": "",
+        "isCreator": false
+       },
+       "toolbar": {
+        "likeCountNotliked": "21",
+        "replyCount": ""
+       }
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-state-4",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "engagementToolbarStateEntityPayload": {
+       "key": "e2e-state-4",
+       "heartState": "TOOLBAR_HEART_STATE_UNHEARTED"
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-key-5",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "commentEntityPayload": {
+       "key": "e2e-key-5",
+       "properties": {
+        "commentId": "Ugxe2e0005",
+        "content": {
+         "content": "Сделал по шагам — всё получилось с первого раза."
+        },
+        "publishedTime": "5 дн. назад",
+        "toolbarStateKey": "e2e-state-5"
+       },
+       "author": {
+        "displayName": "@zritel5",
+        "avatarThumbnailUrl": "",
+        "isCreator": true
+       },
+       "toolbar": {
+        "likeCountNotliked": "14",
+        "replyCount": ""
+       }
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-state-5",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "engagementToolbarStateEntityPayload": {
+       "key": "e2e-state-5",
+       "heartState": "TOOLBAR_HEART_STATE_UNHEARTED"
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-key-6",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "commentEntityPayload": {
+       "key": "e2e-key-6",
+       "properties": {
+        "commentId": "Ugxe2e0006",
+        "content": {
+         "content": "Слишком длинное вступление, суть начинается с 1:40."
+        },
+        "publishedTime": "6 дн. назад",
+        "toolbarStateKey": "e2e-state-6"
+       },
+       "author": {
+        "displayName": "@zritel6",
+        "avatarThumbnailUrl": "",
+        "isCreator": false
+       },
+       "toolbar": {
+        "likeCountNotliked": "7",
+        "replyCount": ""
+       }
+      }
+     }
+    },
+    {
+     "entityKey": "e2e-state-6",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "engagementToolbarStateEntityPayload": {
+       "key": "e2e-state-6",
+       "heartState": "TOOLBAR_HEART_STATE_UNHEARTED"
+      }
+     }
+    }
+   ]
+  }
+ }
+}
