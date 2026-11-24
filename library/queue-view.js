@@ -12,6 +12,8 @@ import { wlCardHtml } from "./wl.js";
 // грузим по первому нажатию кнопки, а не при каждом открытии библиотеки
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-act=triage]")) void import("./triage.js").then((m) => m.openTriage());
+  // «Уборка очереди» (queue-tidy.js) — тоже по первому нажатию
+  if (e.target.closest("[data-qt=open]")) void import("./queue-tidy.js").then((m) => m.openQTidy());
 });
 
 // ---------- очередь «посмотреть потом» ----------
@@ -213,6 +215,7 @@ export function renderQueueSide() {
       <div><div class="q-num">${nf.format(shorts)}</div><div class="q-lbl">Shorts и до 1 мин</div></div>
     </div>` : ""}
     ${q.length > 1 ? `<button type="button" class="ghost q-triage" data-act="triage" title="Видео по одному, крупно: ← убрать, → оставить, ↑ наверх">${icon("library", { size: 16 })}Разобрать завалы · ${nf.format(q.length)}</button>` : ""}
+    ${q.length ? `<button type="button" class="ghost q-triage" data-qt="open" title="Недоступные, дубли, почти досмотренное и давно лежащее — найти и убрать разом">${icon("sparkles", { size: 16 })}Уборка очереди</button>` : ""}
     <details class="q-card q-set" ${state.qSetOpen ?? !narrow() ? "open" : ""}>
       <summary class="q-h">Как работает очередь</summary>
       ${sw("removeWatched", "Убирать досмотренное", "Досмотрели до конца — видео само уходит из очереди")}

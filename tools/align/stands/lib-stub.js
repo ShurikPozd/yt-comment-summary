@@ -126,6 +126,16 @@ window.__errs = []; addEventListener("error", (e) => __errs.push(String(e.messag
     const pick = vids.filter((_, i) => i % 3 === 1).slice(0, Number(qp.get("queue")) || 24);
     local.queue = pick.map((v, i) => ({ id: v.id, title: v.title, channel: v.channel, len: v.len, short: v.short, addedAt: Date.now() - i * 3600e3 * 7 }));
     local.queuePos = Object.fromEntries(pick.filter((_, i) => i % 4 === 0).map((v) => [v.id, Math.floor(v.len * 0.4)]));
+    // для «Уборки очереди»: залежалось (больше 60 дней, не начато; №20 — старое, но начато),
+    // почти досмотрено (95%), два недоступных (удалённое и приватное — ответы oEmbed ниже) и дубль
+    const DAY = 24 * 3600e3;
+    [[19, 74], [20, 96], [21, 88], [22, 117], [23, 143]].forEach(([i, d]) => local.queue[i] && (local.queue[i].addedAt = Date.now() - d * DAY));
+    if (pick[5]) local.queuePos[pick[5].id] = Math.floor(pick[5].len * 0.95);
+    if (local.queue.length > 12) {
+      local.queue.splice(3, 0, { id: "xGoneDel001", title: "Обзор нового телефона — честная распаковка", channel: "Tech Today", len: 912, short: false, addedAt: Date.now() - 30 * 3600e3 });
+      local.queue.splice(11, 0, { id: "xPrivate002", title: "Стрим: собираем ПК с подписчиками", channel: "Железный цех", len: 7420, short: false, addedAt: Date.now() - 80 * 3600e3 });
+      local.queue.push({ ...local.queue[2] });
+    }
     if (qp.get("real")) Object.assign(local.queue[0], { id: "jNQXAC9IVRw", title: "Me at the zoo", channel: "jawed", len: 19 });
     if (qp.get("undo")) local.queueUndo = { at: Date.now() - 60e3, added: [], tabs: pick.slice(0, 18).map((v) => ({ url: "https://www.youtube.com/watch?v=" + v.id })) };
   }
@@ -139,8 +149,22 @@ window.__errs = []; addEventListener("error", (e) => __errs.push(String(e.messag
       return { ok: true, added: add.map((x) => x.id), total: q.length + add.length };
     }
     if (msg.type === "queue:remove") {
-      setLocal({ queue: q.filter((x) => !msg.ids.includes(x.id)) });
+      const pos = { ...(local.queuePos || {}) };
+      for (const id of msg.ids) delete pos[id];
+      setLocal({ queue: q.filter((x) => !msg.ids.includes(x.id)), queuePos: pos });
       return { ok: true };
+    }
+    if (msg.type === "queue:put") {
+      // как restoreAt в background.js: каждое — на прежнее место, по возрастанию места
+      const out = q.slice();
+      const pos = { ...(local.queuePos || {}) };
+      const items = msg.items.filter((it) => !out.some((x) => x.id === it.rec.id)).sort((a, b) => a.at - b.at);
+      for (const it of items) {
+        out.splice(Math.min(it.at, out.length), 0, it.rec);
+        if (it.t > 5) pos[it.rec.id] = it.t;
+      }
+      setLocal({ queue: out, queuePos: pos });
+      return { ok: true, back: items.length, total: out.length };
     }
     if (msg.type === "queue:top") {
       const i = q.findIndex((x) => x.id === msg.id);
@@ -178,10 +202,39 @@ window.__errs = []; addEventListener("error", (e) => __errs.push(String(e.messag
       onUpdated: { addListener() {}, removeListener() {} },
     },
   };
+  // проверка доступности («Уборка очереди»): oEmbed и страница видео без сети.
+  // xGoneDel001 — удалено (404), xPrivate002 — приватное (401, на странице LOGIN_REQUIRED)
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async (url, opts = {}) => {
+    const u = decodeURIComponent(String(url));
+    const oembed = u.includes("youtube.com/oembed");
+    if (!oembed && !/youtube\.com\/watch\?v=/.test(u)) return realFetch(url, opts);
+    const id = u.match(/[?&]v=([\w-]{11})/)?.[1] || "";
+    await new Promise((r) => setTimeout(r, Number(qp.get("odelay") || 60)));
+    if (opts.signal?.aborted) throw new DOMException("Отменено", "AbortError");
+    if (oembed) {
+      const st = id === "xGoneDel001" ? 404 : id === "xPrivate002" ? 401 : 200;
+      return new Response(st === 200 ? JSON.stringify({ title: byId.get(id)?.title || "", author_name: "" }) : "Not Found", { status: st });
+    }
+    const st = id === "xPrivate002" ? '"LOGIN_REQUIRED","reason":"This video is private"' : '"OK"';
+    return new Response(`<script>var ytInitialPlayerResponse = {"playabilityStatus":{"status":${st}}};</script>`, { status: 200 });
+  };
   // обложки: градиент с подписью вместо i.ytimg.com
   const cache = new Map();
   function thumb(id) {
     if (cache.has(id)) return cache.get(id);
+    // удалённое и приватное — серая заглушка, как у YouTube
+    if (/^x(Gone|Priv)/.test(id)) {
+      const c = document.createElement("canvas");
+      c.width = 320;
+      c.height = 180;
+      const g = c.getContext("2d");
+      g.fillStyle = "#3b3b40";
+      g.fillRect(0, 0, 320, 180);
+      const url = c.toDataURL("image/png");
+      cache.set(id, url);
+      return url;
+    }
     const v = byId.get(id) || { hue: 200, title: "" };
     const c = document.createElement("canvas");
     c.width = 320;
