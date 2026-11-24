@@ -4489,3 +4489,35 @@ button.primary .key {
     padding-bottom: 2px;
   }
 }
+
+/* «Копия в Telegram» — последним блоком во всю ширину (без пустой клетки сетки):
+   слева подпись, справа кнопка и переключатель «раз в неделю» */
+.bk .td-sec.bk-tg {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.bk-tg .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 18px;
+}
+
+.bk-tg .row button.ghost {
+  height: 2.6rem;
+}
+
+@media (max-width: 760px) {
+  .bk .td-sec.bk-tg {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bk-tg .row {
+    justify-content: flex-start;
+  }
+}

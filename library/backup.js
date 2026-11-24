@@ -6,6 +6,7 @@
 // добавить к своей; каталог — сразу для поиска, без сбора с YouTube; настройки —
 // по желанию. Сами плейлисты на YouTube файл не меняет.
 
+import { collectBackup } from "../backup-core.js";
 import { icon } from "../sidepanel/icons.js";
 import { useCatalog } from "./catalog.js";
 import { loadQueue, qmsg, renderQueueSide } from "./queue-view.js";
@@ -14,26 +15,11 @@ import { kv } from "./store.js";
 import { ago } from "./view-lib.js";
 
 const FORMAT = "ytcs-backup";
+const AUTO_KEY = "autoBackup"; // backup-bg.js: { on, at, err, tried, size }
 export const bk = { open: false, msg: "", err: "", file: null };
 
-async function collect() {
-  const local = await chrome.storage.local.get(["queue", "queuePos", "queueOpts", "settings", "plRecent", "libWatchHere", "libraryWhere", "wlBackup"]);
-  const settings = { ...(local.settings || {}) };
-  delete settings.token; // секрет бота — никогда в файл
-  const cat = state.cat || (await kv("catalog").catch(() => null));
-  return {
-    format: FORMAT,
-    v: 1,
-    at: Date.now(),
-    extVersion: chrome.runtime.getManifest().version,
-    queue: local.queue || [],
-    queuePos: local.queuePos || {},
-    queueOpts: local.queueOpts || null,
-    settings,
-    prefs: { plRecent: local.plRecent || [], libWatchHere: local.libWatchHere, libraryWhere: local.libraryWhere, wlBackup: local.wlBackup || null },
-    catalog: cat ? { syncedAt: cat.syncedAt, playlists: cat.playlists, videos: cat.videos, gone: cat.gone || [] } : null,
-  };
-}
+// что в копии — общее с автокопией в Telegram (backup-core.js)
+const collect = () => collectBackup(state.cat);
 
 async function exportFile() {
   const data = await collect();
@@ -133,9 +119,40 @@ function html() {
         <div class="td-h"><b>Восстановить из файла</b><span>На новом браузере или если что-то потерялось. Плейлисты на YouTube файл не меняет.</span></div>
         ${preview || `<label class="ghost bk-pick">${icon("history", { size: 16 })}Выбрать файл…<input type="file" accept=".json,application/json" data-bk-file hidden /></label>`}
       </div>
+      <div class="td-sec bk-tg">
+        <div class="td-h"><b>Копия в Telegram</b><span>${autoLine()}</span></div>
+        <div class="row">
+          <button type="button" class="ghost" data-bk="tg" ${bk.sending ? "disabled" : ""}>${icon("send", { size: 16 })}${bk.sending ? "Отправляю…" : "Отправить сейчас"}</button>
+          <label class="bk-check"><input type="checkbox" data-bk-auto ${bk.auto?.on === false ? "" : "checked"} /> Раз в неделю сама</label>
+        </div>
+      </div>
     </div>
     ${bk.msg ? `<div class="td-msg ok">${esc(bk.msg)}</div>` : ""}${bk.err ? `<div class="td-msg wl-err">${esc(bk.err)}</div>` : ""}
   </section>`;
+}
+
+// «Копия в Telegram»: когда была последняя, что не так
+function autoLine() {
+  const a = bk.auto || {};
+  const last = a.at ? `Последняя — ${ago(a.at)}${a.size ? ` (${Math.max(1, Math.round(a.size / 1024))} КБ)` : ""}.` : "Ещё не отправлялась.";
+  const err = a.err ? ` Не получилось: ${a.err}` : "";
+  return `Файл с той же копией — в ваш чат с ботом, раз в неделю или по кнопке. ${last}${err}`;
+}
+
+async function loadAuto() {
+  bk.auto = (await chrome.storage.local.get(AUTO_KEY))[AUTO_KEY] || {};
+}
+
+async function sendNow() {
+  bk.sending = true;
+  bk.msg = bk.err = "";
+  render();
+  const r = await chrome.runtime.sendMessage({ type: "backup:send" }).catch((e) => ({ err: String(e?.message || e) }));
+  bk.sending = false;
+  await loadAuto();
+  if (r?.err) bk.err = `Копия не отправилась: ${r.err}`;
+  else bk.msg = "Копия отправлена — файл в вашем чате с ботом.";
+  render();
 }
 
 function render() {
@@ -150,6 +167,7 @@ export function toggleBackup(on = !bk.open) {
   bk.msg = bk.err = "";
   bk.file = null;
   render();
+  if (on) void loadAuto().then(render);
   if (on) $("#backup")?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
@@ -159,11 +177,16 @@ document.addEventListener("click", (e) => {
   if (a === "open") toggleBackup(true);
   else if (a === "close") toggleBackup(false);
   else if (a === "export") void exportFile();
+  else if (a === "tg") void sendNow();
   else if (a === "cancel") {
     bk.file = null;
     render();
   } else if (a === "add" || a === "replace") void restore(a);
 });
 document.addEventListener("change", (e) => {
+  if (e.target.matches?.("[data-bk-auto]")) {
+    void chrome.runtime.sendMessage({ type: "backup:toggle", on: e.target.checked }).then(loadAuto).then(render);
+    return;
+  }
   if (e.target.matches?.("[data-bk-file]") && e.target.files?.[0]) void pickFile(e.target.files[0]);
 });
