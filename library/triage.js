@@ -171,8 +171,8 @@ async function undo() {
   }
 }
 
+// кнопку «Разобрать завалы» ([data-act=triage]) слушает queue-view.js — он и подгружает этот модуль
 document.addEventListener("click", (e) => {
-  if (e.target.closest("[data-act=triage]")) return openTriage();
   if (!tri.on) return;
   const t = e.target.closest("[data-t]")?.dataset.t;
   if (!t || t === "order") return;

@@ -78,6 +78,18 @@ document.querySelector(".views").addEventListener("click", (e) => {
   const b = e.target.closest("[data-view]");
   if (b) setView(b.dataset.view);
 });
+
+// «Статистика» (stats-view.js) — грузим по первому нажатию или по адресу #stats / #v=stats;
+// значок кнопки стоит прямо в library.html. Адрес запоминаем сразу: пока модуль грузится,
+// раздел «Плейлисты» успевает переписать адрес (saveHash), и сам модуль #stats уже не увидит.
+// Уже открытую статистику повторно не открываем (её открыл и сам модуль по тому же hashchange).
+let statsMod = null;
+const loadStats = () => (statsMod ||= import("./stats-view.js"));
+const statsHash = () => location.hash === "#stats" || new URLSearchParams(location.hash.slice(1)).get("v") === "stats";
+const statsFromHash = () => void loadStats().then((m) => !document.body.dataset.stats && m.openStats());
+$("#st-tab").addEventListener("click", () => void loadStats().then((m) => m.toggleStats()));
+window.addEventListener("hashchange", () => statsHash() && statsFromHash());
+if (statsHash()) statsFromHash();
 setInterval(() => state.view === "queue" && document.visibilityState === "visible" && refreshTabsCount(), 10000);
 
 // ---------- события ----------
@@ -249,8 +261,8 @@ for (const el of document.querySelectorAll("[data-icon]")) el.innerHTML = icon(e
 
 // ---------- старт ----------
 readHash();
-await loadQueue();
-const cached = await kv("catalog").catch(() => null);
+// очередь (chrome.storage) и каталог (IndexedDB) читаем одновременно — сетка появляется раньше
+const [, cached] = await Promise.all([loadQueue(), kv("catalog").catch(() => null)]);
 if (cached?.videos) useCatalog(cached);
 renderSync();
 update();

@@ -15,7 +15,8 @@ import { saveHash } from "./library.js";
 import { $, esc, nf, plural, state } from "./state.js";
 import { closeWatch } from "./watch.js";
 
-// значок раздела — столбики (в общем наборе иконок такого нет)
+// значок раздела — столбики (в общем наборе иконок такого нет); в шапке он же стоит
+// прямо в library.html — модуль грузится по первому нажатию, значок не должен мигать
 const CHART_SVG = (size = 18) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h16"/><path d="M7 16v-4"/><path d="M12 16V6"/><path d="M17 16v-7"/></svg>`;
 
@@ -37,10 +38,10 @@ try {
 }
 
 // ---------- кнопка в шапке ----------
+// Модуль подгружает library.js: по нажатию на «Статистику» (→ toggleStats) или по адресу #stats.
 const tab = $("#st-tab");
-tab.querySelector(".st-tab-ic").innerHTML = CHART_SVG(18);
 // второй щелчок — назад к разделу, откуда пришли
-tab.addEventListener("click", () => (sv.on ? closeStats() : openStats()));
+export const toggleStats = () => (sv.on ? closeStats() : openStats());
 // «Плейлисты» / «Очередь» — уйти из статистики
 $(".views").addEventListener("click", (e) => {
   if (e.target.closest("[data-view]") && sv.on) closeStats();

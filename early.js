@@ -170,11 +170,26 @@
   }
 
   let lastHref = location.href;
-  setInterval(() => {
+  const hrefCheck = () => {
     if (location.href === lastHref) return;
     lastHref = location.href;
     checkPlaying();
-  }, 500);
+  };
+  onHrefChange(hrefCheck, 500);
+
+  // Смена адреса страницы (pushState/replaceState YouTube, «назад»): Navigation API
+  // сообщает о ней и изолированному миру — без опроса раз в полсекунды на каждой
+  // вкладке. Нет API — по-старому, проверка адреса по таймеру. Проверяем с той же
+  // задержкой, что была у опроса в среднем: YouTube успевает дорисовать страницу.
+  function onHrefChange(fn, ms) {
+    const nav = globalThis.navigation;
+    if (!nav?.addEventListener) return void setInterval(fn, ms);
+    let t = 0;
+    nav.addEventListener("currententrychange", () => {
+      clearTimeout(t);
+      t = setTimeout(fn, ms / 2);
+    });
+  }
 
   // ---------- Настройки ----------
   function readPrefs(settings) {
@@ -214,5 +229,6 @@
       document.dispatchEvent(new CustomEvent("ytcs-allow"));
     },
     applyHideProgress,
+    onHrefChange, // общий для content.js и lazy.js (тот же изолированный мир)
   };
 })();

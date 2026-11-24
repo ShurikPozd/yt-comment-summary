@@ -7,7 +7,12 @@ import { $, esc, nf, plural, setSearchHint, state, videosWord } from "./state.js
 import { ago, durOk, fmtLen, mark, more, update } from "./view-lib.js";
 import { openWatch, refreshWatchSide, watch, watchHere } from "./watch.js";
 import { wlCardHtml } from "./wl.js";
-import "./triage.js";
+
+// «Разобрать завалы» (triage.js, с ним пересказы, ИИ и подсказки — ~100 КБ) —
+// грузим по первому нажатию кнопки, а не при каждом открытии библиотеки
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-act=triage]")) void import("./triage.js").then((m) => m.openTriage());
+});
 
 // ---------- очередь «посмотреть потом» ----------
 export const qmsg = (msg) => chrome.runtime.sendMessage(msg).catch(() => null);

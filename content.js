@@ -1795,10 +1795,11 @@
   window.addEventListener("yt-navigate-finish", () => handlePage());
   window.addEventListener("popstate", () => handlePage());
   // Shorts и часть переходов YouTube меняют адрес без yt-navigate-finish —
-  // дешёвая проверка адреса раз в 700 мс ловит и их (handlePage сам
-  // игнорирует повтор того же видео).
+  // ловим смену адреса (Navigation API, early.js; без него — проверка раз в 700 мс).
+  // handlePage сам игнорирует повтор того же видео.
   let lastHref = location.href;
-  setInterval(() => {
+  const onHrefChange = globalThis.__ytcs?.onHrefChange || ((fn, ms) => setInterval(fn, ms));
+  onHrefChange(() => {
     if (location.href === lastHref) return;
     lastHref = location.href;
     void handlePage();

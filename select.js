@@ -169,6 +169,7 @@
   // Пока выбрано хоть что-то, у всех карточек виден пустой кружок —
   // понятно, что клик теперь выбирает. Выбранные — в рамке и с галочкой.
   // Карточки YouTube переиспользует под другие видео — сверяем id каждый раз.
+  let marksShown = false; // на странице есть наши кружки — их надо будет убрать
   function syncMarks() {
     const on = picked.size > 0;
     if (on) ensurePageCss();
@@ -187,12 +188,14 @@
           const img = th.querySelector("img");
           if (img) m.style.borderRadius = getComputedStyle(img).borderRadius;
           th.appendChild(m);
+          marksShown = true;
         }
         m.classList.toggle("on", picked.has(id));
         seen.add(m);
       }
     }
     for (const m of document.querySelectorAll(".ytcs-mark")) if (!seen.has(m)) m.remove();
+    if (!on) marksShown = false;
   }
 
   // ---------- своё окно: кружок при наведении и полоса внизу ----------
@@ -872,7 +875,8 @@
   }
   // YouTube дорисовывает ленту при прокрутке и переходах — отметки догоняют
   setInterval(() => {
-    if (picked.size || document.querySelector(".ytcs-mark")) syncMarks();
+    // без выбора — ни одного поиска по всей странице (раньше искали кружки каждые 0,7 с)
+    if (picked.size || marksShown) syncMarks();
     if (host && picked.size) host.toggleAttribute("dark", isDark());
     if (qmode) syncQueued();
     syncToggle();
