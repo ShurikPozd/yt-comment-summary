@@ -1519,7 +1519,9 @@ async function analyze() {
         if (isSizeLimitError(pe) || nodes.length === 1) throw pe;
         partsFailed++;
         lastPartError = pe;
-        console.warn("часть анализа не удалась:", pe);
+        // не warn: сбой части обработан (панель покажет «разобрано N из M частей») и не должен
+        // попадать в «Ошибки» на chrome://extensions
+        console.info("часть анализа не удалась:", pe?.message || pe);
       }
       baseOffset += nodes[ci].length;
     }
