@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru" dark>
+<head>
+<meta charset="utf-8" />
+<title>Стенд: страница YouTube</title>
+<!-- окна расширения на YouTube рисуются шрифтом страницы — Roboto -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=block" />
+<style>
+  body { margin: 0; background: #0f0f0f; font-family: Roboto, Arial, sans-serif; }
+  #movie_player { position: relative; width: 860px; height: 484px; margin: 16px; overflow: hidden; border-radius: 12px;
+    background: linear-gradient(135deg, #3a4a6b, #1b2233); }
+  #movie_player video { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+  .ytp-chrome-bottom { position: absolute; left: 12px; right: 12px; bottom: 0; height: 59px; }
+  .ytp-progress-bar-container { position: absolute; left: 0; right: 0; top: 0; height: 5px; background: rgba(255,255,255,.3); }
+  .ytp-progress-bar-container::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 58%; background: #f03; }
+  .ytp-chrome-controls { position: absolute; left: 0; right: 0; bottom: 4px; height: 48px; display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(transparent, rgba(0,0,0,.6)); }
+  .ytp-time-display { color: #eee; font-size: 13px; padding-left: 12px; }
+  .ytp-right-controls { display: flex; align-items: center; }
+  .ytp-right-controls-left, .ytp-right-controls-right { display: flex; align-items: center; }
+  /* базовые стили кнопок плеера YouTube */
+  .ytp-button { width: 32px; height: 32px; margin: 4px 2px; padding: 0; border: 0; background: none; color: #eee; cursor: pointer; border-radius: 50%; }
+  .ytp-button:hover { background: rgba(255,255,255,.12); }
+  .ytp-button svg { width: 24px; height: 24px; display: block; margin: auto; }
+</style>
+</head>
+<body>
+  <div id="movie_player">
+    <video></video>
+    <div class="ytp-chrome-bottom">
+      <div class="ytp-progress-bar-container"></div>
+      <div class="ytp-chrome-controls">
+        <div class="ytp-time-display"><span class="ytp-time-current">1:43</span><span class="ytp-time-separator"> / </span><span class="ytp-time-duration">3:33</span></div>
+        <div class="ytp-right-controls">
+          <div class="ytp-right-controls-left">
+            <button class="ytp-button ytp-subtitles-button" aria-label="Субтитры"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 13h4M13 13h4M7 16h6"/></svg></button>
+            <button class="ytp-button ytp-settings-button" aria-label="Настройки"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+          </div>
+          <div class="ytp-right-controls-right">
+            <button class="ytp-button ytp-fullscreen-button" aria-label="Во весь экран"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- заглушка chrome.* и ответы «главного мира» плеера; затем настоящие контент-скрипты -->
+<script src="/tools/align/stands/yt-stub.js"></script>
+<script src="/content.js"></script>
+<script src="/clip.js"></script>
+<script src="/playlists.js"></script>
+<script src="/thumb-preview.js"></script>
+</body>
+</html>

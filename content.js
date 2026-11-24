@@ -1083,10 +1083,10 @@
     .ytcs-note { padding: 4px 16px 6px; font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, .55); min-height: 0; }
     .ytcs-note:empty { display: none; }
     .ytcs-toast { position: absolute; top: 16px; left: 50%; z-index: 80; display: flex; align-items: center; gap: 10px;
-      padding: 12px 22px 13px 16px; border-radius: 999px; background: rgba(28, 28, 30, .9);
+      padding: 11px 22px 11px 16px; border-radius: 999px; background: rgba(28, 28, 30, .9);
       -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
       box-shadow: 0 8px 30px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(255, 255, 255, .06);
-      color: #f1f1f1; font: 500 16px/1.3 "YouTube Noto", Roboto, Arial, sans-serif; white-space: nowrap;
+      color: #f1f1f1; font: 500 16px/22px "YouTube Noto", Roboto, Arial, sans-serif; white-space: nowrap;
       width: max-content; max-width: calc(100% - 32px); box-sizing: border-box;
       opacity: 0; transform: translate(-50%, -8px) scale(.97); pointer-events: none;
       transition: opacity .18s ease, transform .26s cubic-bezier(.22, 1, .36, 1); }
@@ -1097,7 +1097,9 @@
     .ytcs-toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
     .ytcs-toast svg { width: 20px; height: 20px; flex: none; color: #ff6b85; }
     /* длинная плашка («Сохранено в «…»») в узком плеере переносится, а не обрезается */
-    .ytcs-toast span { min-width: 0; white-space: normal; text-wrap: balance; }
+    /* Roboto сидит в строке высоко: подпись на 1px ниже, значок — по центру плашки
+       (высота 44px — ровно на экранах 100–200%, замер tools/align) */
+    .ytcs-toast span { position: relative; top: 1px; min-width: 0; white-space: normal; text-wrap: balance; }
     .ytcs-toast .ytcs-spin { animation: ytcs-spin .9s linear infinite; }
     @keyframes ytcs-spin { to { transform: rotate(360deg); } }
     /* «Таймер сна» (sleep.js): пункт раскрывает варианты под собой — 15…90 мин, «В конце видео», «Выключить» */
@@ -1144,7 +1146,8 @@
     // закладка с галочкой — «Сохранить в «…»» (последний плейлист) одним нажатием
     quicksave: SVG('<path d="M6 4h12v16l-6-4-6 4z"/><path d="M9 9.8l2.2 2.2 3.8-4"/>'),
     // список с часами — «Отложить в очередь» (посмотреть потом)
-    defer: SVG('<path d="M4 6h10"/><path d="M4 11h10"/><path d="M4 16h6"/><circle cx="17.5" cy="16.5" r="4"/><path d="M17.5 14.6v2.1l1.4.9"/>'),
+    // рисунок по центру квадрата 24×24 (иначе значок «садится» ниже подписи)
+    defer: SVG('<path d="M4 4.75h10"/><path d="M4 9.75h10"/><path d="M4 14.75h6"/><circle cx="17.5" cy="15.25" r="4"/><path d="M17.5 13.35v2.1l1.4.9"/>'),
     // стопка плейлистов — «Моя библиотека»
     library: SVG('<rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/>'),
     // «перескок» через вставку — «Пропускать рекламные вставки»
@@ -1164,7 +1167,7 @@
     minus: SVG('<path d="M6 12h12"/>'),
     plus: SVG('<path d="M6 12h12"/><path d="M12 6v12"/>'),
     // спидометр — «Скорость по каналам» (speed.js)
-    speed: SVG('<path d="M4.2 18.5a9 9 0 1 1 15.6 0"/><path d="M12 14.5l4.2-4.6"/><circle cx="12" cy="14.5" r="1.4"/><path d="M12 6.2v1.6M6.3 9l1.2 1M17.7 9l-1.2 1" opacity=".6"/>'),
+    speed: SVG('<path d="M4.2 19a9 9 0 1 1 15.6 0"/><path d="M12 15l4.2-4.6"/><circle cx="12" cy="15" r="1.4"/><path d="M12 6.7v1.6M6.3 9.5l1.2 1M17.7 9.5l-1.2 1" opacity=".6"/>'),
     // стрелка назад — «Скорость для канала: … · Сбросить»
     speedreset: SVG('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/>'),
     // видоискатель с точкой — «Без отвлечений» (тот же знак на карточках focus.js)
