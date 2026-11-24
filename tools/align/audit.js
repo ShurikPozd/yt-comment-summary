@@ -13,7 +13,10 @@
     "button", "[role=tab]", "[role=button]", "[role=menuitem]", "[role=checkbox]", "[role=radio]",
     ".chip", "a[class]", "label[class]", "summary", ".badge", ".pill", "kbd", ".key", ".search-modes label",
   ].join(", ");
+  // заглавная без выносов: у «Д», «Ц», «Щ», «Q», «J» ножки ниже строки — центр по ним
+  // выходит ниже на ~1 px, и ровная подпись «падала» бы в тесте; «Й», «Ё» — с надстрочным
   const CAP = /[A-ZА-ЯЁ0-9]/;
+  const CAP_OK = /[A-IK-PR-ZА-ГЕЖ-ИК-ХЧШЪ-Я0-9]/;
 
   // родитель с переходом через границу тени
   const up = (n) => n.parentElement || n.getRootNode?.().host || null;
@@ -54,7 +57,7 @@
   function firstText(el, sel) {
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
-      if (!CAP.test(n.textContent)) continue;
+      if (!CAP_OK.test(n.textContent)) continue;
       const p = n.parentElement;
       if (p !== el && p.closest(sel) !== el) continue;
       if (p.closest("svg")) continue;
@@ -106,7 +109,7 @@
         if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
         const tn = firstText(el, sel);
         if (!tn) continue;
-        const i0 = tn.textContent.search(CAP);
+        const i0 = tn.textContent.search(CAP_OK);
         const r1 = document.createRange();
         r1.setStart(tn, i0);
         r1.setEnd(tn, i0 + 1);

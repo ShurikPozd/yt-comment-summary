@@ -456,6 +456,9 @@
     :host([dark]) .ctl button:hover:not(:disabled) { background: rgba(255,255,255,.2); }
     .ctl button:active:not(:disabled) { transform: scale(.97); }
     .ctl button:disabled { opacity: .4; cursor: default; }
+    /* шрифт YouTube: заглавные выше середины строки — подписи опускаем на 1 px,
+       тогда они по центру кнопки и вровень со стрелками (замер tools/align) */
+    .ctl button > .lbl { position: relative; top: 1px; }
     /* главная кнопка — цветом расширения, как «Открыть очередь» и «Сохранить» */
     .ctl .done, :host([dark]) .ctl .done { background: #e8002d; color: #fff; font-weight: 600; }
     :host([dark]) .ctl .done { background: #ff3b5c; }
@@ -632,7 +635,7 @@
         ${done ? `<div class="note"><span>Досмотрено — убрано из очереди</span><button data-act="undo">${svg("undo", 16)}Вернуть</button></div>` : ""}
         <div class="ctl" ${done && !total ? "hidden" : ""}>
           <button data-act="prev" ${prev ? "" : "disabled"} title="Предыдущее в очереди — клавиша [" aria-label="Назад">${svg("prev")}<span class="lbl">Назад</span></button>
-          <button class="done" data-act="done" ${i >= 0 ? "" : "disabled"} title="Досмотрел: убрать из очереди и дальше — Shift+]">${svg("check")}Досмотрел</button>
+          <button class="done" data-act="done" ${i >= 0 ? "" : "disabled"} title="Досмотрел: убрать из очереди и дальше — Shift+]">${svg("check")}<span class="lbl">Досмотрел</span></button>
           <button data-act="next" ${next ? "" : "disabled"} title="Следующее в очереди — клавиша ]" aria-label="Дальше"><span class="lbl">Дальше</span>${svg("next")}</button>
         </div>
         ${curRec ? `<div class="cur-line"><span>Сейчас</span><b title="${esc(curRec.title)}">${esc(curRec.title || "Видео")}</b></div>` : ""}
