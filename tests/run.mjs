@@ -20,6 +20,7 @@ import * as ST from "../stats-core.js";
 import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRead, mergeFeed, newCount, queueable, visible } from "../library/digest-core.js";
 import { MODULES, createLoader } from "../lazy-bg.js";
 import { moveIds, rangeIds, restoreAt, snapshot } from "../library/multi-core.js";
+import { moveBefore, moveSteps, undoSteps } from "../queue-core.js";
 import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
@@ -1206,6 +1207,30 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   await new Promise((r) => setTimeout(r, 0));
   ok(badge.text === "", "приветствие: метку сняли — значок гаснет");
   delete globalThis.chrome;
+}
+
+// ---------- перестановка в колонке очереди (queue-core.js) ----------
+{
+  const q = ["a", "b", "c", "d", "e", "f"].map((id) => ({ id }));
+  const ids = (list) => list.map((x) => x.id).join("");
+  ok(ids(moveBefore(q, ["e"], "b")) === "aebcdf", "очередь: перетащили вверх — перед «b»");
+  ok(ids(moveBefore(q, ["b"], "e")) === "acdbef", "очередь: перетащили вниз — перед «e»");
+  ok(ids(moveBefore(q, ["b"], null)) === "acdefb", "очередь: before = null — в конец");
+  ok(ids(moveBefore(q, ["e", "b"], "a")) === "beacdf", "очередь: группа — в порядке очереди, не выбора");
+  ok(ids(moveBefore(q, ["b", "c"], "b")) === "abcdef", "очередь: перед собой — без изменений");
+  ok(ids(moveBefore(q, ["b", "d"], "c")) === "abdcef", "очередь: before среди непереносимых между выбранными");
+  ok(ids(moveBefore(q, ["c", "d"], "c")) === "abcdef", "очередь: before — первый из выбранных → перед следующим за ними");
+  ok(ids(moveBefore(q, ["e", "f"], "e")) === "abcdef", "очередь: выбранные в конце, before — среди них → в конец, как были");
+  ok(ids(moveBefore(q, ["b"], "zz")) === "abcdef", "очередь: before пропал — ничего не двигаем");
+  ok(ids(moveBefore(q, ["zz"], "a")) === "abcdef", "очередь: переносимого нет — порядок прежний");
+  ok(moveBefore(q, ["e"], "b").length === 6 && ids(q) === "abcdef", "очередь: исходный список не меняется, длина та же");
+  // «Наверх» в колонке — перед первым после текущего («a» — текущее)
+  ok(ids(moveBefore(q, ["d", "f"], "b")) === "adfbce", "очередь: «Наверх» — сразу после текущего");
+  for (const [sel, before] of [[["e"], "b"], [["b", "e"], null], [["a", "c", "f"], "d"], [["d", "f"], "b"], [["b"], "e"]]) {
+    const moved = moveBefore(q, sel, before);
+    ok(ids(moveSteps(moved, undoSteps(q, sel))) === "abcdef", `очередь: «Вернуть» после ${sel.join("")} → ${before} — как было`);
+  }
+  ok(ids(moveSteps(q, [{ ids: ["a"], before: null }, { ids: ["f"], before: "b" }])) === "fbcdea", "очередь: несколько шагов подряд");
 }
 
 // ---------- выбор нескольких видео в библиотеке (library/multi-core.js) ----------

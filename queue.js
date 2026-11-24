@@ -408,6 +408,9 @@
     undo: '<path d="M9 14.5L4 9.5l5-5"/><path d="M4 9.5h11a5 5 0 0 1 0 10h-3"/>',
     x: '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
     pick: '<path d="M4 7.25l2 2 3.5-3.5"/><path d="M13 7.25h7"/><path d="M4 16.25l2 2 3.5-3.5"/><path d="M13 16.25h7"/>',
+    // как «Наверх» / «В конец» в выборе «Моей библиотеки»
+    top: '<path d="M5 4h14"/><path d="M12 20V9"/><path d="M7.5 13.5L12 9l4.5 4.5"/>',
+    bottom: '<path d="M5 20h14"/><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/>',
   };
   const svg = (k, s = 20) =>
     `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
@@ -513,10 +516,14 @@
     .row.on, :host([dark]) .row.on { background: rgba(255,59,92,.14); box-shadow: inset 0 0 0 2px #ff3b5c; }
     /* «Дальше» у первой плитки — слева снизу: левый верх занят крестиком */
     .now { top: auto; bottom: 8px; }
-    /* полоса выбора под галереей — всегда на виду, галерея листается над ней */
-    .selbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px 16px; border-top: 1px solid rgba(0,0,0,.08); }
+    /* полоса выбора под галереей — всегда на виду, галерея листается над ней:
+       сверху «Выбрано: N · Все · Отмена», под ней три действия поровну на всю ширину */
+    .selbar { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; border-top: 1px solid rgba(0,0,0,.08); }
     :host([dark]) .selbar { border-top-color: rgba(255,255,255,.12); }
-    .selbar b { flex: 1; min-width: 0; font: 500 14px Roboto, Arial, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sb1 { display: flex; align-items: center; gap: 8px; }
+    .sb2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .sb2 button { min-width: 0; padding: 0 8px; }
+    .selbar b { flex: 1; min-width: 0; padding-left: 4px; font: 500 14px Roboto, Arial, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .selbar button { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px;
       border: 0; border-radius: 18px; background: rgba(0,0,0,.05); color: inherit; font: 500 14px Roboto, Arial, sans-serif; cursor: pointer; white-space: nowrap; }
     :host([dark]) .selbar button { background: rgba(255,255,255,.1); }
@@ -532,11 +539,23 @@
       .hbtns .all .lbl { display: none; }
       .hbtns .all { width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; }
     }
-    @container (max-width: 380px) {
-      .selbar { flex-wrap: wrap; }
-      .selbar b { flex-basis: 100%; }
-      .selbar .drop { flex: 1; }
-    }
+    /* перетаскивание: красная черта — куда встанет; тянутые плитки бледнеют */
+    .list { position: relative; }
+    .row, .row img { -webkit-user-drag: none; }
+    .list.dragging .row, .list.dragging .row:hover { background: transparent; cursor: grabbing; }
+    .list.dragging .row.on { background: rgba(255,59,92,.14); }
+    .list.dragging .row:hover .th img { transform: none; }
+    .list.dragging .x { opacity: 0; }
+    .row.dragged { opacity: .35; }
+    .mark { position: absolute; z-index: 3; border-radius: 2px; background: #ff3b5c; pointer-events: none; }
+    .mark[hidden] { display: none; }
+    .mark::before, .mark::after { content: ""; position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #ff3b5c; }
+    .mark.v { width: 4px; }
+    .mark.v::before { left: -3px; top: -5px; }
+    .mark.v::after { left: -3px; bottom: -5px; }
+    .mark.h { height: 4px; }
+    .mark.h::before { top: -3px; left: -5px; }
+    .mark.h::after { top: -3px; right: -5px; }
     .note { margin: 0 16px 12px; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.05); display: flex; align-items: center; gap: 10px; }
     :host([dark]) .note { background: rgba(255,255,255,.08); }
     .note span { flex: 1; }
@@ -558,6 +577,8 @@
   }
 
   function render() {
+    // пока тянут плитку, галерею не перестраиваем (место просмотра пишется раз в 5 с) — дорисуем после
+    if (drag?.on) return void (drag.dirty = true);
     const id = curId();
     const show = id && (inQueue(id) || doneId === id) && queue.length + (doneId === id ? 1 : 0) > 0;
     if (!show) {
@@ -573,6 +594,8 @@
       host.id = "ytcs-queue";
       host.attachShadow({ mode: "open" });
       host.shadowRoot.addEventListener("click", onClick);
+      host.shadowRoot.addEventListener("pointerdown", onPointerDown);
+      host.shadowRoot.addEventListener("dragstart", (e) => e.preventDefault());
       place.prepend(host);
     }
     host.toggleAttribute("dark", document.documentElement.hasAttribute("dark"));
@@ -592,7 +615,7 @@
       const pct = r.len ? Math.min(100, Math.round((p / r.len) * 100)) : 0;
       const sub = [r.channel, r.len && p > 5 ? `осталось ${fmtDur(left(r))}` : r.short ? "Shorts" : ""].filter(Boolean).join(" · ");
       return `<button class="row${k === 0 ? " hero" : ""}${sel.has(r.id) ? " on" : ""}" data-go="${esc(r.id)}" title="${esc(r.title)}"${selMode ? ` aria-pressed="${sel.has(r.id)}"` : ""}>
-        <span class="th"><span class="x" data-drop="${esc(r.id)}" title="Убрать из очереди" aria-hidden="true">${svg("x", 18)}</span><span class="pk" aria-hidden="true">${svg("check", 18)}</span><img loading="lazy" alt="" src="https://i.ytimg.com/vi/${esc(r.id)}/${k === 0 ? "hqdefault" : "mqdefault"}.jpg">${r.len ? `<span class="len">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${k === 0 ? `<span class="now">Дальше</span>` : ""}</span>
+        <span class="th"><span class="x" data-drop="${esc(r.id)}" title="Убрать из очереди" aria-hidden="true">${svg("x", 18)}</span><span class="pk" aria-hidden="true">${svg("check", 18)}</span><img loading="lazy" alt="" draggable="false" src="https://i.ytimg.com/vi/${esc(r.id)}/${k === 0 ? "hqdefault" : "mqdefault"}.jpg">${r.len ? `<span class="len">${fmtClock(r.len)}</span>` : ""}${pct ? `<span class="bar" style="width:${pct}%"></span>` : ""}${k === 0 ? `<span class="now">Дальше</span>` : ""}</span>
         <span class="rt"><b>${esc(r.title || "Видео")}</b><span>${esc(sub)}</span></span>
       </button>`;
     };
@@ -602,7 +625,7 @@
         <div class="head">
           <div class="ttl"><b>Очередь</b><span>${i >= 0 ? `${i + 1} из ${total}` : total ? `${total} видео` : "больше ничего нет"}${leftAll ? ` · осталось ≈ ${fmtDur(leftAll)}` : ""}</span></div>
           <div class="hbtns">
-            <button class="all${selMode ? " on" : ""}" data-act="select" aria-pressed="${selMode}" title="Выбрать несколько видео и убрать разом (или Ctrl/Shift+клик по видео)" aria-label="Выбрать">${svg("pick", 18)}<span class="lbl">Выбрать</span></button>
+            <button class="all${selMode ? " on" : ""}" data-act="select" aria-pressed="${selMode}" title="Выбрать несколько видео — убрать, наверх или в конец разом (или Ctrl/Shift+клик по видео)" aria-label="Выбрать">${svg("pick", 18)}<span class="lbl">Выбрать</span></button>
             <button class="all" data-act="all" title="Вся очередь — в «Моей библиотеке»" aria-label="Вся очередь">${svg("list", 18)}<span class="lbl">Вся очередь</span></button>
           </div>
         </div>
@@ -616,10 +639,14 @@
         <div class="list${selMode ? " sel" : ""}">${rows.map(row).join("")}</div>
         ${
           selMode
-            ? `<div class="selbar"><b>${sel.size ? `Выбрано: ${sel.size}` : "Отметьте видео"}</b>
-          <button data-act="sel-all" title="Отметить все видео ниже">Все</button>
-          <button class="drop" data-act="sel-drop" ${sel.size ? "" : "disabled"}>${svg("x", 16)}Убрать</button>
-          <button data-act="sel-off" title="Выйти из выбора — Esc">Отмена</button></div>`
+            ? `<div class="selbar">
+          <div class="sb1"><b>${sel.size ? `Выбрано: ${sel.size}` : "Отметьте видео"}</b>
+            <button data-act="sel-all" title="Отметить все видео ниже">Все</button>
+            <button data-act="sel-off" title="Выйти из выбора — Esc">Отмена</button></div>
+          <div class="sb2">
+            <button data-act="sel-top" ${sel.size ? "" : "disabled"} title="Сразу после текущего видео — первое станет «Дальше»">${svg("top", 16)}Наверх</button>
+            <button data-act="sel-bottom" ${sel.size ? "" : "disabled"} title="В самый конец очереди">${svg("bottom", 16)}В конец</button>
+            <button class="drop" data-act="sel-drop" ${sel.size ? "" : "disabled"}>${svg("x", 16)}Убрать</button></div></div>`
             : ""
         }
       </div>`;
@@ -641,6 +668,13 @@
   }
 
   function onClick(e) {
+    // отпустили после перетаскивания (или отменили его Esc) — это не клик
+    if (eatClick) {
+      eatClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const dropEl = e.target.closest("[data-drop]");
     if (dropEl) {
       e.stopPropagation();
@@ -681,6 +715,7 @@
       for (const x of shown) sel.add(x);
       render();
     } else if (act === "sel-drop") void dropIds([...sel]);
+    else if (act === "sel-top" || act === "sel-bottom") void moveSel(act === "sel-top");
   }
 
   // ---------- убрать из очереди (крестик или выбранные) — с «Вернуть» ----------
@@ -702,6 +737,277 @@
     toast(items.length === 1 ? `Убрано из очереди: «${items[0].rec.title || "видео"}»` : `Убрано из очереди: ${items.length} видео`, [
       ["Вернуть", () => send({ type: "queue:put", items, undo: "drop" })],
     ]);
+  }
+
+  // ---------- перестановка: перетаскивание, «Наверх» / «В конец» — с «Вернуть» ----------
+  // То же, что moveBefore / undoSteps в queue-core.js (там же проверки): ids — перед
+  // видео before (null — в конец), в их нынешнем порядке; остальные не двигаются.
+  function moveBefore(list, ids, before = null) {
+    const pick = new Set(ids);
+    const moved = list.filter((x) => pick.has(x.id));
+    if (!moved.length) return list.slice();
+    let target = null;
+    if (before != null) {
+      const at = list.findIndex((x) => x.id === before);
+      if (at < 0) return list.slice();
+      target = list.slice(at).find((x) => !pick.has(x.id))?.id ?? null;
+    }
+    const rest = list.filter((x) => !pick.has(x.id));
+    const i = target == null ? rest.length : rest.findIndex((x) => x.id === target);
+    return [...rest.slice(0, i), ...moved, ...rest.slice(i)];
+  }
+  function undoSteps(list, ids) {
+    const pick = new Set(ids);
+    const out = [];
+    list.forEach((x, i) => {
+      if (pick.has(x.id)) out.push({ ids: [x.id], before: list[i + 1]?.id ?? null });
+    });
+    return out.reverse();
+  }
+  const sameOrder = (a, b) => a.length === b.length && a.every((x, i) => x.id === b[i].id);
+  // Переставить сразу на экране, записать в фоне; не вышло — вернуть как было
+  async function moveTo(ids, before, note) {
+    const was = queue;
+    const next = moveBefore(queue, ids, before);
+    if (sameOrder(next, was)) return false;
+    queue = next;
+    render();
+    const r = await send({ type: "queue:move", ids, before });
+    if (!r?.ok) {
+      toast("Не получилось переставить — обновите страницу (F5)");
+      void load();
+      return false;
+    }
+    if (note) toast(note, [["Вернуть", () => send({ type: "queue:move", steps: undoSteps(was, ids) })]]);
+    return true;
+  }
+  // «Наверх» — сразу после текущего видео (первое из выбранных станет «Дальше»),
+  // «В конец» — в самый конец очереди
+  async function moveSel(top) {
+    const ids = shown.filter((x) => sel.has(x));
+    if (!ids.length) return;
+    const before = top ? shown[0] : null;
+    if (sameOrder(moveBefore(queue, ids, before), queue)) return toast(top ? "Уже стоят первыми после текущего" : "Уже в конце очереди");
+    const one = ids.length === 1 ? `«${queue.find((x) => x.id === ids[0])?.title || "видео"}»` : `${ids.length} видео`;
+    if (!(await moveTo(ids, before, top ? `Наверх, сразу после текущего: ${one}` : `В конец очереди: ${one}`))) return;
+    const list = host?.shadowRoot.querySelector(".list");
+    if (list) list.scrollTop = top ? 0 : list.scrollHeight;
+  }
+
+  // Перетаскивание мышью: плитку (в режиме выбора — все отмеченные, если тянете
+  // отмеченную). Начинается после сдвига на несколько px — иначе это обычный клик.
+  // Куда встанет — красная черта между плитками и подпись «№ N из M» у курсора;
+  // у края списка он листается сам; Esc — отменить.
+  const DRAG_PX = 6;
+  let drag = null;
+  let eatClick = false;
+  let ghost = null;
+  window.addEventListener("pointerdown", () => (eatClick = false), true);
+
+  function onPointerDown(e) {
+    if (e.button !== 0 || e.pointerType === "touch" || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || drag) return;
+    const rowEl = e.target.closest(".row");
+    if (!rowEl || e.target.closest("[data-drop]")) return;
+    drag = { id: rowEl.dataset.go, el: rowEl, pid: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, on: false };
+    window.addEventListener("pointermove", onDragMove, true);
+    window.addEventListener("pointerup", onDragUp, true);
+    window.addEventListener("pointercancel", onDragCancel, true);
+    window.addEventListener("blur", onDragCancel);
+  }
+  function onDragMove(e) {
+    if (!drag || e.pointerId !== drag.pid) return;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    if (!drag.on) {
+      if (Math.hypot(drag.x - drag.x0, drag.y - drag.y0) < DRAG_PX) return;
+      if (!startDrag()) return endDrag(false);
+    }
+    e.preventDefault();
+    update();
+  }
+  const onDragUp = (e) => drag && e.pointerId === drag.pid && endDrag(true, true);
+  const onDragCancel = () => endDrag(false);
+
+  function startDrag() {
+    const list = host?.shadowRoot.querySelector(".list");
+    if (!list || !drag.el.isConnected) return false;
+    drag.ids = selMode && sel.has(drag.id) ? shown.filter((x) => sel.has(x)) : [drag.id];
+    drag.list = list;
+    drag.on = true;
+    // с какой стороны курсора держать обложку — решаем один раз, чтобы она не перескакивала:
+    // справа от колонки есть место (стенд, узкий YouTube) — справа, иначе слева
+    drag.left = host.getBoundingClientRect().right + 18 + 176 > innerWidth - 8;
+    try {
+      drag.el.setPointerCapture(drag.pid); // отпустили за окном — всё равно узнаем
+    } catch (e) {
+      /* без захвата */
+    }
+    list.classList.add("dragging");
+    for (const r of list.querySelectorAll(".row")) if (drag.ids.includes(r.dataset.go)) r.classList.add("dragged");
+    // кнопки «Превью / О чём видео» на обложках не всплывают, пока тянете
+    const VA = globalThis.__ytcsVideoActions;
+    if (VA) for (const th of list.querySelectorAll(".row .th")) VA.detach(th);
+    drag.mark = document.createElement("div");
+    drag.mark.className = "mark";
+    drag.mark.hidden = true;
+    list.appendChild(drag.mark);
+    showGhost(drag.ids);
+    drag.raf = requestAnimationFrame(autoScroll);
+    return true;
+  }
+
+  // Куда встанет: ближайшая плитка; левая/правая половина — перед ней или после
+  // (у крупной «Дальше» — верхняя/нижняя). Далеко от списка — никуда.
+  function dropAt() {
+    const lr = drag.list.getBoundingClientRect();
+    if (drag.x < lr.left - 80 || drag.x > lr.right + 80 || drag.y < lr.top - 120 || drag.y > lr.bottom + 120) return null;
+    const x = Math.min(Math.max(drag.x, lr.left + 1), lr.right - 1);
+    const y = Math.min(Math.max(drag.y, lr.top + 1), lr.bottom - 1);
+    let best = null;
+    [...drag.list.querySelectorAll(".row")].forEach((el, k) => {
+      const r = el.getBoundingClientRect();
+      const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
+      const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+      const d = dx * dx + 4 * dy * dy; // в просвете между рядами — по вертикали важнее
+      if (!best || d < best.d) best = { d, el, k, r };
+    });
+    if (!best) return null;
+    const hero = best.el.classList.contains("hero");
+    const after = hero ? y > best.r.top + best.r.height / 2 : x > best.r.left + best.r.width / 2;
+    const k = best.k + (after ? 1 : 0);
+    // перед кем встать: видео на экране или следующее за последним показанным (null — конец очереди)
+    let before = shown[k];
+    if (before === undefined) {
+      const last = queue.findIndex((q) => q.id === shown[shown.length - 1]);
+      before = last >= 0 ? (queue[last + 1]?.id ?? null) : null;
+    }
+    return { before, hero, after, r: best.r, lr };
+  }
+
+  function update() {
+    const t = dropAt();
+    drag.target = t;
+    const m = drag.mark;
+    if (!t) {
+      m.hidden = true;
+      return ghostCaption("Отпустите над списком");
+    }
+    const next = moveBefore(queue, drag.ids, t.before);
+    if (sameOrder(next, queue)) {
+      drag.target = null;
+      m.hidden = true;
+      return ghostCaption("На прежнем месте");
+    }
+    // черта — посередине просвета между плитками
+    const L = drag.list;
+    const ox = -t.lr.left + L.scrollLeft;
+    const oy = -t.lr.top + L.scrollTop;
+    m.hidden = false;
+    if (t.hero) {
+      m.className = "mark h";
+      Object.assign(m.style, { left: `${t.r.left + ox + 8}px`, width: `${t.r.width - 16}px`, height: "", top: `${Math.max(3, (t.after ? t.r.bottom : t.r.top) + oy - 2)}px` });
+    } else {
+      m.className = "mark v";
+      Object.assign(m.style, { left: `${(t.after ? t.r.right : t.r.left) + ox - 2}px`, top: `${t.r.top + oy + 8}px`, height: `${t.r.height - 16}px`, width: "" });
+    }
+    const n = next.findIndex((x) => x.id === drag.ids[0]) + 1;
+    const cur = next.findIndex((x) => x.id === curId());
+    const range = drag.ids.length > 1 ? `Станут № ${n}–${n + drag.ids.length - 1}` : `Станет № ${n}`;
+    ghostCaption(`${range} из ${next.length}${n - 1 === cur + 1 ? " · «Дальше»" : ""}`);
+  }
+
+  // у края списка (или окна, если список не влез) — листать, пока держат
+  function autoScroll() {
+    if (!drag?.on) return;
+    const L = drag.list;
+    const lr = L.getBoundingClientRect();
+    const capTop = Math.max(0, document.querySelector("#masthead-container")?.getBoundingClientRect().bottom || 0);
+    const top = Math.max(lr.top, capTop);
+    const bottom = Math.min(lr.bottom, innerHeight);
+    const zone = Math.min(64, (bottom - top) / 4);
+    const near = drag.x > lr.left - 80 && drag.x < lr.right + 80;
+    let v = 0;
+    if (near && drag.y < top + zone) v = -Math.min(1, (top + zone - drag.y) / zone);
+    else if (near && drag.y > bottom - zone) v = Math.min(1, (drag.y - (bottom - zone)) / zone);
+    if (v) {
+      const step = Math.round(v * 18) || Math.sign(v);
+      const was = L.scrollTop;
+      L.scrollTop += step;
+      if (L.scrollTop === was && ((step > 0 && lr.bottom > innerHeight) || (step < 0 && lr.top < capTop))) window.scrollBy(0, step);
+      update();
+    }
+    drag.raf = requestAnimationFrame(autoScroll);
+  }
+
+  // клик, который браузер пришлёт следом за отпусканием, — не «открыть видео»;
+  // отменили раньше (Esc) — ждём, пока отпустят кнопку
+  function eatNextClick(now) {
+    if (!now) return void window.addEventListener("pointerup", () => eatNextClick(true), { capture: true, once: true });
+    eatClick = true;
+    setTimeout(() => (eatClick = false), 0);
+  }
+  function endDrag(commit, released = false) {
+    window.removeEventListener("pointermove", onDragMove, true);
+    window.removeEventListener("pointerup", onDragUp, true);
+    window.removeEventListener("pointercancel", onDragCancel, true);
+    window.removeEventListener("blur", onDragCancel);
+    const d = drag;
+    drag = null;
+    if (!d?.on) return;
+    cancelAnimationFrame(d.raf);
+    eatNextClick(released);
+    try {
+      d.el.releasePointerCapture(d.pid);
+    } catch (e) {
+      /* уже отпущен */
+    }
+    ghost?.remove();
+    ghost = null;
+    if (commit && d.target) void moveTo(d.ids, d.target.before);
+    else render(); // отмена — всё как было (и то, что пришло, пока тянули)
+  }
+
+  // Esc — отменить перетаскивание (раньше, чем Esc снимет выбор)
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Escape" || !drag?.on) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      endDrag(false);
+    },
+    true
+  );
+
+  // Под курсором — обложка того, что тянут (у группы — стопкой и с числом) и куда встанет
+  function showGhost(ids) {
+    ghost = document.createElement("div");
+    ghost.id = "ytcs-queue-drag";
+    const dark = document.documentElement.hasAttribute("dark");
+    ghost.attachShadow({ mode: "open" }).innerHTML = `<style>
+      :host { all: initial; position: fixed; left: 0; top: 0; z-index: 2147483000; pointer-events: none; }
+      .g { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 176px; }
+      .th { position: relative; width: 160px; aspect-ratio: 16/9; }
+      .th img, .th i { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+      .th img { background: #3a3a3a; box-shadow: 0 10px 28px rgba(0,0,0,.45), 0 0 0 2px #ff3b5c; }
+      .th i { transform: translate(6px, 6px); background: ${dark ? "#3f3f3f" : "#d9d9d9"}; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
+      .n { position: absolute; right: -9px; top: -9px; min-width: 28px; height: 28px; padding: 0 8px; box-sizing: border-box; display: grid; place-items: center;
+        border-radius: 14px; background: #ff3b5c; color: #fff; font: 600 14px/1 Roboto, Arial, sans-serif; box-shadow: 0 0 0 2px ${dark ? "#0f0f0f" : "#fff"}; }
+      .cap { max-width: 260px; padding: 6px 12px; border-radius: 999px; background: ${dark ? "#f1f1f1" : "#0f0f0f"}; color: ${dark ? "#0f0f0f" : "#fff"};
+        font: 500 13px/1.3 Roboto, Arial, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+    </style><div class="g"><div class="th">${ids.length > 1 ? "<i></i>" : ""}<img alt="" src="https://i.ytimg.com/vi/${esc(ids[0])}/mqdefault.jpg">${
+      ids.length > 1 ? `<span class="n">${ids.length}</span>` : ""
+    }</div><div class="cap"></div></div>`;
+    document.documentElement.appendChild(ghost);
+  }
+  function ghostCaption(t) {
+    if (!ghost || !drag) return;
+    const g = ghost.shadowRoot.querySelector(".g");
+    g.querySelector(".cap").textContent = t;
+    const w = 176;
+    const x = drag.left ? Math.max(8, drag.x - 18 - w) : drag.x + 18;
+    const y = Math.min(drag.y + 14, innerHeight - 140);
+    g.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
   // Esc — выйти из выбора
