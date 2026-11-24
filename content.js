@@ -15,9 +15,10 @@
   // встроенный плеер в «Моей библиотеке» — работаем как на странице видео
   const OUR_EMBED = location.pathname.startsWith("/embed/");
 
-  // Запасные значения: настоящие берём из ytcfg страницы (см. innerTubeConfig),
+  // Запасная версия клиента: настоящую берём из ytcfg страницы (см. innerTubeConfig),
   // иначе после очередного обновления YouTube сбор через API тихо сломается.
-  const FALLBACK_INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+  // Ключ InnerTube в коде не храним: берём со страницы, а если его там нет — запрос
+  // идёт без ключа (youtubei/v1 с youtube.com его не требует).
   const FALLBACK_CLIENT_VERSION = "2.20260910.00.00";
   let ytcfgCache = null;
 
@@ -34,7 +35,7 @@
       version ||= t.match(/"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"/)?.[1] || null;
       if (key && version) break;
     }
-    const cfg = { key: key || FALLBACK_INNERTUBE_KEY, version: version || FALLBACK_CLIENT_VERSION };
+    const cfg = { key, version: version || FALLBACK_CLIENT_VERSION };
     if (key && version) ytcfgCache = cfg; // кэшируем только найденное, иначе попробуем снова позже
     return cfg;
   }
@@ -443,7 +444,7 @@
     const cfg = innerTubeConfig();
     let resp;
     try {
-      resp = await fetch(`https://www.youtube.com/youtubei/v1/next?key=${cfg.key}`, {
+      resp = await fetch(`https://www.youtube.com/youtubei/v1/next?${cfg.key ? `key=${encodeURIComponent(cfg.key)}&` : ""}prettyPrint=false`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
