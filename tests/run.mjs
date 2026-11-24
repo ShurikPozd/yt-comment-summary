@@ -18,6 +18,7 @@ import { buildData, describe, escapeXml, fingerprint, parseInput, suggest, video
 import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
 import { linkRecord, revokeResult, savedLink, shareBody, shareResult } from "../share-core.js";
 import * as ST from "../stats-core.js";
+import { queueLeft, weeklyReport } from "../report-core.js";
 import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRead, mergeFeed, newCount, queueable, visible } from "../library/digest-core.js";
 import { MODULES, createLoader } from "../lazy-bg.js";
 import { moveIds, rangeIds, restoreAt, snapshot } from "../library/multi-core.js";
@@ -1293,6 +1294,24 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(shareResult(429, { code: "rate" }).kind === "busy" && shareResult(503, { code: "no_owner" }).kind === "setup" && shareResult(500, {}).kind === "error", "ссылка: лимит, владелец, сбой");
   ok(shareResult(200, { ok: true, id: "../x", url: "javascript:alert(1)" }).ok === false, "ссылка: негодный id/адрес не принимаем");
   ok(revokeResult(200, { ok: true, revoked: true }).ok && revokeResult(404, null).kind === "update" && revokeResult(0, null).kind === "network", "ссылка: отзыв");
+}
+
+// ---------- отчёт недели (report-core.js) ----------
+{
+  const now = new Date(2026, 10, 24, 12).getTime();
+  const st = ST.emptyStats(now - 30 * 86400000);
+  ST.addDelta(st, { w: 3 * 3600, s: 1200, sp: 900, sb: 300, si: 60, n: 9, fin: 4, qd: 2, qx: 5, ch: { id: "UC1", name: "Канал А", sec: 7200 } }, now - 86400000);
+  ST.addDelta(st, { w: 1800, n: 2, ch: { id: "UC2", name: "Канал Б", sec: 1800 } }, now);
+  const q = [{ id: "a", len: 600 }, { id: "b", len: 1200 }];
+  const t = weeklyReport({ stats: st, queue: q, queuePos: { b: 600 }, now });
+  ok(t && t.startsWith("📊 Неделя на YouTube"), "отчёт: заголовок");
+  ok(/Смотрели: 3 ч 50 мин \(из них Shorts — 20 мин\)/.test(t), "отчёт: сколько смотрели и Shorts");
+  ok(/Сэкономили: 21 мин \(скорость — 15 мин, пропуск рекламы — 5 мин, пропуск тишины — 1 мин\)/.test(t), "отчёт: экономия по видам");
+  ok(/Чаще всего: Канал А — 2 ч, Канал Б — 30 мин/.test(t), "отчёт: каналы");
+  ok(/Очередь: 2 видео \(≈ 20 мин\) · за неделю досмотрено 2, убрано 5/.test(t), "отчёт: очередь и движение");
+  ok(queueLeft(q, { b: 600 }) === 1200 && queueLeft([{ id: "x" }]) === 0, "отчёт: остаток очереди");
+  ok(weeklyReport({ stats: ST.emptyStats(now), queue: [], now }) === null && weeklyReport({}) === null, "отчёт: показать нечего — null");
+  ok(/Очередь: 1 видео/.test(weeklyReport({ stats: null, queue: [{ id: "z", len: 30 }], now })), "отчёт: без статистики — только очередь");
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);

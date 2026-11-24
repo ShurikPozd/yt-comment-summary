@@ -7,6 +7,8 @@
 
 import { collectBackup } from "./backup-core.js";
 import { serverSettings } from "./bot-settings.js";
+import { weeklyReport } from "./report-core.js";
+import { STATS_KEY, cleanStats } from "./stats-core.js";
 
 export const AUTO_BACKUP_KEY = "autoBackup"; // { on, at (последняя удачная), err, tried, size }
 const ALARM = "ytcs-autobackup";
@@ -55,6 +57,8 @@ export function sendBackup({ manual = false } = {}) {
       if (!r.ok || !d.ok) throw new Error(d.error || `Бот ответил ${r.status}`);
       st.at = Date.now();
       st.size = body.length;
+      // раз в неделю вместе с копией — «Отчёт недели» текстом (по кнопке — только копия)
+      if (!manual) st.report = await sendReport(s, data).catch((e) => `не отправился: ${e?.message || e}`);
     } catch (e) {
       st.err = e?.name === "AbortError" ? "Бот не ответил за 90 с (просыпается?) — попробую позже" : String(e?.message || e);
     }
@@ -62,6 +66,21 @@ export function sendBackup({ manual = false } = {}) {
     return st;
   })().finally(() => (running = null));
   return running;
+}
+
+// «Отчёт недели»: текст из статистики и очереди — сообщением в чат с ботом
+async function sendReport(s, data) {
+  const raw = (await chrome.storage.local.get(STATS_KEY))[STATS_KEY];
+  const text = weeklyReport({ stats: raw ? cleanStats(raw) : null, queue: data.queue, queuePos: data.queuePos });
+  if (!text) return "нечего показать";
+  const r = await fetch(`${s.baseUrl.replace(/\/+$/, "")}/api/weekly-report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Sec-Token": s.token },
+    body: JSON.stringify({ text }),
+  });
+  if (r.status === 404) return "бот ещё не умеет — обновите бота";
+  const d = await r.json().catch(() => ({}));
+  return r.ok && d.ok ? "отправлен" : `не отправился: ${d.error || r.status}`;
 }
 
 async function due() {
