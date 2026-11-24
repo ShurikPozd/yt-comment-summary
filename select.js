@@ -211,7 +211,7 @@
     .hov:hover { background: rgba(0, 0, 0, .7); color: rgba(255, 255, 255, .9); }
     .hov:active { transform: scale(.92); }
     .hov.on { background: var(--acc); color: var(--on-acc); box-shadow: 0 1px 6px rgba(0, 0, 0, .45); }
-    .hov svg { width: 20px; height: 20px; }
+    .hov svg { width: var(--is, 20px); height: var(--is, 20px); }
     .hov.q { width: auto; height: 34px; padding: 0 14px 1px 10px; gap: 6px; border-radius: 999px; color: #fff;
       font: 600 14px/1 Roboto, Arial, sans-serif; white-space: nowrap; display: none; align-items: center; }
     .hov.q.show { display: inline-flex; }
@@ -323,7 +323,10 @@
       hov.classList.remove("show");
       return;
     }
-    const s = r.width < 200 ? 26 : 32; // мелкие превью (справа на странице видео, Shorts)
+    // Того же размера, что и круглые кнопки обложки рядом (video-actions.js): 28 px на мелких
+    // превью, 32 px на обычных, на больших экранах крупнее — до ×1,25.
+    const zl = innerWidth >= 2200 && innerHeight >= 1150 ? 1.25 : innerWidth >= 1600 && innerHeight >= 860 ? 1.15 : 1;
+    const s = r.width < 220 ? 28 : Math.round(32 * zl);
     hov.style.left = `${Math.round(r.left + 8)}px`;
     hov.style.top = `${Math.round(r.top + 8)}px`;
     // в режиме очереди — подсказка словами, что сделает клик
@@ -339,6 +342,7 @@
     }
     if (!hov.querySelector("svg path[d^='M5 12.5']") || hov.querySelector("span")) hov.innerHTML = CHECK;
     hov.style.width = hov.style.height = `${s}px`;
+    hov.style.setProperty("--is", `${Math.round(s * 0.6)}px`);
     const on = picked.has(id);
     hov.classList.toggle("on", on);
     hov.setAttribute("aria-label", on ? "Снять выбор" : "Выбрать видео");

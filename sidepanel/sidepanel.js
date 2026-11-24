@@ -1192,7 +1192,7 @@ async function renderReserve() {
     return;
   }
   box.innerHTML =
-    `<div class="ar-head">Запас ИИ на сегодня<span class="ar-note">пополняется понемногу весь день</span></div>` +
+    `<div class="ar-head">Запас ИИ на сегодня<span class="ar-note">${d.main?.synced ? "пополняется понемногу весь день" : "оценка — уточнится после первых запросов"}</span></div>` +
     reserveRow("Основная модель", d.main) +
     reserveRow("Запасная", d.fallback) +
     (d.cloudflare ? `<div class="ar-foot">Кончатся обе — выручит Cloudflare (тоже бесплатно).</div>` : "");

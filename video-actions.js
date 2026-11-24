@@ -449,7 +449,7 @@
     let leftX = 0;
     let pad = target.top ?? (small ? 6 : 8);
     if (target.auto) {
-      const circle = r.width < 200 ? 26 : 32;
+      const circle = s; // кружок того же размера (select.js)
       leftX = r.left + 8 + circle + g;
       const hv = document.getElementById("ytcs-select")?.shadowRoot?.querySelector(".hov.show")?.getBoundingClientRect();
       if (hv && hv.width && hv.left < r.left + 40 && hv.right + g > leftX) leftX = hv.right + g;
