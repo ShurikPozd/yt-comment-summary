@@ -41,9 +41,6 @@
     "yt-thumbnail-view-model, ytd-thumbnail, [class*='ThumbnailContainer'], .shortsLockupViewModelHostThumbnailContainer, a#thumbnail, a.reel-item-endpoint";
   // плейлисты, миксы и подборки — это не одно видео
   const COLLECTION = "yt-collection-thumbnail-view-model, ytd-playlist-thumbnail, [class*='CollectionStack'], [class*='collection-stack']";
-  // чужие кнопки на превью, которые нельзя закрывать своими
-  const FOREIGN =
-    "button, [role='button'], yt-icon-button, ytd-thumbnail-overlay-toggle-button-renderer, [class*='summarization'], [class*='Summarization']";
   const OWN_HOSTS = new Set(["ytcs-tldr", "ytcs-select", "ytcs-qmode"]);
   const ID_RE = /(?:[?&]v=|\/shorts\/)([A-Za-z0-9_-]{11})/;
   const VID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -368,7 +365,6 @@
   // target: { key, el (обложка), card, info(), right, top, actions, auto (карточка YouTube) }
   const bindings = new WeakMap(); // обложка → параметры attach()
   let target = null;
-  let lockOffset = 0; // отступ кнопок от правого края превью, с которым они встали
   let pointer = { x: -1, y: -1 };
   let recheck = 0;
   let btnZoom = 1;
@@ -404,24 +400,6 @@
     const el = thumbOf(card);
     if (!el) return null;
     return { key: card, el, card, info: () => infoOf(card), auto: true };
-  }
-
-  // свободно ли место под кнопками: ни одной чужой кнопки в углах и по центру
-  function spotFree(x, y, w, h) {
-    const pts = [
-      [x + 3, y + 3],
-      [x + w - 3, y + 3],
-      [x + 3, y + h - 3],
-      [x + w - 3, y + h - 3],
-      [x + w / 2, y + h / 2],
-    ];
-    for (const [px, py] of pts) {
-      for (const el of document.elementsFromPoint(px, py)) {
-        if (el === host) continue;
-        if (el.matches?.(FOREIGN)) return false;
-      }
-    }
-    return true;
   }
 
   // Видимая часть элемента: обложка может быть внутри прокручиваемого блока (колонка очереди,
@@ -465,8 +443,21 @@
     const bz = small ? 1 : Math.min(zoomLevel(), 1.25);
     const s = (small ? 28 : 32) * bz;
     const g = (small ? 5 : 6) * bz;
-    // на узкой обложке три кнопки не влезают — «В архив» уступает место (есть в меню)
-    const room = r.width - (target.auto ? 44 + (small ? 6 : 8) : (target.right ?? (small ? 6 : 8)) + 4);
+    // На обложках YouTube (auto) кнопки — слева сверху, сразу за кружком выбора (select.js):
+    // справа YouTube через секунду ставит «Звук» и «Субтитры» живого превью, и кнопки
+    // прыгали бы влево. Кружок 8 px от края, 26/32 px; в режиме очереди он — плашка со словами.
+    let leftX = 0;
+    let pad = target.top ?? (small ? 6 : 8);
+    if (target.auto) {
+      const circle = r.width < 200 ? 26 : 32;
+      leftX = r.left + 8 + circle + g;
+      const hv = document.getElementById("ytcs-select")?.shadowRoot?.querySelector(".hov.show")?.getBoundingClientRect();
+      if (hv && hv.width && hv.left < r.left + 40 && hv.right + g > leftX) leftX = hv.right + g;
+      pad = 8 + (circle - s) / 2; // по одной линии с кружком
+    }
+    // на узкой обложке три кнопки не влезают — «В архив» уступает место (есть в меню);
+    // справа оставляем колонку под кнопки живого превью YouTube (~44 px)
+    const room = target.auto ? r.right - 44 - leftX : r.width - ((target.right ?? (small ? 6 : 8)) + 4);
     if (actions.length > 1 && actions.includes("archive") && actions.length * s + (actions.length - 1) * g > room) {
       actions = actions.filter((a) => a !== "archive");
     }
@@ -485,30 +476,15 @@
     va.querySelector('[data-va="tldr"]')?.classList.toggle("on", Boolean(cur && cur.vid === info.videoId && !$(".pop").hidden));
     paintArchive(va.querySelector('[data-va="archive"]'), info.videoId);
     host.style.zIndex = String(target.zIndex || 2019);
-    let off;
-    const pad = target.top ?? (small ? 6 : 8);
     if (target.auto) {
-      // Сначала — в самый угол. Если там чужие кнопки (у живого превью YouTube —
-      // «Звук» и «Субтитры», колонка ~40 px; появляются через секунду — их ловит
-      // повторная проверка ниже), кнопки уходят левее.
-      const offsets = small ? [6, 40, 74] : [8, 48, 88, 128];
-      off = -1;
-      for (const o of offsets) {
-        if (o < lockOffset) continue; // на той же карточке кнопки двигаются только левее
-        if (r.right - o - w < r.left + 44) break; // левый угол — кружок выбора и чужие кнопки
-        if (spotFree(r.right - o - w, r.top + pad, w, s)) {
-          off = o;
-          break;
-        }
-      }
-      if (off < 0) off = Math.max(lockOffset, offsets[0]);
-      lockOffset = off;
+      va.style.right = "auto";
+      va.style.left = `${Math.round(leftX) / bz}px`;
     } else {
-      off = target.right ?? (small ? 6 : 8);
+      const off = target.right ?? (small ? 6 : 8);
+      const vw = document.documentElement.clientWidth || innerWidth;
+      va.style.left = "auto";
+      va.style.right = `${Math.round(vw - (r.right - off)) / bz}px`;
     }
-    const vw = document.documentElement.clientWidth || innerWidth;
-    va.style.left = "auto";
-    va.style.right = `${Math.round(vw - (r.right - off)) / bz}px`;
     va.style.top = `${Math.round(r.top + pad) / bz}px`;
     va.classList.add("show");
   }
@@ -516,7 +492,6 @@
   function setTarget(t) {
     if ((t?.key || null) === (target?.key || null)) return;
     target = t;
-    lockOffset = 0;
     hideTip();
     clearInterval(recheck);
     recheck = 0;
@@ -525,7 +500,7 @@
       host.toggleAttribute("dark", isDark());
       void loadMark(t.info().videoId);
       if (t.auto) {
-        // живое превью YouTube и кнопка «Пересказать» появляются не сразу — сверяем место ещё пару раз
+        // кружок выбора и живое превью YouTube появляются не сразу — сверяем место ещё пару раз
         let n = 0;
         recheck = setInterval(() => {
           if (++n > 14 || target !== t) {

@@ -268,7 +268,9 @@
     host = document.createElement("div");
     host.id = "ytcs-select";
     // свой слой: ниже шапки YouTube, всплывающих меню и окон расширения
-    host.style.cssText = "position:fixed;inset:auto;z-index:2019;";
+    // ниже слоя кнопок обложки и окна «О чём видео» (video-actions.js, 2019) — иначе
+    // кружок соседней карточки просвечивал сквозь открытое окно
+    host.style.cssText = "position:fixed;inset:auto;z-index:2018;";
     const root = host.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${UI_CSS}</style>
       <button class="hov" aria-label="Выбрать видео" title="Выбрать (Shift — диапазон)">${CHECK}</button>
