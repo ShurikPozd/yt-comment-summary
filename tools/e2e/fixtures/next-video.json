@@ -1,0 +1,70 @@
+{
+ "responseContext": {},
+ "engagementPanels": [
+  {
+   "engagementPanelSectionListRenderer": {
+    "panelIdentifier": "engagement-panel-comments-section",
+    "targetId": "engagement-panel-comments-section",
+    "header": {
+     "engagementPanelTitleHeaderRenderer": {
+      "title": {
+       "runs": [
+        {
+         "text": "Комментарии"
+        }
+       ]
+      },
+      "menu": {
+       "sortFilterSubMenuRenderer": {
+        "subMenuItems": [
+         {
+          "title": "Популярные",
+          "serviceEndpoint": {
+           "continuationCommand": {
+            "token": "E2E_TOP",
+            "request": "CONTINUATION_REQUEST_TYPE_WATCH_NEXT"
+           }
+          }
+         },
+         {
+          "title": "Новые",
+          "serviceEndpoint": {
+           "continuationCommand": {
+            "token": "E2E_NEW",
+            "request": "CONTINUATION_REQUEST_TYPE_WATCH_NEXT"
+           }
+          }
+         }
+        ]
+       }
+      }
+     }
+    },
+    "content": {
+     "sectionListRenderer": {
+      "contents": [
+       {
+        "itemSectionRenderer": {
+         "sectionIdentifier": "comment-item-section",
+         "contents": [
+          {
+           "continuationItemRenderer": {
+            "trigger": "CONTINUATION_TRIGGER_ON_ITEM_SHOWN",
+            "continuationEndpoint": {
+             "continuationCommand": {
+              "token": "E2E_COMMENTS",
+              "request": "CONTINUATION_REQUEST_TYPE_WATCH_NEXT"
+             }
+            }
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ ]
+}
