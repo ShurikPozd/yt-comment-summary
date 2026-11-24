@@ -1173,6 +1173,32 @@ function humanCollectError(error) {
 const TAB_ORDER = ["summary", "video", "moments", "topics", "search", "comments", "settings"];
 let currentTab = "summary";
 
+// ---------------- Запас бесплатного ИИ на сегодня ----------------
+// У Groq дневной лимит токенов на каждую модель (200 тыс.). Сервер говорит, сколько
+// осталось у основной и запасной модели; перед анализом по этому решаем, хватит ли.
+const fmtK = (n) => (n >= 10000 ? `${Math.round(n / 1000)} тыс.` : n >= 1000 ? `${(n / 1000).toFixed(1).replace(".", ",")} тыс.` : String(Math.max(0, Math.round(n))));
+function reserveRow(label, m) {
+  if (!m) return "";
+  const pct = m.limit ? Math.max(0, Math.min(100, Math.round((m.left / m.limit) * 100))) : 0;
+  const tone = pct < 10 ? "low" : pct < 35 ? "mid" : "ok";
+  return `<div class="ar-row"><span class="ar-name">${label}</span><span class="ar-bar ${tone}"><i style="width:${pct}%"></i></span><span class="ar-val">≈ ${fmtK(m.left)} из ${fmtK(m.limit)}</span></div>`;
+}
+async function renderReserve() {
+  const box = $("ai-reserve");
+  if (!box || !proxy.configured) return;
+  const d = await proxy.limits();
+  if (!d) {
+    box.hidden = true;
+    return;
+  }
+  box.innerHTML =
+    `<div class="ar-head">Запас ИИ на сегодня<span class="ar-note">пополняется понемногу весь день</span></div>` +
+    reserveRow("Основная модель", d.main) +
+    reserveRow("Запасная", d.fallback) +
+    (d.cloudflare ? `<div class="ar-foot">Кончатся обе — выручит Cloudflare (тоже бесплатно).</div>` : "");
+  box.hidden = false;
+}
+
 function setTab(name) {
   // направление перехода для анимации: правее → въезд справа, левее → слева
   const dir = Math.sign(TAB_ORDER.indexOf(name) - TAB_ORDER.indexOf(currentTab));
@@ -1186,6 +1212,7 @@ function setTab(name) {
   });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   $("view-" + name).classList.add("active");
+  if (name === "settings") void renderReserve();
   $("app").classList.toggle("on-settings", name === "settings");
   fitClamps();
   $("btn-settings").classList.toggle("active", name === "settings");
@@ -1340,10 +1367,32 @@ async function analyze() {
     // Пул для ИИ: при большом сборе берём самые залайканные (в исходном
     // порядке) — иначе 2000 комментариев на бесплатном лимите это ~20 минут.
     // Обзор, моменты и поиск по тексту всё равно работают по всем.
-    const pool = analysisPool(comments);
-    const poolComments = pool.map((i) => comments[i]);
-    const nodes = buildChunks(poolComments);
+    let pool = analysisPool(comments);
+    let poolComments = pool.map((i) => comments[i]);
+    let nodes = buildChunks(poolComments);
     if (!nodes.length) throw new Error("Нет комментариев для анализа.");
+    // Запас ИИ на сегодня: не хватает даже вместе с запасной моделью — разбираем меньше
+    // (самые залайканные), чтобы анализ дошёл до конца, а не оборвался на середине.
+    const need = (ns) =>
+      ns.reduce((s, n) => s + estimateRequestTokens(CHUNK_ANALYZE_SYSTEM, chunkUser(n, [])) + 280, 0) + 2200;
+    const reserve = await proxy.limits({ timeoutMs: 3500 });
+    if (!live()) return;
+    if (reserve) {
+      const usable = (reserve.main?.left || 0) + (reserve.fallback?.left || 0);
+      const want = need(nodes);
+      if (usable < want && pool.length > 40) {
+        const k = Math.max(40, Math.floor((pool.length * Math.max(0, usable * 0.9 - 2200)) / Math.max(1, want - 2200)));
+        if (k < pool.length) {
+          const before = pool.length;
+          pool = analysisPool(comments, k);
+          poolComments = pool.map((i) => comments[i]);
+          nodes = buildChunks(poolComments);
+          showToast(`Запас ИИ на сегодня почти кончился — разбираю ${k} самых залайканных комментариев из ${before}.`);
+        }
+      } else if ((reserve.main?.left || 0) < want && reserve.fallback?.left) {
+        uiEl("summary-placeholder").textContent = "Основная модель на сегодня почти исчерпана — часть разберёт запасная…";
+      }
+    }
 
     let baseOffset = 0;
     let partLabel = "";

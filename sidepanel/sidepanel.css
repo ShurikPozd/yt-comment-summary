@@ -3738,3 +3738,77 @@ button.primary.collecting:disabled {
   flex: none;
   transform: rotate(180deg); /* стрелка влево */
 }
+
+/* «Запас ИИ на сегодня» в блоке «Сервер с ИИ»: модель · полоса · сколько осталось */
+.ai-reserve[hidden] {
+  display: none;
+}
+
+.ai-reserve {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: var(--r-s);
+  background: var(--bg-3);
+}
+
+.ar-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.ar-note {
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5em) minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.ar-name {
+  color: var(--fg-2);
+}
+
+.ar-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.ar-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pos);
+}
+
+.ar-bar.mid i {
+  background: #f5a524;
+}
+
+.ar-bar.low i {
+  background: var(--neg-ink);
+}
+
+.ar-val {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ar-foot {
+  color: var(--fg-2);
+  font-size: 12px;
+}

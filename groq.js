@@ -191,6 +191,30 @@ export class GroqProxy {
     return this._run(messages, { jsonMode, maxTokens, temperature, timeoutMs, stream: false, signal });
   }
 
+  /**
+   * Запас бесплатного ИИ на сегодня (сервер /api/limits): {main, fallback, cloudflare},
+   * у моделей — {model, left, limit, synced}. null — сервер старый или недоступен
+   * (тогда просто ничего не показываем и не мешаем анализу).
+   */
+  async limits({ timeoutMs = 5000 } = {}) {
+    if (!this.configured) return null;
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const r = await fetch(`${this.baseUrl}/api/limits?model=${encodeURIComponent(this.model)}`, {
+        headers: { "X-Sec-Token": this.token },
+        signal: ac.signal,
+      });
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d && d.main ? d : null;
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
   /** Проверка настроек: тривиальный вызов. */
   async test() {
     const out = await this.chat(
