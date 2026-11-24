@@ -22,6 +22,7 @@ import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRea
 import { MODULES, createLoader } from "../lazy-bg.js";
 import { moveIds, rangeIds, restoreAt, snapshot } from "../library/multi-core.js";
 import { moveBefore, moveSteps, undoSteps } from "../queue-core.js";
+import * as QT from "../library/queue-tidy-core.js";
 import { SHIFT, addDoc, chunkSegments, createIndex, decodeBlocks, encodeBlocks, pack, searchSubs, snippet, unpack, words } from "../library/subs-core.js";
 
 let failed = 0;
@@ -1293,6 +1294,112 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(shareResult(429, { code: "rate" }).kind === "busy" && shareResult(503, { code: "no_owner" }).kind === "setup" && shareResult(500, {}).kind === "error", "ссылка: лимит, владелец, сбой");
   ok(shareResult(200, { ok: true, id: "../x", url: "javascript:alert(1)" }).ok === false, "ссылка: негодный id/адрес не принимаем");
   ok(revokeResult(200, { ok: true, revoked: true }).ok && revokeResult(404, null).kind === "update" && revokeResult(0, null).kind === "network", "ссылка: отзыв");
+}
+
+// ---------- «Уборка очереди» (library/queue-tidy-core.js) ----------
+{
+  const D = 24 * 3600 * 1000;
+  const now = 1_800_000_000_000;
+  const v = (id, o = {}) => ({ id, title: "Видео " + id, channel: "к", len: 600, addedAt: now - D, ...o });
+  const queue = [
+    v("aaaaaaaaaaa"), // свежее, не начато — не мусор
+    v("bbbbbbbbbbb", { addedAt: now - 90 * D }), // залежалось
+    v("ccccccccccc", { addedAt: now - 90 * D }), // старое, но начато — не залежалось
+    v("ddddddddddd"), // почти досмотрено
+    v("eeeeeeeeeee", { addedAt: now - 120 * D }), // удалено (и старое — группа одна: недоступные)
+    v("fffffffffff"), // дубль
+    v("ggggggggggg", { len: 0 }), // длина неизвестна — «почти досмотрено» не считаем
+    v("fffffffffff"),
+    v("hhhhhhhhhhh", { addedAt: now - 59 * D }), // 59 дней — ещё не залежалось
+    v("iiiiiiiiiii", { addedAt: now - 61 * D }), // 61 день, место 3 с — не начато
+  ];
+  const pos = { ccccccccccc: 60, ddddddddddd: 560, ggggggggggg: 500, iiiiiiiiiii: 3 };
+  const avail = { eeeeeeeeeee: "gone", aaaaaaaaaaa: "ok" };
+  const g = QT.groupQueue(queue, pos, { now, avail });
+  const ids = (l) => l.map((x) => x.id).join(",");
+  ok(ids(g.gone) === "eeeeeeeeeee" && g.gone[0].note === "удалено", "уборка: недоступные — по проверке");
+  ok(ids(g.dups) === "fffffffffff" && g.dups[0].n === 1 && g.dups[0].d === 5 && g.dups[0].note === "ещё 1 копия", "уборка: дубль — одна запись на видео, первая копия");
+  ok(ids(g.almost) === "ddddddddddd" && g.almost[0].pct === 93, "уборка: почти досмотрено — больше 90%");
+  ok(ids(g.stale) === "bbbbbbbbbbb,iiiiiiiiiii" && g.stale[0].days === 90, "уборка: залежалось — больше 60 дней и не начато (место < 5 с)");
+  const all = [...g.gone, ...g.dups, ...g.almost, ...g.stale].map((x) => x.id);
+  ok(all.length === new Set(all).size, "уборка: у каждого видео одна группа");
+  ok(QT.groupQueue([v("xxxxxxxxxxx", { addedAt: 0 })], {}, { now }).stale.length === 0, "уборка: без даты добавления — не залежалось");
+  ok(QT.groupQueue(queue, pos, { now, avail: { ddddddddddd: "private" } }).gone[0]?.note === "приватное", "уборка: недоступное важнее «почти досмотрено»");
+  ok(QT.groupQueue([v("x1xxxxxxxxx"), v("x1xxxxxxxxx"), v("x1xxxxxxxxx")], {}, { now }).dups[0].note === "ещё 2 копии", "уборка: число копий");
+
+  const picked = QT.defaultPicked(g);
+  ok(picked.has("eeeeeeeeeee") && picked.has("fffffffffff") && picked.has("ddddddddddd") && !picked.has("bbbbbbbbbbb"), "уборка: по умолчанию всё, кроме залежавшегося");
+  ok(QT.groupState(g.stale, picked) === "none" && QT.groupState(g.gone, picked) === "all", "уборка: состояние галочки группы");
+  ok(QT.groupState(g.stale, new Set(["bbbbbbbbbbb"])) === "some", "уборка: группа отмечена частично");
+
+  picked.add("bbbbbbbbbbb");
+  const plan = QT.removalPlan(queue, pos, g, picked);
+  ok(plan.drop.join(",") === "bbbbbbbbbbb,eeeeeeeeeee,fffffffffff" && plan.done.join(",") === "ddddddddddd", "уборка: что убрать — по порядку очереди, досмотренное отдельно");
+  ok(plan.keep.length === 1 && plan.keep[0].at === 2 && plan.keep[0].rec.id === "fffffffffff", "уборка: первая копия дубля возвращается на место");
+  ok(plan.undo.done.length === 1 && plan.undo.done[0].t === 560 && plan.undo.drop.map((x) => x.at).join(",") === "1,3" && plan.undo.done[0].at === 3, "уборка: «Вернуть» — прежние места и место просмотра");
+  ok(plan.count === 4, "уборка: число отмеченных видео");
+  // после «Убрать» (все копии) + «вернуть первую копию» дубль остаётся один
+  const removedIds = new Set([...plan.drop, ...plan.done]);
+  const after = restoreAt(queue.filter((x) => !removedIds.has(x.id)), plan.keep);
+  ok(after.filter((x) => x.id === "fffffffffff").length === 1 && after.findIndex((x) => x.id === "fffffffffff") === 2, "уборка: дубль — одна копия, на месте первой");
+  // «Вернуть» — всё на места (копию дубля второй раз не добавляем)
+  const back = restoreAt(restoreAt(after, plan.undo.drop), plan.undo.done);
+  ok(back.map((x) => x.id).join() === queue.filter((x, i) => i !== 7).map((x) => x.id).join(), "уборка: «Вернуть» — очередь как была, без лишней копии");
+
+  // ответы oEmbed и страницы видео
+  ok(QT.oembedVerdict(200) === "ok" && QT.oembedVerdict(404) === "gone" && QT.oembedVerdict(401) === "check" && QT.oembedVerdict(403) === "check", "уборка: oEmbed — есть, удалено, проверить страницей");
+  ok(QT.oembedVerdict(429) === "retry" && QT.oembedVerdict(0) === "retry" && QT.oembedVerdict(503) === "retry", "уборка: oEmbed — лимит и сбой не считаем недоступностью");
+  const pl = (st, reason = "") => `var ytInitialPlayerResponse = {"responseContext":{},"playabilityStatus":{"status":"${st}","reason":"${reason}","messages":["x"]}};`;
+  ok(QT.playability(pl("OK")) === "ok" && QT.playability(pl("ERROR", "Video unavailable")) === "gone" && QT.playability(pl("UNPLAYABLE", "Not available in your country")) === "blocked", "уборка: страница — есть, удалено, заблокировано");
+  ok(QT.playability(pl("LOGIN_REQUIRED", "This video is private")) === "private" && QT.playability(pl("LOGIN_REQUIRED", "Войдите, чтобы подтвердить возраст")) === "ok", "уборка: приватное — да, «подтвердите возраст» — нет");
+  ok(QT.playability(pl("LOGIN_REQUIRED", "Sign in to confirm your age")) === "ok" && QT.playability(pl("AGE_CHECK_REQUIRED")) === "ok", "уборка: возрастные ограничения — смотреть можно");
+  ok(QT.playability("<html>капча</html>") === null && QT.playability("") === null, "уборка: не разобрали страницу — не знаем");
+
+  // кеш проверок
+  const cache = { aaaaaaaaaaa: { s: "ok", at: now - D }, bbbbbbbbbbb: { s: "ok", at: now - 10 * D }, ccccccccccc: { s: "gone", at: now } };
+  ok(QT.needCheck(["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc", "ddddddddddd", "ddddddddddd"], cache, now).join() === "bbbbbbbbbbb,ddddddddddd", "уборка: перепроверяем старое и новое, без повторов");
+  ok(QT.availOf(cache).ccccccccccc === "gone" && Object.keys(QT.pruneCache(cache, ["ccccccccccc"])).join() === "ccccccccccc", "уборка: кеш — вердикты и чистка");
+
+  // темп проверок: не чаще perSec в секунду, не больше parallel сразу, отмена
+  const t0 = Date.now();
+  const hit = [];
+  let inFlight = 0;
+  let maxFlight = 0;
+  const okAll = await QT.paced(
+    ["1", "2", "3", "4", "5", "6"],
+    async (id) => {
+      inFlight++;
+      maxFlight = Math.max(maxFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 30));
+      inFlight--;
+      return id === "3" ? "gone" : "ok";
+    },
+    { perSec: 50, parallel: 2, onDone: (id, v2) => hit.push(id + v2) }
+  );
+  const took = Date.now() - t0;
+  ok(okAll && hit.length === 6 && hit.includes("3gone") && maxFlight <= 2, "уборка: проверки — все, не больше двух сразу");
+  ok(took >= 5 * 20 - 5, "уборка: проверки — не чаще 50 в секунду");
+  const ac = new AbortController();
+  const got = [];
+  const fin = await QT.paced(
+    ["a", "b", "c", "d", "e"],
+    async (id) => {
+      if (id === "b") ac.abort();
+      return "ok";
+    },
+    { perSec: 1000, parallel: 1, signal: ac.signal, onDone: (id) => got.push(id) }
+  );
+  ok(fin === false && got.join() === "a", "уборка: «Остановить» — дальше не проверяем");
+  const errs = [];
+  await QT.paced(
+    ["a", "b"],
+    async (id) => {
+      if (id === "a") throw new Error("сеть");
+      return "ok";
+    },
+    { perSec: 1000, onDone: (id, v2) => errs.push(`${id}:${v2}`) }
+  );
+  ok(errs.sort().join() === "a:null,b:ok", "уборка: сбой запроса — «не знаем», не недоступно");
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);

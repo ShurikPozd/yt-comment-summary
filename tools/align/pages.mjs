@@ -12,6 +12,9 @@ const click = (sel) => `document.querySelector(${JSON.stringify(sel)})?.click()`
 // Ctrl+щелчок по двум карточкам — включается выбор и полоса «Выбрано: N»
 const pickTwo = `(() => { const cs = [...document.querySelectorAll('#grid .card, #cont .card, #digest .card')].slice(0, 2);
   for (const c of cs) c.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true, button: 0 })); return cs.length; })()`;
+// открыть «Уборку очереди» и дождаться конца проверки (модуль грузится по нажатию)
+const qtidyDone = `(async () => { ${click("[data-qt=open]")};
+  for (let i = 0; i < 150; i++) { const b = document.getElementById("qtidy"); if (b?.querySelector(".qt-foot, .qt-clean") && !b.querySelector("[data-qt=stop]")) return i; await new Promise((r) => setTimeout(r, 100)); } return -1; })()`;
 const shadow = (id) => `[document.getElementById(${JSON.stringify(id)})?.shadowRoot]`;
 // шрифт YouTube (Roboto с Google Fonts) загружен — без сети стенды YouTube не откроются
 const roboto = `[...document.fonts].some((f) => f.family.replace(/["']/g, "") === "Roboto" && f.status === "loaded")`;
@@ -30,6 +33,10 @@ export const PAGES = [
   // окна разбора очереди и резервной копии
   { key: "lib-triage", url: LIB + "#v=queue", w: 1200, h: 1400, wait: libReady, act: click("[data-act=triage]"), roots: "[document.getElementById('triage')]" },
   { key: "lib-backup", url: LIB + "#v=queue", w: 1200, h: 1400, wait: libReady, act: click("[data-bk=open]"), roots: "[document.getElementById('backup')]" },
+  // «Уборка очереди»: ждём конца проверки доступности (подделка oEmbed в lib-stub.js, 5 запросов в секунду)
+  { key: "lib-qtidy", url: LIB + "#v=queue", w: 1200, h: 2000, wait: libReady, act: qtidyDone, roots: "[document.getElementById('qtidy')]" },
+  // она же, пока идёт проверка («Остановить»), в узком окне
+  { key: "lib-qtidy-run", url: LIB.replace("?", "?odelay=600000&") + "#v=queue", w: 720, h: 2600, wait: libReady, act: click("[data-qt=open]"), settle: 1500, roots: "[document.getElementById('qtidy')]" },
   // приветственная страница «Что умеет расширение»
   { key: "welcome", url: "/welcome/welcome.html", w: 1200, h: 7000, wait: "document.querySelector('.cards .card, .cards article, .klist *') && performance.now() > 800" },
   // на широком экране корневой шрифт крупнее (clamp по ширине окна) — другие доли пикселя

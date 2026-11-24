@@ -1740,7 +1740,7 @@ body[data-watch] .body {
   overflow: hidden;
   font-size: 0.92rem;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: round(1.2rem, 1px);
 }
 
 .w-it span {
@@ -2638,6 +2638,339 @@ body.embed .t-acts.main {
 
 #backup .tidy {
   margin-bottom: 22px;
+}
+
+/* ---------- «Уборка очереди» (library/queue-tidy.js) ---------- */
+#qtidy .tidy {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+#qtidy .td-top {
+  margin-bottom: 0;
+}
+
+/* Центровка в окне (замер tools/align, страницы lib-qtidy и lib-qtidy-run, 100–200%):
+   высоты и строки — целыми пикселями, иначе подписи «прыгают» на полпикселя от того,
+   где окно оказалось на странице. У .ghost целая высота — общая добавка снизу лишняя
+   (как у «Закончить» в разборе). */
+#qtidy button.ghost {
+  height: round(2.6rem, 1px);
+  padding-bottom: 0;
+}
+
+#qtidy button.ghost > svg {
+  top: 0;
+}
+
+/* «Убрать отмеченные»: кнопка и строка чётные — подпись и значок на целых пикселях;
+   подпись на 1px выше (Segoe сажает заглавные низко), значок — на месте */
+.qt-foot button.primary {
+  height: round(2.9rem, 2px);
+  padding-bottom: 2px;
+  line-height: round(1.4em, 2px);
+}
+
+.qt-foot button.primary > svg {
+  position: relative;
+  top: 1px;
+}
+
+.qt-sec,
+.qt-check {
+  padding: 14px;
+  border-radius: var(--r-m);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.qt-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qt-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+.qt-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 2px;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+/* название группы: строка целая, отступ снизу поднимает заглавные к середине (Segoe
+   сажает их низко) — галочка остаётся по центру строки */
+.qt-all > b {
+  line-height: round(1.5rem, 1px);
+}
+
+.qt-all input,
+.qt-row input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* число видео в группе — плашка рядом с названием */
+.qt-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.7rem;
+  height: round(1.5rem, 1px);
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--fg-2);
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* число — вплотную к названию (10px, как галочка), пояснение — дальше */
+.qt-h > .qt-n {
+  margin-left: -4px;
+}
+
+.qt-why {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: round(1.25rem, 1px);
+}
+
+/* видео группы — плиткой по ширине окна: на узком в один столбец; одно видео — во всю ширину */
+.qt-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 6px 12px;
+}
+
+.qt-row {
+  display: grid;
+  grid-template-columns: auto 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease;
+}
+
+.qt-row:hover {
+  background: var(--bg-hover);
+}
+
+/* снятые — бледнее: сразу видно, что останется в очереди */
+.qt-row:not(.on) .qt-th,
+.qt-row:not(.on) .qt-tx {
+  opacity: 0.55;
+}
+
+.qt-th {
+  position: relative;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-3);
+}
+
+.qt-th img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qt-th .dur {
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.qt-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.qt-tx b {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.qt-tx small {
+  overflow: hidden;
+  line-height: round(1.1rem, 1px);
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.qt-tx em {
+  color: var(--accent-ink);
+  font-style: normal;
+  font-weight: 650;
+}
+
+.qt-more {
+  align-self: center;
+}
+
+/* проверка доступности: подпись и полоска слева, «Остановить» справа */
+.qt-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.qt-check .wl-bar {
+  grid-column: 1;
+}
+
+.qt-check > button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.qt-check-off > button {
+  grid-row: 1;
+}
+
+.qt-check-t {
+  line-height: round(1.4rem, 1px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+
+.qt-check-t span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.qt-none,
+.qt-clean {
+  line-height: round(1.4rem, 1px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.qt-none svg {
+  flex: none;
+}
+
+.qt-clean {
+  padding: 22px 14px;
+  color: var(--fg-2);
+  font-size: 1.05rem;
+}
+
+.qt-clean svg {
+  color: var(--accent);
+}
+
+/* «Убрано: N видео · Вернуть» */
+.qt-done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 10px 10px 10px 16px;
+  border-radius: var(--r-m);
+  background: var(--accent-soft);
+}
+
+.qt-done > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.qt-done svg {
+  color: var(--accent-ink);
+}
+
+/* низ окна прилипает к краю экрана — «Убрать отмеченные» видна и у длинных списков */
+.qt-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin: 0 -18px -18px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-strong);
+  border-radius: 0 0 var(--r-l) var(--r-l);
+  background: var(--bg-2);
+}
+
+.qt-foot > span {
+  color: var(--fg-2);
+}
+
+@media (max-width: 560px) {
+  .qt-foot > button,
+  .qt-check > button {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .qt-check {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .qt-check > button {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .qt-row {
+    grid-template-columns: auto 80px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .qt-th {
+    width: 80px;
+  }
+
+  /* узко: подпись («досмотрено на 95%», «удалено») переносится, а не обрезается */
+  .qt-tx small {
+    white-space: normal;
+  }
 }
 
 /* ---------- поиск по смыслу ---------- */
