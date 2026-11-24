@@ -51,6 +51,8 @@ class H(http.server.SimpleHTTPRequestHandler):
             with open(os.path.join(ROOT, "sidepanel", "sidepanel.html"), encoding="utf-8") as f:
                 html = f.read()
             html = re.sub(r"<script[^>]*>\s*</script>", "", html)
+            # html.booting прячет пустой экран до ответа скрипта панели — здесь его нет
+            html = html.replace('<html lang="ru" class="booting">', '<html lang="ru">', 1)
             show = "<style>.view{display:block!important} .copy-btn.hidden,#tabs.hidden,#collect-bar.hidden{display:flex!important}"
             # панель во всю длину, без внутренней прокрутки — в снимок попадает всё
             show += "html,body,#app{height:auto!important;max-height:none!important;overflow:visible!important}#content{overflow:visible!important;flex:none!important}</style>"
