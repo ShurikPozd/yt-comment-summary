@@ -7,6 +7,7 @@ import { statsAdd } from "./stats-bg.js"; // статистика просмот
 import { moveIds, restoreAt } from "./library/multi-core.js"; // выбор нескольких в библиотеке: «Наверх», «В конец», «Вернуть»
 import { moveSteps } from "./queue-core.js"; // перетаскивание в колонке очереди на странице видео
 import { setupAutoBackup } from "./backup-bg.js"; // автокопия в Telegram раз в неделю
+import { initYqSync, setupYqSync } from "./yqsync-bg.js"; // очередь на телефоне (/yq у бота): туда и отметки обратно
 import { createLoader } from "./lazy-bg.js"; // клип, плейлисты, превью — во вкладку по требованию
 import { hasSidePanel, openPanel, openPanelWindow } from "./panel-window.js"; // без chrome.sidePanel — панель окном
 import { paintWhatsNew } from "./welcome-bg.js"; // «Что умеет расширение»: при установке, «NEW» после крупного обновления
@@ -86,6 +87,7 @@ function setup() {
   void buildMenus();
   void setupSelfCheck();
   void setupAutoBackup();
+  void setupYqSync();
 }
 
 chrome.runtime.onInstalled.addListener(setup);
@@ -716,6 +718,8 @@ function qRemove(ids, why = "") {
     return { total: left.length };
   });
 }
+
+initYqSync({ remove: qRemove }); // «Досмотрел» / «Убрать» с телефона — тем же путём, что кнопки расширения
 
 // «Наверх» / «В конец» — одно видео или сразу несколько (в их нынешнем порядке)
 function qMove(ids, where = "top") {

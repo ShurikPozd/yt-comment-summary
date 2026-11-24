@@ -1444,5 +1444,115 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(errs.sort().join() === "a:null,b:ok", "уборка: сбой запроса — «не знаем», не недоступно");
 }
 
+// ---------- очередь на телефоне: синхронизация с ботом (yqsync-core.js, yqsync-bg.js) ----------
+{
+  const Y = await import("../yqsync-core.js");
+  const q = [
+    { id: "dQw4w9WgXcQ", title: "Т".repeat(400), channel: "К", len: 213.4, addedAt: 1795000000999 },
+    { id: "bad", title: "плохой" },
+    { id: "jNQXAC9IVRw", title: "Zoo", short: true, addedAt: 1795000500000 },
+  ];
+  const pl = Y.queuePayload(q, { dQw4w9WgXcQ: 100.7, jNQXAC9IVRw: 3 });
+  ok(pl.length === 2 && pl[0].title.length === 300 && pl[0].len === 213 && pl[0].pos === 100 && pl[0].added === 1795000000, "выжимка очереди: поля, длины, секунды");
+  ok(pl[1].pos === 0 && pl[1].short === true && Y.queuePayload(Array(2100).fill(q[0])).length === Y.YQ_MAX, "выжимка: меньше 5 с — не начато; не больше 2000");
+  ok(Y.hashOf("abc") === Y.hashOf("abc") && Y.hashOf("abc") !== Y.hashOf("abd"), "отпечаток очереди");
+  const plan = Y.planMarks(q, [
+    { id: "dQw4w9WgXcQ", act: "done", at: 1795000100 },
+    { id: "jNQXAC9IVRw", act: "drop", at: 1795000100 }, // видео добавили позже отметки — остаётся
+    { id: "9bZkp7q19f0", act: "drop", at: 1795000100 }, // в очереди уже нет — просто подтвердить
+    { id: "../x", act: "drop", at: 1 },
+    { id: "kJQP7kiw5Fk", act: "nuke", at: 1 },
+  ]);
+  ok(plan.done.join() === "dQw4w9WgXcQ" && plan.drop.length === 0, "отметки: убираем только то, что добавлено не позже отметки");
+  ok(plan.acks.map((a) => a.id).join() === "dQw4w9WgXcQ,jNQXAC9IVRw,9bZkp7q19f0", "отметки: подтверждаем и применённые, и устаревшие");
+  ok(Y.planMarks([{ id: "jNQXAC9IVRw", addedAt: 1795000100500 }], [{ id: "jNQXAC9IVRw", act: "drop", at: 1795000100 }]).drop.length === 1, "отметка в ту же секунду, что добавление — как у бота, убираем");
+
+  // фон: поддельные chrome.* и бот
+  const store = { settings: { baseUrl: "https://bot.example/", token: "test-token" }, queue: q.filter((x) => x.id !== "bad"), queuePos: {} };
+  const alarms = new Map();
+  const changed = [];
+  const alarmFns = [];
+  globalThis.chrome = {
+    runtime: { getURL: (p2) => `chrome-extension://abc/${p2}`, getManifest: () => ({ version: "9.9.9" }) },
+    storage: {
+      local: {
+        get: async (k) => {
+          const keys = k === null ? Object.keys(store) : Array.isArray(k) ? k : [k];
+          return Object.fromEntries(keys.filter((x) => x in store).map((x) => [x, structuredClone(store[x])]));
+        },
+        set: async (o) => Object.assign(store, structuredClone(o)),
+      },
+      onChanged: { addListener: (fn) => changed.push(fn) },
+    },
+    alarms: {
+      get: async (n) => alarms.get(n) || null,
+      create: async (n, o) => void alarms.set(n, { name: n, scheduledTime: o.when ?? Date.now() + (o.delayInMinutes || 0) * 60000, ...o }),
+      onAlarm: { addListener: (fn) => alarmFns.push(fn) },
+    },
+    tabs: { query: async () => [{ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }] },
+  };
+  const realFetch = globalThis.fetch;
+  const sent = [];
+  const bot = { rev: "", marks: [], status: 200, want: null };
+  globalThis.fetch = async (url, opt = {}) => {
+    if (String(url).endsWith("local-config.js")) return { ok: false };
+    const body = JSON.parse(opt.body);
+    sent.push({ url: String(url), opt, body });
+    if (bot.status !== 200) return { status: bot.status, ok: false, json: async () => ({ error: "сбой" }) };
+    for (const a of body.acks || []) bot.marks = bot.marks.filter((m) => !(m.id === a.id && m.at <= a.at));
+    if (body.items) bot.rev = body.rev;
+    const want = bot.want ?? (Boolean(body.rev) && bot.rev !== body.rev);
+    bot.want = null;
+    return { status: 200, ok: true, json: async () => ({ ok: true, marks: bot.marks, want }) };
+  };
+  const removed = [];
+  const bg = await import("../yqsync-bg.js?t=" + Date.now());
+  bg.initYqSync({
+    remove: async (ids, why) => {
+      removed.push(`${ids.join("+")}:${why}`);
+      store.queue = store.queue.filter((x) => !ids.includes(x.id));
+    },
+  });
+  const t0 = Date.now();
+  changed.forEach((fn) => fn({ queue: { newValue: [] } }, "local"));
+  await new Promise((r) => setTimeout(r, 20));
+  ok(alarms.get("ytcs-yqsync")?.scheduledTime >= t0 + 59000, "изменение очереди — отправка будильником через минуту");
+  let r = await bg.syncNow();
+  ok(r.ok && r.sent && sent.length === 1 && sent[0].url === "https://bot.example/api/yq-sync", "первая отправка — сразу вся очередь");
+  ok(sent[0].opt.headers["X-Sec-Token"] === "test-token" && sent[0].body.items.length === 2 && sent[0].body.ver === "9.9.9", "секрет как у /api/backup, версия расширения");
+  store.queuePos = { dQw4w9WgXcQ: 150 };
+  alarms.delete("ytcs-yqsync"); // одноразовый будильник после срабатывания исчезает
+  alarmFns.forEach((fn) => fn({ name: "ytcs-yqsync" })); // сработал будильник «через минуту»
+  r = await bg.syncNow();
+  ok(!r.sent && !sent[1].body.items && sent[1].body.rev === sent[0].body.rev, "через минуту — только спросить отметки, очередь подождёт 10 минут");
+  ok(store.yqSync.hash === sent[0].body.rev && alarms.get("ytcs-yqsync").scheduledTime >= store.yqSync.at + 599000, "изменения ждут будильника через 10 минут");
+  bot.marks = [{ id: "dQw4w9WgXcQ", act: "done", at: Math.floor(Date.now() / 1000) }, { id: "jNQXAC9IVRw", act: "drop", at: 1795000000 }];
+  const n0 = sent.length;
+  r = await bg.syncNow();
+  ok(removed.join() === "dQw4w9WgXcQ:done", "«Досмотрел» с телефона — убрано из очереди как досмотренное");
+  ok(store.queue.map((x) => x.id).join() === "jNQXAC9IVRw", "видео, добавленное позже отметки «Убрать», осталось");
+  const follow = sent[sent.length - 1].body;
+  ok(sent.length === n0 + 2 && follow.acks.length === 2 && follow.items.length === 1, "сразу подтверждение отметок и новая очередь");
+  ok(bot.marks.length === 0 && store.yqSync.acks.length === 0, "бот стёр отметки, подтверждать больше нечего");
+  bot.want = true;
+  const n1 = sent.length;
+  await bg.syncNow();
+  ok(sent.length === n1 + 2 && sent[n1 + 1].body.items?.length === 1, "бот потерял очередь — присылаем её сразу");
+  bot.status = 500;
+  store.queue = [];
+  r = await bg.syncNow({ force: true });
+  ok(r.err && store.yqSync.err && alarms.get("ytcs-yqsync").scheduledTime >= Date.now() + 590000, "бот не ответил — ошибка запомнена, повтор через 10 минут");
+  bot.status = 200;
+  store.settings = { baseUrl: "https://bot.example", token: "" };
+  const n2 = sent.length;
+  r = await bg.syncNow();
+  ok(r.skip === "setup" && sent.length === n2, "без секрета — к боту не ходим");
+  alarms.delete("ytcs-yqpoll");
+  await bg.setupYqSync();
+  ok(alarms.get("ytcs-yqpoll")?.periodInMinutes === 5 && alarms.has("ytcs-yqsync"), "будильники: раз в 5 минут отметки, при запуске — сверка");
+  globalThis.fetch = realFetch;
+  delete globalThis.chrome;
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);
