@@ -1,0 +1,108 @@
+# Проверки расширения на каждый пуш и PR в main (бесплатно: публичный репозиторий).
+#   «Проверки»  — bash check-syntax.sh: экспорты, необъявленные константы, разбор как ESM,
+#                 автотесты tests/run.mjs. Linux, ~1 мин.
+#   «Центровка» — bash tools/align/check.sh: пиксельный автотест подписей (tools/align/README.md).
+#                 Windows: панель и библиотека рисуются шрифтом Segoe UI Variable, а его есть
+#                 только в Windows — на Linux вместо него встал бы другой шрифт с другими
+#                 отклонениями, и тест мерил бы не то, что видит пользователь. ~6–8 мин.
+# Секреты не нужны: local-config.js в репозиторий не попадает, проверкам он не нужен.
+name: Проверки
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# новый пуш в ту же ветку отменяет недоделанный прогон
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Проверки
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # зависимостей npm у проекта нет (нет package.json) — кэшировать нечего,
+      # Node 24 берётся из кэша инструментов раннера
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Синтаксис, ESM, автотесты
+        run: bash check-syntax.sh
+
+  align:
+    name: Центровка
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # без этого Git для Windows выкачает .sh с CRLF, и bash споткнётся о \r
+      - name: Концы строк как в репозитории
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: tools/align/requirements.txt
+      - name: Pillow и numpy
+        run: python -m pip install -r tools/align/requirements.txt
+      - name: Chrome и шрифт
+        id: env
+        run: |
+          chrome="C:/Program Files/Google/Chrome/Application/chrome.exe"
+          if [ ! -f "$chrome" ]; then
+            echo "::error::Нет Chrome: $chrome"
+            exit 1
+          fi
+          echo "CHROME=$chrome" >> "$GITHUB_ENV"
+          powershell -NoProfile -Command "(Get-Item '$chrome').VersionInfo.ProductVersion" | sed 's/^/Chrome /'
+          out="$(cygpath -m "$RUNNER_TEMP")/align"
+          mkdir -p "$out"
+          echo "ALIGN_OUT=$out" >> "$GITHUB_ENV"
+          echo "ALIGN_JSON=$out/itog.json" >> "$GITHUB_ENV"
+          if [ -f /c/Windows/Fonts/SegUIVar.ttf ]; then
+            echo "Segoe UI Variable есть — центровка обязательна"
+            echo "segoe=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::На раннере нет Segoe UI Variable (C:\Windows\Fonts\SegUIVar.ttf): панель и библиотека рисуются запасным шрифтом, отклонения не те, что у пользователя. Центровка прогоняется, но не валит проверку."
+            echo "segoe=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Центровка подписей
+        id: align
+        # обязательна, только если шрифт тот же, что у пользователя
+        continue-on-error: ${{ steps.env.outputs.segoe != '1' }}
+        run: |
+          set -o pipefail
+          bash tools/align/check.sh 2>&1 | tee "$ALIGN_OUT/itog.txt"
+      - name: Итог в сводку
+        if: ${{ !cancelled() && steps.align.outcome != 'skipped' }}
+        run: |
+          {
+            if [ "${{ steps.align.outcome }}" = "success" ]; then echo "### Центровка: подписи по центру"; else echo "### Центровка: есть отклонения"; fi
+            [ "${{ steps.env.outputs.segoe }}" = "1" ] || echo "> Нет Segoe UI Variable — результат справочный, проверку не валит."
+            echo
+            echo '```'
+            tail -n 60 "$ALIGN_OUT/itog.txt" 2>/dev/null
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Снимки и итог в артефакты
+        if: ${{ !cancelled() && steps.align.outcome == 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: align-${{ github.run_number }}
+          path: ${{ runner.temp }}/align
+          retention-days: 14

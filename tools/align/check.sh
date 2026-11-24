@@ -6,14 +6,18 @@
 # и падает, если подпись дальше ±ALIGN_TH px (0.6) от середины кнопки или значок —
 # от заглавной. Исключения — allow.txt. Нужны node, python с Pillow и numpy, Chrome
 # и сеть (окна на YouTube рисуются шрифтом Roboto с Google Fonts).
+# ALIGN_OUT=папка — сохранить снимки и рамки туда (не удалять; для артефактов CI).
 set -u
 cd "$(dirname "$0")"
 PORT="${ALIGN_PORT:-8777}"
 DPRS="${ALIGN_DPRS:-1.5,2}"
-OUT="$(mktemp -d)"
+OUT="${ALIGN_OUT:-}"
+keep=1
+[ -n "$OUT" ] || { OUT="$(mktemp -d)"; keep=0; }
+mkdir -p "$OUT"
 python serve.py "$PORT" >/dev/null 2>&1 &
 SRV=$!
-cleanup() { kill "$SRV" 2>/dev/null; rm -rf "$OUT"; }
+cleanup() { kill "$SRV" 2>/dev/null; [ "$keep" -eq 1 ] || rm -rf "$OUT"; }
 trap cleanup EXIT
 for _ in $(seq 1 50); do
   curl -s -o /dev/null "http://127.0.0.1:$PORT/tools/align/audit.js" && break
