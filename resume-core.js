@@ -8,6 +8,7 @@
 // обновляется раз в десятки секунд — видео откатывается назад на ~20 с. Мы
 // каждую секунду кладём { id, t, d, at } в sessionStorage вкладки (переживает
 // перезагрузку, у каждой вкладки своё) и после перезагрузки возвращаем t.
+// А раз в 10 с — ещё и в chrome.storage.local (см. «надолго» ниже).
 (() => {
   const KEY = "ytcs:resume";
   const TTL_MS = 12 * 3600 * 1000; // запись старше — не наша сессия просмотра
@@ -53,5 +54,65 @@
     return Number.isFinite(currentTime) && Math.abs(currentTime - target) > DRIFT;
   }
 
-  globalThis.__ytcsResumeCore = { KEY, TTL_MS, MIN_T, END_GAP, pack, unpack, plan, sameVideo, needSeek };
+  // ---------- надолго: chrome.storage.local, переживает закрытие вкладки и браузера ----------
+  // { [id]: { t, d, at } } — до LONG_MAX роликов, не старше LONG_TTL_MS. Открыли
+  // ролик снова: если YouTube сам поставил его чуть раньше (его история отстаёт
+  // на десятки секунд) — тихо догоняем; если начал с нуля — плашка «Продолжить с 12:34».
+  const LONG_KEY = "resumeLong";
+  const LONG_MAX = 400;
+  const LONG_TTL_MS = 60 * 24 * 3600 * 1000;
+  const LONG_MIN = 30; // меньше полуминуты — не о чем напоминать
+  const LONG_END = 30; // последние полминуты (титры) — считаем досмотренным
+  const CATCH_UP = 90; // YouTube поставил не дальше стольких секунд позади — догоняем молча
+
+  /** Новая таблица мест: запись rec добавлена (или убрана — ролик досмотрен), лишнее срезано. */
+  function put(map, rec, now) {
+    const out = {};
+    for (const [id, r] of Object.entries(map && typeof map === "object" ? map : {})) {
+      if (r && Number.isFinite(r.t) && Number.isFinite(r.d) && Number.isFinite(r.at) && now - r.at < LONG_TTL_MS) out[id] = r;
+    }
+    // досмотрели — забываем; первые полминуты (открыл и закрыл) — прежнее место не трогаем
+    if (rec && rec.t > rec.d - LONG_END) delete out[rec.id];
+    else if (rec && rec.t >= LONG_MIN) {
+      delete out[rec.id]; // заново в конец — порядок ключей не важен, но так нагляднее
+      out[rec.id] = { t: rec.t, d: rec.d, at: rec.at };
+    }
+    const ids = Object.keys(out);
+    if (ids.length > LONG_MAX) {
+      ids.sort((a, b) => out[a].at - out[b].at);
+      for (const id of ids.slice(0, ids.length - LONG_MAX)) delete out[id];
+    }
+    return out;
+  }
+
+  /** Сохранённое место ролика id или null. urlT — в адресе есть &t= (место выбрано явно). */
+  function longTarget(map, { id, now, urlT }) {
+    const r = id && map && typeof map === "object" ? map[id] : null;
+    if (urlT || !r || !Number.isFinite(r.t) || !Number.isFinite(r.d) || !Number.isFinite(r.at)) return null;
+    if (!(now - r.at >= 0 && now - r.at < LONG_TTL_MS)) return null;
+    if (r.t < LONG_MIN || r.t > r.d - LONG_END) return null;
+    return { id, t: r.t, d: r.d, at: r.at };
+  }
+
+  /** Ролик загрузился и стоит на currentTime: "none" — уже там (или дальше: досмотрели
+   *  на другом устройстве), "seek" — YouTube отстал чуть-чуть, догоняем, "offer" — спросить. */
+  function longAction(target, currentTime) {
+    if (!Number.isFinite(currentTime) || currentTime >= target - DRIFT) return "none";
+    if (currentTime > MIN_T && currentTime >= target - CATCH_UP) return "seek";
+    return "offer";
+  }
+
+  /** 754 → "12:34", 3723 → "1:02:03". */
+  function clock(sec) {
+    const s = Math.max(0, Math.floor(sec));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = String(s % 60).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+  }
+
+  globalThis.__ytcsResumeCore = {
+    KEY, TTL_MS, MIN_T, END_GAP, pack, unpack, plan, sameVideo, needSeek,
+    LONG_KEY, LONG_MAX, LONG_TTL_MS, LONG_MIN, LONG_END, CATCH_UP, put, longTarget, longAction, clock,
+  };
 })();

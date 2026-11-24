@@ -50,4 +50,7 @@ export const PAGES = [
   { key: "yt-clip", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.clip()", settle: 1200, roots: shadow("ytcs-clip") },
   { key: "yt-pltoast", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.plToast()", settle: 900, extra: "#ytcs-pl-toast" },
   { key: "yt-playlists", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.playlists()", settle: 1200, roots: shadow("ytcs-playlists") },
+  // плашки поверх плеера: «Вы остановились на 2:30 · Продолжить» и затухание таймера сна
+  { key: "yt-resume", url: "/watch?v=dQw4w9WgXcQ&resume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-resume-offer')", settle: 700, roots: shadow("ytcs-resume-offer") },
+  { key: "yt-sleep", url: "/watch?v=dQw4w9WgXcQ&sleep=fade", w: 1280, h: 900, wait: ytReady, act: "__ytcsSleep.set('end')", settle: 900, roots: shadow("ytcs-sleep-notice") },
 ];

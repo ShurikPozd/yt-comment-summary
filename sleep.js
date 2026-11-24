@@ -220,7 +220,7 @@
     /* узкий плеер: текст не обрезается, а переносится — «таблетка» становится карточкой */
     .n.wrap { border-radius: 18px; padding-top: 8px; padding-bottom: 8px; }
     .n.wrap .txt { white-space: normal; overflow: visible; top: 0; }
-    button { flex: none; height: 34px; padding: 0 16px 1px; border: 0; border-radius: 999px; font: inherit; font-weight: 600;
+    button { flex: none; height: 34px; padding: 2px 16px 0; border: 0; border-radius: 999px; font: inherit; font-weight: 600;
       background: rgba(255, 255, 255, .14); color: #fff; cursor: pointer; transition: background-color .12s ease; }
     button:hover, button:focus-visible { background: rgba(255, 255, 255, .24); outline: none; }
     button:active { background: rgba(255, 255, 255, .3); }

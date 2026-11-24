@@ -3,10 +3,15 @@
 //   __stand.preview() — окно превью, __stand.clip() — окно клипа,
 //   __stand.playlists() — «Сохранить в плейлисты», __stand.menu() — меню кнопки в плеере,
 //   __stand.toast() — плашка плеера, __stand.plToast() — плашка плейлистов на странице.
+// Адрес с &resume=1 — ролик открыт заново с нуля, а место сохранено: плашка
+// «Вы остановились на 2:30 · Продолжить» (resume.js). С &sleep=fade — видео «играет» за 8 с
+// до конца: таймер сна «в конце видео» сразу даёт плашку затухания с кнопкой (sleep.js).
 (() => {
   const listeners = [];
   const msgListeners = [];
+  const q = new URLSearchParams(location.search);
   const store = { settings: {}, plRecent: ["PL19", "PL2", "PL9"] };
+  if (q.get("resume")) store.resumeLong = { dQw4w9WgXcQ: { t: 150, d: 213, at: Date.now() - 3600000 } };
   const stub = {
     runtime: {
       id: "stand",
@@ -38,8 +43,13 @@
   // у макетного <video> нет файла — длительность и время задаём сами
   const mv = document.querySelector("#movie_player video");
   Object.defineProperty(mv, "duration", { configurable: true, get: () => 213 });
-  let ct = 61.4;
+  let ct = q.get("resume") ? 0 : q.get("sleep") ? 205 : 61.4;
   Object.defineProperty(mv, "currentTime", { configurable: true, get: () => ct, set: (v) => (ct = v) });
+  Object.defineProperty(mv, "readyState", { configurable: true, get: () => 4 });
+  if (q.get("sleep")) {
+    mv.classList.add("html5-main-video");
+    Object.defineProperty(mv, "paused", { configurable: true, get: () => false });
+  }
 
   const TITLE = "Как построить уютный дом в Майнкрафте — полный гайд для новичков";
   // clip-main.js: «info» — название, длина, качества

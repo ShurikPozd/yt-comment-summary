@@ -677,6 +677,26 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(R.plan(null, { id: rec.id, nav: "reload", now }) === null, "записи нет — ничего");
   ok(R.sameVideo(rec, 1800.3) && !R.sameVideo(rec, 15) && !R.sameVideo(rec, NaN), "реклама (другая длина) и незагруженное — ждём сам ролик");
   ok(R.needSeek(612.3, 590) && !R.needSeek(612.3, 611) && !R.needSeek(612.3, NaN), "откат на 20 с — возвращаем, мелочь — нет");
+  // надолго (chrome.storage.local)
+  const day = 24 * 3600 * 1000;
+  let m = R.put({}, { id: "a", t: 600, d: 1800, at: now }, now);
+  ok(m.a && m.a.t === 600, "место запомнено");
+  ok(R.put(m, { id: "a", t: 1790, d: 1800, at: now + 1 }, now + 1).a === undefined, "досмотрели (титры) — забыли");
+  ok(R.put(m, { id: "a", t: 12, d: 1800, at: now + 1 }, now + 1).a.t === 600, "открыл и закрыл в первые полминуты — прежнее место цело");
+  ok(R.put(m, null, now + R.LONG_TTL_MS + 1).a === undefined, "старше двух месяцев — забыто");
+  const big = {};
+  for (let i = 0; i < R.LONG_MAX + 5; i++) big["v" + i] = { t: 100, d: 900, at: now - (R.LONG_MAX + 5 - i) * 1000 };
+  const cut = R.put(big, { id: "new", t: 100, d: 900, at: now }, now);
+  ok(Object.keys(cut).length === R.LONG_MAX && cut.new && !cut.v0 && cut["v" + (R.LONG_MAX + 4)], "не больше 400 роликов — самые давние уходят");
+  ok(R.put({ x: { t: "?" }, y: null }, null, now).x === undefined, "мусор в хранилище отбрасывается");
+  const L = (o) => R.longTarget(m, { id: "a", now: now + day, urlT: false, ...o });
+  ok(L({})?.t === 600, "открыли снова — место есть");
+  ok(L({ urlT: true }) === null, "метка &t= в адресе — выбор явный, не трогаем");
+  ok(L({ id: "b" }) === null && R.longTarget(null, { id: "a", now }) === null, "чужое видео и пусто — ничего");
+  ok(R.longAction(600, 600.5) === "none" && R.longAction(600, 900) === "none", "уже там или дальше (досмотрели на телефоне) — ничего");
+  ok(R.longAction(600, 580) === "seek" && R.longAction(600, 520) === "seek", "YouTube поставил на 20–80 с раньше — догоняем молча");
+  ok(R.longAction(600, 0) === "offer" && R.longAction(600, 3) === "offer" && R.longAction(600, 300) === "offer", "с нуля или далеко позади — спрашиваем плашкой");
+  ok(R.clock(754) === "12:34" && R.clock(3723) === "1:02:03" && R.clock(59.9) === "0:59", "время на плашке");
 }
 
 // ---------- таймер сна (sleep-core.js) ----------
