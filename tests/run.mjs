@@ -16,6 +16,7 @@ import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs } from 
 import { countOf, dayOf, fullDue, listsOf, readPlaylist, sameList, splice, syncSummary, updDay } from "../library/sync-plan.js";
 import { buildData, describe, escapeXml, fingerprint, parseInput, suggest, videoIdOf, videoUrl } from "../omnibox-core.js";
 import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
+import { linkRecord, revokeResult, savedLink, shareBody, shareResult } from "../share-core.js";
 import * as ST from "../stats-core.js";
 import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRead, mergeFeed, newCount, queueable, visible } from "../library/digest-core.js";
 import { MODULES, createLoader } from "../lazy-bg.js";
@@ -1259,6 +1260,39 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(ids(restoreAt(left, snap.slice().reverse())) === "abcdef", "выбор: «Вернуть» — порядок в списке не важен");
   ok(ids(restoreAt(left.slice(0, 2), snap)) === "abce", "выбор: очередь укоротилась — встают на прежние места или в конец");
   ok(ids(restoreAt([...left, { id: "b" }], snap)) === "acdfeb", "выбор: уже вернувшееся не задваивается");
+}
+
+// ---------- «Ссылка» на сводку (share-core.js) ----------
+{
+  const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const s = {
+    summary: "Хвалят подачу.",
+    topics: [{ name: "Подача", count: 12.7 }, { name: "" }, ...Array.from({ length: 20 }, (_, i) => ({ name: "т" + i, count: i }))],
+    points: ["Понятно", "", 5],
+    sentiment: { positive: 6, neutral: 3, negative: 1 },
+    notable: Array.from({ length: 9 }, (_, i) => ({ author: "@a" + i, text: "к" + i, likes: i * 10, id: "x" + i, avatar: "https://yt3/x.jpg" })),
+    commentCount: 1234,
+    updatedAt: 1764000000000,
+  };
+  const b = shareBody(s, { title: "  Видео ", channelName: "Канал" }, "dQw4w9WgXcQ");
+  ok(b && b.videoId === "dQw4w9WgXcQ" && b.title === "Видео" && b.channel === "Канал" && b.date === 1764000000000, "ссылка: тело — видео, название, канал, дата");
+  ok(b.topics.length === 12 && b.topics[0].count === 12 && b.points.length === 1, "ссылка: темы до 12 с числами, пустые мнения выкинуты");
+  ok(b.comments.length === 6 && eq(Object.keys(b.comments[0]).sort(), ["author", "likes", "text"]), "ссылка: до 6 ярких, без аватарок и id");
+  ok(b.sentiment.positive === 6 && b.commentCount === 1234, "ссылка: настроение и число комментариев");
+  ok(shareBody(s, {}, "bad") === null && shareBody({ summary: " " }, {}, "dQw4w9WgXcQ") === null && shareBody(null, {}, "dQw4w9WgXcQ") === null, "ссылка: без сводки или с негодным id — не отправляем");
+
+  const r = shareResult(200, { ok: true, id: "AbCdEfGhIjKl", url: "https://bot.example/sum/AbCdEfGhIjKl/", existed: false });
+  ok(r.ok && r.url.endsWith("/sum/AbCdEfGhIjKl/"), "ссылка: удачный ответ бота");
+  const rec = linkRecord(r, s, "https://bot.example");
+  ok(savedLink(rec, s, "https://bot.example")?.url === r.url, "ссылка: та же сводка — та же ссылка");
+  ok(savedLink(rec, { ...s, updatedAt: s.updatedAt + 1 }, "https://bot.example") === null, "ссылка: сводку обновили — новая ссылка");
+  ok(savedLink(rec, s, "https://other.example") === null && savedLink(null, s, "x") === null, "ссылка: другой бот или нет записи — новая ссылка");
+  ok(shareResult(404, null).kind === "update" && /Обновите бота/.test(shareResult(405, null).text), "ссылка: старый бот — «Обновите бота»");
+  ok(shareResult(200, { content: "x" }).kind === "update", "ссылка: странный ответ 200 — тоже старый бот");
+  ok(shareResult(0, null).kind === "network" && shareResult(-1, null).kind === "timeout" && shareResult(403, {}).kind === "forbidden", "ссылка: сеть, таймаут, секрет");
+  ok(shareResult(429, { code: "rate" }).kind === "busy" && shareResult(503, { code: "no_owner" }).kind === "setup" && shareResult(500, {}).kind === "error", "ссылка: лимит, владелец, сбой");
+  ok(shareResult(200, { ok: true, id: "../x", url: "javascript:alert(1)" }).ok === false, "ссылка: негодный id/адрес не принимаем");
+  ok(revokeResult(200, { ok: true, revoked: true }).ok && revokeResult(404, null).kind === "update" && revokeResult(0, null).kind === "network", "ссылка: отзыв");
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);

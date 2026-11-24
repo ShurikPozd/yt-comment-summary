@@ -2424,6 +2424,47 @@ button.primary.sc-run:disabled {
   transform: translate(-50%, 0) scale(1);
 }
 
+/* тост с действием («Ссылка скопирована · Отозвать»): кнопка справа, на одной линии */
+.toast.has-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 16px;
+  text-align: left;
+}
+
+.toast.has-action.show {
+  pointer-events: auto;
+}
+
+.toast-action {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast-action:hover {
+  background: var(--accent-hover);
+}
+
+/* 4 кнопки экспорта сводки; в узкой панели — сетка 2×2, подписи не режутся */
+.summary-actions {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 439px) {
+  .summary-actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ---------- Анимации ---------- */
 @keyframes view-in {
   from {
