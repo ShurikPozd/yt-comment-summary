@@ -110,6 +110,7 @@
     const was = st.mode;
     st = core.make("off");
     save();
+    arm();
     if (was === "off") return;
     if (v && !v.paused) v.pause();
     // громкость возвращаем чуть позже паузы — иначе хвост звука прозвучит громко
@@ -173,6 +174,7 @@
     st = next;
     lastAt = performance.now();
     save();
+    arm();
     showNotice("set");
     tick();
     syncMark();
@@ -188,6 +190,7 @@
     st = st.mode === "end" ? core.make("off") : { mode: "min", left: 15 * 60000, preset: st.preset };
     lastAt = performance.now();
     save();
+    arm();
     showNotice(st.mode === "off" ? "set" : "more");
     syncMark();
   }
@@ -332,7 +335,19 @@
   globalThis.__ytcsSleep = api;
 
   // ---------- Подписки ----------
-  setInterval(tick, 250);
+  // Ход — раз в 250 мс, но только пока таймер идёт: выключенный (почти всегда)
+  // не будит вкладку четыре раза в секунду. Включают его только apply/extend
+  // (меню, клавиша, плашка) и сохранённое состояние после перезагрузки.
+  let tickTimer = 0;
+  function arm() {
+    const on = st.mode !== "off";
+    if (on && !tickTimer) tickTimer = setInterval(tick, 250);
+    else if (!on && tickTimer) {
+      clearInterval(tickTimer);
+      tickTimer = 0;
+    }
+  }
+  arm();
   document.addEventListener("timeupdate", (e) => e.target instanceof HTMLVideoElement && st.mode !== "off" && tick(), true);
   // включили видео после остановки — плашка «остановлено» больше не нужна
   document.addEventListener(

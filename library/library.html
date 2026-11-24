@@ -11,53 +11,54 @@
   <body>
     <header class="top">
       <nav class="views" role="tablist" aria-label="Разделы библиотеки">
-        <span class="brand-icon" data-icon="library" data-size="22" title="Моя библиотека"></span>
+        <span class="brand-icon" data-icon="library" data-size="22" title="Моя библиотека"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/></svg></span>
         <button type="button" role="tab" data-view="lib" aria-selected="true">Плейлисты</button>
         <button type="button" role="tab" data-view="queue" aria-selected="false">Очередь<span id="q-badge" class="badge"></span></button>
         <!-- «Подписки» — дайджест новых видео из подписок (library/digest.js) -->
         <button type="button" role="tab" data-view="digest" aria-selected="false" title="Новые видео из ваших подписок с прошлого раза">Подписки<span id="d-badge" class="badge" aria-label="новых видео"></span></button>
       </nav>
       <label class="search">
-        <span class="search-icon" data-icon="search" data-size="20"></span>
+        <span class="search-icon" data-icon="search" data-size="20"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
         <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Поиск по плейлистам" aria-label="Поиск по видео в ваших плейлистах" />
         <kbd class="hint" title="Поиск — клавиша /">/</kbd>
       </label>
       <div class="where">
-        <!-- «Статистика» — library/stats-view.js -->
-        <button id="st-tab" type="button" class="icon-btn st-tab" aria-pressed="false" title="Статистика просмотра: сколько смотрели и сколько сэкономили" aria-label="Статистика просмотра"><span class="st-tab-ic"></span><span class="st-tab-label">Статистика</span></button>
+        <!-- «Статистика» — library/stats-view.js (грузится по нажатию); значок — здесь, чтобы не мигал -->
+        <button id="st-tab" type="button" class="icon-btn st-tab" aria-pressed="false" title="Статистика просмотра: сколько смотрели и сколько сэкономили" aria-label="Статистика просмотра"><span class="st-tab-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h16"/><path d="M7 16v-4"/><path d="M12 16V6"/><path d="M17 16v-7"/></svg></span><span class="st-tab-label">Статистика</span></button>
         <!-- «Что умеет расширение» — welcome/link.js -->
-        <button id="welcome-btn" type="button" class="icon-btn welcome-btn" data-welcome title="Что умеет расширение: все возможности, клавиши и что нового" aria-label="Что умеет расширение"><span data-icon="help" data-size="18"></span></button>
-        <button id="where-back" type="button" class="icon-btn embed-only" title="Назад к сводке" aria-label="Назад к сводке"><span data-icon="chevron" data-size="18"></span></button>
-        <button id="d-sync-embed" type="button" class="icon-btn embed-only digest-only" title="Обновить дайджест" aria-label="Обновить дайджест"><span data-icon="refresh" data-size="18"></span></button>
-        <button id="where" type="button" class="icon-btn" title="" aria-label=""><span data-icon="external" data-size="18"></span></button>
+        <button id="welcome-btn" type="button" class="icon-btn welcome-btn" data-welcome title="Что умеет расширение: все возможности, клавиши и что нового" aria-label="Что умеет расширение"><span data-icon="help" data-size="18"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 0 1 5 1c0 1.8-2.5 2.2-2.5 4"/><path d="M12 17.4h.01"/></svg></span></button>
+        <button id="where-back" type="button" class="icon-btn embed-only" title="Назад к сводке" aria-label="Назад к сводке"><span data-icon="chevron" data-size="18"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg></span></button>
+        <button id="d-sync-embed" type="button" class="icon-btn embed-only digest-only" title="Обновить дайджест" aria-label="Обновить дайджест"><span data-icon="refresh" data-size="18"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg></span></button>
+        <!-- в обычной вкладке — «Открывать в боковой панели», в панели (?panel) library.js ставит «во вкладку» -->
+        <button id="where" type="button" class="icon-btn" title="" aria-label=""><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
       </div>
       <div class="sync lib-only">
         <span id="sync-text" class="sync-text" role="status"></span>
-        <button id="sync" class="ghost" type="button"><span data-icon="refresh" data-size="16"></span><span class="label">Обновить</span></button>
+        <button id="sync" class="ghost" type="button"><span data-icon="refresh" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg></span><span class="label">Обновить</span></button>
       </div>
       <div class="sync queue-only">
         <span id="tabs-text" class="sync-text"></span>
-        <button id="collect" class="ghost" type="button" title="Все вкладки с видео YouTube — в очередь, вкладки закрыть (текущая и закреплённые останутся)"><span data-icon="download" data-size="16"></span><span class="label">Собрать вкладки</span></button>
+        <button id="collect" class="ghost" type="button" title="Все вкладки с видео YouTube — в очередь, вкладки закрыть (текущая и закреплённые останутся)"><span data-icon="download" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span><span class="label">Собрать вкладки</span></button>
       </div>
       <!-- «Подписки»: когда обновлялось и «Обновить» -->
       <div class="sync digest-only">
         <span id="d-sync-text" class="sync-text" role="status"></span>
-        <button id="d-sync" class="ghost" type="button" title="Перечитать ленту подписок"><span data-icon="refresh" data-size="16"></span><span class="label">Обновить</span></button>
+        <button id="d-sync" class="ghost" type="button" title="Перечитать ленту подписок"><span data-icon="refresh" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg></span><span class="label">Обновить</span></button>
       </div>
       <div id="progress" class="progress" hidden><div class="progress-fill"></div></div>
     </header>
 
     <div class="filters" role="toolbar" aria-label="Фильтры">
-      <button id="q-play" type="button" class="primary queue-only" title="Открыть первое видео в отдельной вкладке очереди"><span data-icon="play" data-size="16"></span>Смотреть очередь</button>
+      <button id="q-play" type="button" class="primary queue-only" title="Открыть первое видео в отдельной вкладке очереди"><span data-icon="play" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span>Смотреть очередь</button>
       <label class="side-search lib-only">
-        <span data-icon="search" data-size="16"></span>
+        <span data-icon="search" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
         <input id="pl-q" type="search" autocomplete="off" placeholder="Найти плейлист" aria-label="Найти плейлист" />
       </label>
       <!-- две группы: режимы поиска и длительность — не влезают в строку, переносятся целиком -->
       <div class="seg">
         <span class="modes lib-only">
-          <button type="button" id="sem-btn" class="sem-btn lib-only" aria-pressed="false" title="Искать по теме, а не только по словам: «что приготовить утром» найдёт «Шакшука на завтрак»"><span data-icon="sparkles" data-size="16"></span>По смыслу</button>
-          <button type="button" id="subs-btn" class="sem-btn lib-only" aria-pressed="false" aria-expanded="false" aria-controls="subs-info" title="Искать и по тому, что говорят в видео, — и открывать с нужного места"><span data-icon="subtitles" data-size="16"></span>В субтитрах<span class="subs-pct" hidden></span></button>
+          <button type="button" id="sem-btn" class="sem-btn lib-only" aria-pressed="false" title="Искать по теме, а не только по словам: «что приготовить утром» найдёт «Шакшука на завтрак»"><span data-icon="sparkles" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 3l1.9 4.8L17.7 9.7l-4.8 1.9L11 16.4l-1.9-4.8L4.3 9.7l4.8-1.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span>По смыслу</button>
+          <button type="button" id="subs-btn" class="sem-btn lib-only" aria-pressed="false" aria-expanded="false" aria-controls="subs-info" title="Искать и по тому, что говорят в видео, — и открывать с нужного места"><span data-icon="subtitles" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h4"/><path d="M14 15h3"/><path d="M7 11h10"/></svg></span>В субтитрах<span class="subs-pct" hidden></span></button>
         </span>
         <span class="durs" role="radiogroup" aria-label="Длительность" id="dur">
           <button type="button" role="radio" data-dur="" aria-checked="true">Любая длина</button>
@@ -72,7 +73,7 @@
         <select id="sort"></select>
       </label>
       <!-- «Подписки»: «Всё просмотрено», что показывать, как группировать, Shorts -->
-      <button id="d-read" type="button" class="primary digest-only" title="Отметить все видео просмотренными — счётчик новых обнулится"><span data-icon="check" data-size="16"></span>Всё просмотрено</button>
+      <button id="d-read" type="button" class="primary digest-only" title="Отметить все видео просмотренными — счётчик новых обнулится"><span data-icon="check" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Всё просмотрено</button>
       <div class="seg d-seg digest-only">
         <span class="d-show" id="d-show" role="radiogroup" aria-label="Какие видео">
           <button type="button" role="radio" data-dshow="new" aria-checked="true">Новые<span class="n"></span></button>
@@ -127,7 +128,6 @@
     <script src="../thumb-preview.js"></script>
     <script src="../video-actions.js"></script>
     <script type="module" src="library.js"></script>
-    <script type="module" src="stats-view.js"></script>
     <script type="module" src="../welcome/link.js"></script>
   </body>
 </html>

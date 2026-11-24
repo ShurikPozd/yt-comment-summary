@@ -54,16 +54,21 @@
   }
 
   // Shorts: кнопка «Сохранить» — из playlists.js. Переходы на YouTube без
-  // перезагрузки, поэтому смотрим адрес по таймеру (дёшево); после 3 неудач — хватит.
+  // перезагрузки — ловим смену адреса (Navigation API, early.js; без него —
+  // проверка адреса раз в секунду); не вышло — повтор через секунду, после 3 неудач — хватит.
+  const onHrefChange = globalThis.__ytcs?.onHrefChange;
   let shortsFails = 0;
   let shortsBusy = false;
   async function shortsCheck() {
     if (shortsBusy || globalThis.__ytcsPlaylists || shortsFails >= 3 || !location.pathname.startsWith("/shorts/") || !alive()) return;
     shortsBusy = true;
-    if (!(await load("playlists"))) shortsFails++;
+    const ok = await load("playlists");
     shortsBusy = false;
+    if (!ok) shortsFails++;
+    if (!ok && onHrefChange && shortsFails < 3) setTimeout(shortsCheck, 1000); // при опросе повторит он сам
   }
-  setInterval(shortsCheck, 1000);
+  if (onHrefChange) onHrefChange(shortsCheck, 1000);
+  else setInterval(shortsCheck, 1000);
   void shortsCheck();
 
   globalThis.__ytcsLazy = { load, lastPlaylist, alive };
