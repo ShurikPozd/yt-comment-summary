@@ -37,12 +37,24 @@ import {
 } from "./insights.js";
 import { DEFAULTS } from "../config.js";
 import { icon, hydrateIcons } from "./icons.js";
-import { renderSummaryCard } from "./card.js";
 import { NOT_SET_UP, SHARE_KEY_PREFIX, SHARE_PATH, SHARE_TIMEOUT_MS, linkRecord, revokeResult, savedLink, shareBody, shareResult } from "../share-core.js";
 import { initSelfCheckUI } from "./selfcheck-ui.js";
-import { initVideoTldr, renderVideoTldr } from "./video-tldr.js";
 
 hydrateIcons();
+
+// Картинка сводки (card.js) и «О видео» (video-tldr.js + tldr-core.js) для первой
+// отрисовки не нужны — грузим их после неё: картинку — по нажатию, «О видео» —
+// как только известно видео (загрузка идёт уже после того, как данные на экране,
+// и к открытию вкладки пересказ готов, без пустого кадра).
+let tldrDeps = null;
+let tldrMod = null;
+function videoTldr() {
+  return (tldrMod ||= import("./video-tldr.js").then((m) => {
+    m.initVideoTldr(tldrDeps);
+    return m;
+  }));
+}
+const renderVideoTldr = () => videoTldr().then((m) => m.renderVideoTldr());
 
 const LOCAL_CONFIG =
   (typeof window !== "undefined" && window.__EXT_LOCAL_CONFIG__) || {};
@@ -435,20 +447,27 @@ let clampTimer = null;
 function fitClamps() {
   clearTimeout(clampTimer);
   clampTimer = setTimeout(() => {
-    for (const el of document.querySelectorAll("#content .c-text.clamp:not([data-fit])")) {
-      if (!el.offsetParent) continue; // в скрытой вкладке — посчитаем, когда откроют
-      el.dataset.fit = "1";
-      const btn = el.nextElementSibling;
+    // Сначала все замеры, потом все правки: когда они чередовались, браузер
+    // пересчитывал раскладку на каждой карточке (60 карточек — 60 пересчётов).
+    const els = [...document.querySelectorAll("#content .c-text.clamp:not([data-fit])")].filter(
+      (el) => el.offsetParent // в скрытой вкладке — посчитаем, когда откроют
+    );
+    const cut = els.map((el) => {
       // найденное слово спрятано под обрезкой — раскрываем текст целиком,
       // иначе непонятно, почему комментарий попал в результаты
       const mark = el.querySelector("mark");
       const hiddenHit = mark && mark.getBoundingClientRect().bottom > el.getBoundingClientRect().bottom + 2;
-      if (el.scrollHeight > el.clientHeight + 2 && !hiddenHit) {
+      return el.scrollHeight > el.clientHeight + 2 && !hiddenHit;
+    });
+    els.forEach((el, i) => {
+      el.dataset.fit = "1";
+      const btn = el.nextElementSibling;
+      if (cut[i]) {
         if (btn?.classList.contains("more-text")) btn.hidden = false;
       } else {
         el.classList.remove("clamp");
       }
-    }
+    });
   }, 0);
 }
 new MutationObserver(fitClamps).observe(document.getElementById("content"), { childList: true, subtree: true });
@@ -1035,6 +1054,22 @@ function renderAll() {
   renderSearchResults();
 }
 
+// Вкладки строим, только когда их видно: setTab перерисовывает вкладку при каждом
+// показе, так что работа над скрытой пропадала зря. При открытии панели на 1000
+// комментариев это были сотни лишних узлов и замер раскладки в скрытых «Моментах»,
+// а во время сбора — перерисовка трёх пустых вкладок на каждое сообщение о прогрессе.
+const isShown = (tab) => currentTab === tab;
+
+// innerHTML — только если разметка другая (и узлы с прошлого раза на месте):
+// пустые экраны во время сбора приходят одинаковыми много раз подряд.
+const lastHtml = new WeakMap();
+function setHtml(el, html) {
+  const prev = lastHtml.get(el);
+  if (prev && prev.html === html && prev.first === el.firstChild && prev.n === el.childNodes.length) return;
+  el.innerHTML = html;
+  lastHtml.set(el, { html, first: el.firstChild, n: el.childNodes.length });
+}
+
 function renderBottomMatters() {
   $("empty-state").classList.toggle("hidden", Boolean(state.videoId));
   $("empty-actions").classList.toggle("hidden", Boolean(state.videoId));
@@ -1217,9 +1252,9 @@ function setTab(name) {
   $("app").classList.toggle("on-settings", name === "settings");
   fitClamps();
   $("btn-settings").classList.toggle("active", name === "settings");
-  moveTabInk();
-  $("content").scrollTop = 0;
-  document.scrollingElement.scrollTop = 0; // в низком окне прокручивается вся панель
+  // Сначала строим вкладку, потом меряем (полоска под вкладкой, прокрутка): раньше
+  // замер шёл до перерисовки, и браузер считал раскладку дважды — для старой
+  // разметки и для новой.
   if (name === "topics") renderTopics();
   if (name === "summary") {
     renderSummary();
@@ -1229,8 +1264,11 @@ function setTab(name) {
   if (name === "video") void renderVideoTldr();
   if (name === "comments") renderComments();
   if (name === "search") renderSearchResults();
+  if (name === "settings") fillSettingsFields();
+  moveTabInk();
+  $("content").scrollTop = 0;
+  document.scrollingElement.scrollTop = 0; // в низком окне прокручивается вся панель
   if (name === "settings") {
-    fillSettingsFields();
     void renderHistoryList();
   } else {
     // запоминаем вкладку: при следующем открытии панели вернёмся на неё
@@ -1826,9 +1864,12 @@ function renderSummary() {
   if (!s) {
     // Есть комментарии — показываем карточку-приглашение; идёт сбор — короткую строку.
     // идёт сбор — такой же пустой экран, как на других вкладках (иконка, заголовок, пояснение)
-    ph.innerHTML = state.comments.length
-      ? ""
-      : noCommentsEmpty("Собираю комментарии", "Сводку можно будет сделать, когда сбор закончится — прогресс виден над вкладками.");
+    setHtml(
+      ph,
+      state.comments.length
+        ? ""
+        : noCommentsEmpty("Собираю комментарии", "Сводку можно будет сделать, когда сбор закончится — прогресс виден над вкладками.")
+    );
     ph.classList.toggle("hidden", Boolean(state.comments.length));
     $("btn-copy-summary").classList.add("hidden");
     $("btn-image-summary").classList.add("hidden");
@@ -1914,6 +1955,7 @@ function renderSummary() {
 // и не тратит лимиты Groq.
 
 function renderInsights() {
+  if (!isShown("summary")) return; // построим при показе «Сводки»
   const box = $("insights");
   const list = state.comments;
   if (!list.length) {
@@ -2015,14 +2057,22 @@ function countUp(nodes, ms = 550) {
 
 // ---------------- Моменты ----------------
 
+// Моменты с одним комментарием — шум: прячем под кнопку, если есть из чего выбирать.
+function momentsShown(moments) {
+  const multi = moments.filter((m) => m.count > 1);
+  const singles = moments.length - multi.length;
+  const hideSingles = !state.momentsAll && multi.length >= 3 && singles > 0;
+  return { singles, hideSingles, list: hideSingles ? multi : moments };
+}
+
 function renderMoments() {
   const list = state.comments;
   const moments = list.length ? allMoments() : [];
   const badge = $("moments-badge");
-  // в счётчике — моменты, которые видны в списке по умолчанию (от двух комментариев)
-  const nMulti = moments.filter((m) => m.count > 1).length;
-  badge.textContent = moments.length ? String(nMulti >= 3 ? nMulti : moments.length) : "";
+  // в счётчике на вкладке — сколько моментов в списке; он виден и при скрытой вкладке
+  badge.textContent = moments.length ? String(momentsShown(moments).list.length) : "";
   badge.classList.toggle("hidden", !moments.length);
+  if (!isShown("moments")) return; // сам список построим при показе вкладки
   $("moments-empty").classList.toggle("hidden", Boolean(moments.length));
   const line = $("moments-timeline");
   const wrap = $("moments-list");
@@ -2055,11 +2105,10 @@ function renderMoments() {
       .join("") +
     '</div></div><div class="tl-scale"><span class="tl-from"></span><span class="tl-mid"></span><span class="tl-to"></span></div><div class="tl-pop" aria-hidden="true"></div>';
   bindTimeline(line);
-  applyZoom(false);
+  applyZoom(false, true);
   line.classList.remove("hidden");
 
-  // Список: по ходу видео или по обсуждаемости. Моменты, на которые сослался
-  // один зритель, — шум: прячем под кнопку, если есть из чего выбирать.
+  // Список: по ходу видео или по обсуждаемости (одиночные — под кнопкой, см. momentsShown).
   const sortBy = state.momentsSort || "time";
   tools.classList.remove("hidden");
   document.querySelectorAll("#moments-sort .chip").forEach((b) => {
@@ -2067,14 +2116,9 @@ function renderMoments() {
     b.classList.toggle("active", on);
     b.setAttribute("aria-pressed", String(on));
   });
-  const multi = moments.filter((m) => m.count > 1);
-  const singles = moments.length - multi.length;
-  const hideSingles = !state.momentsAll && multi.length >= 3 && singles > 0;
-  const shown = (hideSingles ? multi : moments.slice()).sort((a, b) =>
-    sortBy === "time" ? a.t - b.t : b.score - a.score || a.t - b.t
-  );
+  const { singles, hideSingles, list: visible } = momentsShown(moments);
+  const shown = visible.slice().sort((a, b) => (sortBy === "time" ? a.t - b.t : b.score - a.score || a.t - b.t));
   allBtn.classList.toggle("hidden", !hideSingles);
-  badge.textContent = String(shown.length); // счётчик = сколько моментов в списке
   if (hideSingles)
     allBtn.textContent = `Ещё ${singles} ${plural(singles, "момент", "момента", "моментов")} с одним комментарием`;
 
@@ -2131,7 +2175,9 @@ function fmtZoom(z) {
   return z < 10 ? z.toFixed(1).replace(".", ",") : String(Math.round(z));
 }
 
-function applyZoom(animate = true) {
+// fresh — полосу только что построили: анимировать ей не от чего, поэтому без
+// принудительного пересчёта раскладки (он стоил до 150–190 мс при открытии панели).
+function applyZoom(animate = true, fresh = false) {
   const { line, view, track } = tlParts();
   if (!view || !track) return;
   tl.z = Math.min(Math.max(1, tl.z), tlMaxZoom());
@@ -2139,9 +2185,10 @@ function applyZoom(animate = true) {
   const instant = !animate || prefersReducedMotion.matches;
   if (instant) track.style.transition = "none";
   track.style.width = `${tl.z * 100}%`;
-  track.style.transform = `translateX(${-tl.s * tl.z * tlWidth(view)}px)`;
+  // без сдвига ширина не нужна — и не меряем её
+  track.style.transform = `translateX(${tl.s ? -tl.s * tl.z * tlWidth(view) : 0}px)`;
   if (instant) {
-    void track.offsetWidth;
+    if (!fresh) void track.offsetWidth;
     track.style.transition = "";
   }
   const zoomed = tl.z > 1.01;
@@ -2501,6 +2548,7 @@ function expandTopicInline(name) {
 }
 
 function renderTopics() {
+  if (!isShown("topics")) return; // построим при показе вкладки
   const wrap = $("topics-list");
   const empty = $("topics-empty");
   const s = state.summary;
@@ -2582,8 +2630,13 @@ function setCommentFilter(filter, query = null) {
   renderComments();
 }
 
+// Что сейчас нарисовано во «Все»: «Показать ещё» дописывает только новую порцию,
+// а не строит заново весь список (на шестой порции это было ~0,4 с).
+let commentsDrawn = null; // { key, list, n, last }
+
 // Рендерим порциями: 2000 карточек разом заметно подвешивали панель.
 function renderComments() {
+  if (!isShown("comments")) return; // построим при показе вкладки
   const wrap = $("comments-list");
   const list = filteredComments();
   const labels = { all: "", new: " · новые с прошлой сводки", popular: " · по лайкам", replies: " · по числу ответов", questions: " · вопросы", timecodes: " · с таймкодами" };
@@ -2599,14 +2652,34 @@ function renderComments() {
   });
   const more = $("btn-more-comments");
   if (!list.length) {
-    wrap.innerHTML = state.comments.length
-      ? `<div class="placeholder">Ничего не нашлось — смените фильтр или текст поиска.</div>`
-      : noCommentsEmpty("Комментариев пока нет", "Они появятся здесь, когда закончится сбор.");
+    commentsDrawn = null;
+    setHtml(
+      wrap,
+      state.comments.length
+        ? `<div class="placeholder">Ничего не нашлось — смените фильтр или текст поиска.</div>`
+        : noCommentsEmpty("Комментариев пока нет", "Они появятся здесь, когда закончится сбор.")
+    );
     more.classList.add("hidden");
     return;
   }
   const shown = list.slice(0, state.commentLimit);
-  wrap.innerHTML = shown.map((c) => commentCard(c, { query: state.commentQuery })).join("");
+  const card = (c) => commentCard(c, { query: state.commentQuery });
+  // всё, от чего зависит разметка карточек и порядок списка
+  const key = [state.comments, state.commentFilter, state.commentQuery, state.newIds, maxSec()];
+  const d = commentsDrawn;
+  // нарисованное — начало нужного списка, и разметку с тех пор никто не трогал
+  const intact =
+    d &&
+    d.n <= shown.length &&
+    d.key.every((x, i) => x === key[i]) &&
+    wrap.childElementCount === d.n &&
+    wrap.lastElementChild === d.last &&
+    d.list.slice(0, d.n).every((c, i) => c === list[i]);
+  // тот же список (вернулись на вкладку) — не строим заново: с несколькими
+  // «Показать ещё» это были сотни карточек и ~0,1–0,5 с на каждое переключение
+  if (intact && d.n < shown.length) wrap.insertAdjacentHTML("beforeend", shown.slice(d.n).map(card).join(""));
+  else if (!intact) wrap.innerHTML = shown.map(card).join("");
+  commentsDrawn = { key, list, n: shown.length, last: wrap.lastElementChild };
   const rest = list.length - shown.length;
   more.textContent = `Показать ещё ${Math.min(rest, COMMENTS_PAGE)} (осталось ${rest})`;
   more.classList.toggle("hidden", rest <= 0);
@@ -2626,6 +2699,7 @@ const MODE_HELP = `<div class="mode-help">${[
   .join("")}</div>`;
 
 function renderSearchResults() {
+  if (!isShown("search")) return; // построим при показе вкладки
   const wrap = $("search-results");
   const info = $("search-info");
   const answer = $("search-answer");
@@ -2640,11 +2714,14 @@ function renderSearchResults() {
   info.textContent = r.info || "";
   info.classList.toggle("err", Boolean(r.error));
   if (!items.length) {
-    wrap.innerHTML = r.info
-      ? ""
-      : state.comments.length
-        ? MODE_HELP
-        : noCommentsEmpty("Поиск заработает после сбора", "Когда комментарии соберутся, по ним можно будет искать и задавать вопросы.");
+    setHtml(
+      wrap,
+      r.info
+        ? ""
+        : state.comments.length
+          ? MODE_HELP
+          : noCommentsEmpty("Поиск заработает после сбора", "Когда комментарии соберутся, по ним можно будет искать и задавать вопросы.")
+    );
     return;
   }
   wrap.innerHTML = items.map((c) => commentCard(c, { query: r.mode === "text" ? r.query : "" })).join("");
@@ -3246,6 +3323,7 @@ function bindEvents() {
     btn.disabled = true;
     let png;
     try {
+      const { renderSummaryCard } = await import("./card.js");
       png = await renderSummaryCard(s, state.meta);
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       showToast("Картинка со сводкой в буфере — вставьте в чат через Ctrl+V");
@@ -3536,7 +3614,14 @@ function bindEvents() {
   window.addEventListener("focus", () => void wakeServer());
 }
 
+// Пустой экран прячется (html.booting в sidepanel.html), пока не ясно, есть ли
+// видео. Снимаем, как только ясно (если ответ задержался, CSS сам покажет экран через 1,5 с).
+function bootDone() {
+  document.documentElement.classList.remove("booting");
+}
+
 function showFatal(message, detail) {
+  bootDone();
   // Раньше любая ошибка инициализации уходила только в консоль, а панель
   // оставалась на статической заглушке — пользователь не понимал, что делать.
   const el = $("empty-state");
@@ -3568,7 +3653,7 @@ async function main() {
     },
   });
   // «О видео»: пересказ по субтитрам — общий с анализом клиент и бюджет лимитов Groq
-  initVideoTldr({
+  tldrDeps = {
     proxy,
     getState: () => state,
     pacer,
@@ -3578,7 +3663,7 @@ async function main() {
     showToast,
     setTab,
     esc,
-  });
+  };
   chrome.runtime.onMessage.addListener(onRuntimeMessage);
   // Переключатели плеера могут поменять из контекстного меню — держим панель
   // в курсе, иначе следующее «Сохранить» вернуло бы старые значения.
@@ -3596,6 +3681,7 @@ async function main() {
   });
   void wakeServer();
   await refreshFromActiveTab();
+  bootDone();
   // Возвращаемся на вкладку, открытую в прошлый раз (кроме настроек).
   try {
     const ms = (await chrome.storage.local.get("ui:momentsSort"))["ui:momentsSort"];

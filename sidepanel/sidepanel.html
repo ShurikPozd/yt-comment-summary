@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="booting">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -22,8 +22,8 @@
         <div class="thumb-wrap">
           <img id="thumbnail" alt="" />
           <div class="thumb-actions">
-            <button id="btn-view-thumb" title="Открыть превью в отдельной вкладке" aria-label="Открыть превью"><span data-icon="eye" data-size="14"></span></button>
-            <button id="btn-download-thumb" title="Скачать превью (имя по шаблону)" aria-label="Скачать превью"><span data-icon="download" data-size="14"></span></button>
+            <button id="btn-view-thumb" title="Открыть превью в отдельной вкладке" aria-label="Открыть превью"><span data-icon="eye" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span></button>
+            <button id="btn-download-thumb" title="Скачать превью (имя по шаблону)" aria-label="Скачать превью"><span data-icon="download" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg></span></button>
           </div>
         </div>
         <div class="video-info">
@@ -37,14 +37,14 @@
       </header>
 
       <div id="empty-state" class="empty">
-        <div class="empty-icon" data-icon="chat" data-size="28"></div>
+        <div class="empty-icon" data-icon="chat" data-size="28"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7"/><path d="M8.5 14.5h4"/></svg></div>
         <div class="empty-title">Откройте видео на YouTube</div>
         <div class="empty-text">Комментарии соберутся автоматически, а здесь появятся обзор, моменты и сводка.</div>
       </div>
       <div id="empty-actions" class="empty-actions">
-        <button id="btn-refresh-tab" class="ghost" title="Переискать вкладку с видео"><span data-icon="search" data-size="14"></span>Найти вкладку с видео</button>
-        <button id="btn-open-library" class="ghost" title="Поиск по всем видео в ваших плейлистах"><span data-icon="library" data-size="14"></span>Моя библиотека</button>
-        <button id="btn-open-settings" class="ghost" title="Настройки"><span data-icon="settings" data-size="14"></span>Настройки</button>
+        <button id="btn-refresh-tab" class="ghost" title="Переискать вкладку с видео"><span data-icon="search" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Найти вкладку с видео</button>
+        <button id="btn-open-library" class="ghost" title="Поиск по всем видео в ваших плейлистах"><span data-icon="library" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/></svg></span>Моя библиотека</button>
+        <button id="btn-open-settings" class="ghost" title="Настройки"><span data-icon="settings" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9"/><path d="M19 7h1"/><circle cx="16" cy="7" r="2.5"/><path d="M4 17h2"/><path d="M12 17h8"/><circle cx="9" cy="17" r="2.5"/></svg></span>Настройки</button>
       </div>
 
       <section id="collect-bar" class="toolbar hidden">
@@ -53,8 +53,8 @@
           <span>лимит</span>
           <input id="quick-max" type="number" min="10" max="2000" step="10" value="120" />
         </label>
-        <button id="btn-restart" class="icon-btn" title="Собрать комментарии заново" aria-label="Собрать заново"><span data-icon="refresh" data-size="15"></span></button>
-        <button id="btn-lib" class="icon-btn lib-btn" title="Моя библиотека — поиск по всем вашим плейлистам и очередь" aria-label="Моя библиотека"><span data-icon="library" data-size="16"></span><span class="lbl">Библиотека</span></button>
+        <button id="btn-restart" class="icon-btn" title="Собрать комментарии заново" aria-label="Собрать заново"><span data-icon="refresh" data-size="15"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg></span></button>
+        <button id="btn-lib" class="icon-btn lib-btn" title="Моя библиотека — поиск по всем вашим плейлистам и очередь" aria-label="Моя библиотека"><span data-icon="library" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/></svg></span><span class="lbl">Библиотека</span></button>
         <div id="collect-progress" class="progress hidden"><i></i></div>
       </section>
       <div id="status-row" class="status-row hidden"><span id="collect-status" class="status"></span></div>
@@ -66,7 +66,7 @@
         <button data-tab="topics" class="tab" role="tab" aria-selected="false" aria-controls="view-topics">Темы</button>
         <button data-tab="search" class="tab" role="tab" aria-selected="false" aria-controls="view-search">Поиск</button>
         <button data-tab="comments" class="tab" role="tab" aria-selected="false" aria-controls="view-comments">Все</button>
-        <button id="btn-settings" class="tab settings-tab" title="Настройки" aria-label="Настройки"><span data-icon="settings" data-size="18"></span></button>
+        <button id="btn-settings" class="tab settings-tab" title="Настройки" aria-label="Настройки"><span data-icon="settings" data-size="18"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9"/><path d="M19 7h1"/><circle cx="16" cy="7" r="2.5"/><path d="M4 17h2"/><path d="M12 17h8"/><circle cx="9" cy="17" r="2.5"/></svg></span></button>
         <span class="tab-ink" aria-hidden="true"></span>
       </nav>
 
@@ -74,7 +74,7 @@
         <div id="view-summary" class="view active">
           <section class="ai-block">
             <div id="summary-cta" class="cta hidden">
-              <div class="cta-icon" data-icon="summary" data-size="18"></div>
+              <div class="cta-icon" data-icon="summary" data-size="18"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M4 11h16"/><path d="M4 16h11"/><path d="M4 21h7"/></svg></div>
               <div class="cta-body">
                 <div class="cta-title">Сводка обсуждения от ИИ</div>
                 <div class="cta-text">Темы, настроение зрителей, главные мнения и яркие комментарии. Бесплатно, обычно около минуты.</div>
@@ -92,10 +92,10 @@
             <div id="summary-points"></div>
             <div id="summary-notable"></div>
             <div class="summary-actions">
-              <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку текстом"><span data-icon="copy" data-size="14"></span>Текст</button>
-              <button id="btn-export-summary" class="ghost copy-btn hidden" title="Скачать сводку в файл .md"><span data-icon="file" data-size="14"></span>.md</button>
-              <button id="btn-image-summary" class="ghost copy-btn hidden" title="Сводка картинкой — скопировать в буфер (удобно отправить в Telegram)"><span data-icon="image" data-size="14"></span>Картинка</button>
-              <button id="btn-share-summary" class="ghost copy-btn hidden" title="Ссылка на страницу со сводкой — друг откроет её в любом браузере, без расширения"><span data-icon="link" data-size="14"></span>Ссылка</button>
+              <button id="btn-copy-summary" class="ghost copy-btn hidden" title="Скопировать сводку текстом"><span data-icon="copy" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg></span>Текст</button>
+              <button id="btn-export-summary" class="ghost copy-btn hidden" title="Скачать сводку в файл .md"><span data-icon="file" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="M9 14l3 3 3-3"/></svg></span>.md</button>
+              <button id="btn-image-summary" class="ghost copy-btn hidden" title="Сводка картинкой — скопировать в буфер (удобно отправить в Telegram)"><span data-icon="image" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg></span>Картинка</button>
+              <button id="btn-share-summary" class="ghost copy-btn hidden" title="Ссылка на страницу со сводкой — друг откроет её в любом браузере, без расширения"><span data-icon="link" data-size="14"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg></span>Ссылка</button>
             </div>
           </section>
           <section id="insights" class="insights hidden"></section>
@@ -107,7 +107,7 @@
 
         <div id="view-moments" class="view">
           <div id="moments-empty" class="view-empty">
-            <div class="empty-icon small" data-icon="clock" data-size="22"></div>
+            <div class="empty-icon small" data-icon="clock" data-size="22"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
             <div class="empty-title">Моментов пока нет</div>
             <div class="empty-text">Когда зрители пишут таймкоды вроде 1:23, здесь собираются самые обсуждаемые места видео — клик перематывает.</div>
           </div>
@@ -124,7 +124,7 @@
 
         <div id="view-topics" class="view">
           <div id="topics-empty" class="view-empty">
-            <div class="empty-icon small" data-icon="summary" data-size="22"></div>
+            <div class="empty-icon small" data-icon="summary" data-size="22"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M4 11h16"/><path d="M4 16h11"/><path d="M4 21h7"/></svg></div>
             <div class="empty-title">Темы появятся после анализа</div>
             <div class="empty-text">ИИ разложит обсуждение по темам и покажет, сколько комментариев в каждой.</div>
             <button id="btn-topics-analyze" class="primary empty-cta">Анализировать</button>
@@ -173,17 +173,17 @@
         <div id="view-settings" class="view">
           <!-- выход из настроек — сверху и всегда на виду; всё на странице сохраняется само -->
           <div class="settings-top">
-            <button type="button" id="btn-settings-close" class="settings-back"><span data-icon="chevron" data-size="18"></span>Назад</button>
+            <button type="button" id="btn-settings-close" class="settings-back"><span data-icon="chevron" data-size="18"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg></span>Назад</button>
             <span id="settings-status" class="settings-saved" aria-live="polite">Сохраняется автоматически</span>
           </div>
           <!-- страница «Что умеет расширение» (../welcome/link.js) -->
           <button type="button" id="btn-welcome" class="welcome-row" data-welcome>
-            <span class="wr-ic" data-icon="help" data-size="20"></span>
+            <span class="wr-ic" data-icon="help" data-size="20"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.4a2.6 2.6 0 0 1 5 1c0 1.8-2.5 2.2-2.5 4"/><path d="M12 17.4h.01"/></svg></span>
             <span class="wr-text">
               <span class="wr-title">Что умеет расширение<span class="wr-new" hidden>Новое</span></span>
               <span class="hint">Все возможности, клавиши и что нового</span>
             </span>
-            <span class="wr-go" data-icon="chevron" data-size="16"></span>
+            <span class="wr-go" data-icon="chevron" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg></span>
           </button>
           <div class="settings-block">
             <h3>Плеер YouTube</h3>

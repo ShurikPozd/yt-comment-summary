@@ -136,11 +136,22 @@ export function topWords(comments, limit = 12) {
   // Грубый стемминг режет по-разному: «куертов» → «куерт», «куертову» →
   // «куертов». Склеиваем основы, где одна — начало другой с разницей до двух букв.
   const keys = [...groups.keys()].sort((a, b) => a.length - b.length);
+  // кандидаты для основы — основы на 1–2 буквы длиннее, начинающиеся с неё
+  // (раньше перебирали все пары: на тысяче комментариев ~60 мс при открытии панели)
+  const longer = new Map(); // основа → [основы на 1–2 буквы длиннее, в порядке keys]
+  for (const k2 of keys) {
+    for (const cut of [1, 2]) {
+      if (k2.length - cut < 4) continue;
+      const p = k2.slice(0, -cut);
+      let arr = longer.get(p);
+      if (!arr) longer.set(p, (arr = []));
+      arr.push(k2);
+    }
+  }
   for (const k of keys) {
     const g = groups.get(k);
     if (!g || k.length < 4) continue;
-    for (const k2 of keys) {
-      if (k2 === k || k2.length <= k.length || k2.length - k.length > 2 || !k2.startsWith(k)) continue;
+    for (const k2 of longer.get(k) || []) {
       // хвост должен быть окончанием (или его началом): «куерт|ов» — да,
       // «прав|д» (правда), «стар|т», «play|er» — нет
       const rest = k2.slice(k.length);
