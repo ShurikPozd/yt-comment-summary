@@ -5,6 +5,7 @@ import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адр�
 import { saveVideo } from "./archive-bg.js"; // «В архив Telegram»: видео в бот-архив
 import { statsAdd } from "./stats-bg.js"; // статистика просмотра: прибавки от вкладок, счётчики очереди
 import { moveIds, restoreAt } from "./library/multi-core.js"; // выбор нескольких в библиотеке: «Наверх», «В конец», «Вернуть»
+import { moveSteps } from "./queue-core.js"; // перетаскивание в колонке очереди на странице видео
 import { createLoader } from "./lazy-bg.js"; // клип, плейлисты, превью — во вкладку по требованию
 import { paintWhatsNew } from "./welcome-bg.js"; // «Что умеет расширение»: при установке, «NEW» после крупного обновления
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
@@ -717,6 +718,19 @@ function qMove(ids, where = "top") {
   });
 }
 
+// Колонка очереди на странице видео: перетаскивание, «Наверх» / «В конец» в полосе
+// выбора и «Вернуть» — шаги { ids, before }: ids встают перед before (null — в конец)
+function qMoveTo(steps) {
+  return qSerial(async () => {
+    const { queue } = await qLoad();
+    const moved = moveSteps(queue, steps);
+    if (moved.length !== queue.length) return { ok: false }; // перестановка не теряет и не добавляет видео
+    if (moved.some((x, i) => x !== queue[i])) await chrome.storage.local.set({ queue: moved });
+    return { ok: true };
+  });
+}
+const qStep = (s) => ({ ids: Array.isArray(s?.ids) ? s.ids.map(String).slice(0, Q_MAX) : [], before: s?.before == null ? null : String(s.before) });
+
 // «Вернуть» после «Убрать» в библиотеке: каждое видео — на своё прежнее место,
 // с прежними «добавлено …» и местом просмотра
 function qPut(items) {
@@ -884,6 +898,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     "queue:remove": () => qRemove(Array.isArray(msg.ids) ? msg.ids.map(String) : [], String(msg.why || "")),
     "queue:top": () => qMove(Array.isArray(msg.ids) ? msg.ids.map(String) : [String(msg.id || "")], "top"),
     "queue:bottom": () => qMove(Array.isArray(msg.ids) ? msg.ids.map(String) : [String(msg.id || "")], "bottom"),
+    "queue:move": () => qMoveTo((Array.isArray(msg.steps) ? msg.steps.slice(0, 500) : [msg]).map(qStep)),
     "queue:put": async () => {
       const r = await qPut(Array.isArray(msg.items) ? msg.items : []);
       // вернули убранное — забираем назад из статистики «убрано без просмотра»
