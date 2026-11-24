@@ -100,7 +100,7 @@ function html() {
     ? `<div class="bk-file">
         <div><b>Файл от ${esc(new Date(d.at).toLocaleString("ru-RU", { dateStyle: "long", timeStyle: "short" }))}</b></div>
         <div>Очередь — ${videosWord(d.queue.length)}${d.catalog ? ` · плейлисты — ${nf.format(d.catalog.playlists.length)} (${videosWord(d.catalog.videos.length)})` : ""}</div>
-        <label class="bk-check"><input type="checkbox" id="bk-opts" checked /> Восстановить и настройки (секрет бота не трогается)</label>
+        <label class="bk-check"><input type="checkbox" id="bk-opts" checked /><span>Восстановить и настройки (секрет бота не трогается)</span></label>
         <div class="row">
           <button type="button" class="primary" data-bk="add">${icon("download", { size: 16 })}Добавить к очереди</button>
           <button type="button" class="ghost" data-bk="replace">Заменить очередь</button>
@@ -123,7 +123,7 @@ function html() {
         <div class="td-h"><b>Копия в Telegram</b><span>${autoLine()}</span></div>
         <div class="row">
           <button type="button" class="ghost" data-bk="tg" ${bk.sending ? "disabled" : ""}>${icon("send", { size: 16 })}${bk.sending ? "Отправляю…" : "Отправить сейчас"}</button>
-          <label class="bk-check"><input type="checkbox" data-bk-auto ${bk.auto?.on === false ? "" : "checked"} /> Раз в неделю сама</label>
+          <label class="bk-check"><input type="checkbox" data-bk-auto ${bk.auto?.on === false ? "" : "checked"} /><span>Раз в неделю сама</span></label>
         </div>
       </div>
     </div>

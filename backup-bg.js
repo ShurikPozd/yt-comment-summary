@@ -81,21 +81,25 @@ export async function setupAutoBackup() {
   }
 }
 
-chrome.alarms.onAlarm.addListener(async (a) => {
-  if (a.name !== ALARM) return;
-  if (await due()) void sendBackup();
-});
+// обработчики — сразу при загрузке фона (так MV3 будит его по будильнику и сообщению);
+// вне расширения (проверки в Node) chrome нет — тогда ничего не вешаем
+if (globalThis.chrome?.alarms && globalThis.chrome?.runtime?.onMessage) {
+  chrome.alarms.onAlarm.addListener(async (a) => {
+    if (a.name !== ALARM) return;
+    if (await due()) void sendBackup();
+  });
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type === "backup:send") {
-    sendBackup({ manual: true }).then(sendResponse, (e) => sendResponse({ err: String(e?.message || e) }));
-    return true;
-  }
-  if (msg?.type === "backup:toggle") {
-    chrome.storage.local
-      .get(AUTO_BACKUP_KEY)
-      .then(({ [AUTO_BACKUP_KEY]: st = {} }) => chrome.storage.local.set({ [AUTO_BACKUP_KEY]: { ...st, on: Boolean(msg.on) } }))
-      .then(() => sendResponse({ ok: true }));
-    return true;
-  }
-});
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.type === "backup:send") {
+      sendBackup({ manual: true }).then(sendResponse, (e) => sendResponse({ err: String(e?.message || e) }));
+      return true;
+    }
+    if (msg?.type === "backup:toggle") {
+      chrome.storage.local
+        .get(AUTO_BACKUP_KEY)
+        .then(({ [AUTO_BACKUP_KEY]: st = {} }) => chrome.storage.local.set({ [AUTO_BACKUP_KEY]: { ...st, on: Boolean(msg.on) } }))
+        .then(() => sendResponse({ ok: true }));
+      return true;
+    }
+  });
+}

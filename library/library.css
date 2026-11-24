@@ -4521,3 +4521,10 @@ button.primary .key {
     justify-content: flex-start;
   }
 }
+
+/* подпись у галочки: Segoe UI сажает заглавные ниже середины строки — поднимаем
+   текст на 1 px, галочка остаётся по центру (замер tools/align, страница lib-backup) */
+.bk-check > span {
+  position: relative;
+  top: -1px;
+}
