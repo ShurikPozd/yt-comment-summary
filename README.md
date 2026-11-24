@@ -1,5 +1,7 @@
 # Сводка комментариев YouTube
 
+[![Проверки](https://github.com/ShurikPozd/yt-comment-summary/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/ShurikPozd/yt-comment-summary/actions/workflows/checks.yml)
+
 Расширение для Chrome, которое делает YouTube удобнее. Начиналось как ИИ-сводка
 комментариев в боковой панели, а теперь это набор для всего YouTube:
 
@@ -679,6 +681,11 @@ YouTube — он заметно легче полной страницы сай�
   YouTube на образцах всех форматов (`tests/fixtures/`), ядра пересказа, статистики, скорости,
   тишины, таймера, дайджеста, архива, адресной строки и логика страницы «Что умеет
   расширение».
+- `tools/align/` — пиксельный автотест центровки подписей (`bash tools/align/check.sh`).
+- `.github/workflows/checks.yml` — те же проверки на GitHub на каждый пуш и PR в `main`:
+  «Проверки» (`check-syntax.sh`, Linux) и «Центровка» (`tools/align/check.sh`, Windows — там
+  есть Segoe UI Variable, которым рисуются панель и библиотека). При отклонениях снимки и итог
+  лежат в артефактах прогона.
 
 **Бэкенд** — репозиторий `ShurikPozd/tg-saver-bot-cloud`: `POST /api/chat` и
 `POST /api/save-video` с заголовком `X-Sec-Token`. Если сервер не на `localhost:8080` и не на
