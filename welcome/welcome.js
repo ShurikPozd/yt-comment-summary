@@ -3,6 +3,7 @@
 // и кнопкой «?» в шапке «Моей библиотеки». После крупного обновления фон ставит
 // метку whatsNew (значок «NEW») — здесь она показывается и снимается.
 
+import { openPanel } from "../panel-window.js";
 import { icon } from "../sidepanel/icons.js";
 
 const $ = (s) => document.querySelector(s);
@@ -370,7 +371,7 @@ chrome?.windows?.getCurrent?.().then((w) => (windowId = w.id), () => {});
 function go(where) {
   if (where === "settings") {
     // панель открывается только по действию пользователя — вызываем сразу, без await перед ним
-    if (windowId != null) chrome.sidePanel?.open({ windowId }).catch(() => {});
+    if (windowId != null) void openPanel({ windowId });
     void chrome.storage.session.set({ panelGoto: { view: "settings", at: Date.now() } }).catch(() => {});
   } else if (where === "shortcuts") {
     void chrome.tabs.create({ url: "chrome://extensions/shortcuts" });

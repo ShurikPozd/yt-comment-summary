@@ -1,5 +1,6 @@
 // «Моя библиотека»: просмотр прямо здесь — встроенный плеер.
 
+import { openPanel } from "../panel-window.js";
 import { icon } from "../sidepanel/icons.js";
 import { myWindowId, saveHash } from "./library.js";
 import { loadQueue, qLeft, qmsg, renderQueueSide } from "./queue-view.js";
@@ -270,7 +271,7 @@ document.addEventListener("click", (e) => {
   else if (a === "panel") {
     // панель — сразу в ответ на клик (иначе Chrome не откроет); она сама найдёт
     // эту вкладку и видео в ней, скрипты расширения работают и во встроенном плеере
-    chrome.sidePanel.open({ windowId: myWindowId }).catch(() => {});
+    void openPanel({ windowId: myWindowId });
   }
   else if (a === "yt") {
     saveWatchPos();

@@ -8,6 +8,7 @@
 //   2. Каталог хранится в этом браузере (IndexedDB расширения), никуда не уходит.
 //   3. Поиск — search.js: опечатки, окончания, раскладка, без сети.
 
+import { openPanel } from "../panel-window.js";
 import { icon } from "../sidepanel/icons.js";
 import { sync, useCatalog } from "./catalog.js";
 import { loadQueue, onQueueGridClick, refreshTabsCount } from "./queue-view.js";
@@ -208,7 +209,7 @@ export function setupWhere() {
       parent.postMessage({ ytcsLib: "tab" }, location.origin);
     } else {
       // панель открывается только сразу в ответ на клик — без ожиданий до вызова
-      const ok = await chrome.sidePanel.open({ windowId: myWindowId }).then(() => true, () => false);
+      const ok = await openPanel({ windowId: myWindowId }); // без боковых панелей (старый Яндекс) — окном
       if (!ok) return; // не открылась — вкладку не закрываем
       await chrome.storage.session.set({ panelLibrary: { at: Date.now(), q: state.q, view: state.view === "lib" ? "" : state.view } });
       window.close();
