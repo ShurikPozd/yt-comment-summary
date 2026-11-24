@@ -8,6 +8,7 @@ import { moveIds, restoreAt } from "./library/multi-core.js"; // выбор не
 import { moveSteps } from "./queue-core.js"; // перетаскивание в колонке очереди на странице видео
 import { setupAutoBackup } from "./backup-bg.js"; // автокопия в Telegram раз в неделю
 import { createLoader } from "./lazy-bg.js"; // клип, плейлисты, превью — во вкладку по требованию
+import { hasSidePanel, openPanel, openPanelWindow } from "./panel-window.js"; // без chrome.sidePanel — панель окном
 import { paintWhatsNew } from "./welcome-bg.js"; // «Что умеет расширение»: при установке, «NEW» после крупного обновления
 import { runSelfCheck, failuresOf, CHECKS, SELFCHECK_KEY, SELFCHECK_AUTO_KEY, SELFCHECK_ALARM, AUTO_EVERY } from "./selfcheck.js";
 
@@ -78,15 +79,20 @@ function setup() {
   chrome.storage.session
     .setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" })
     .catch((e) => console.error("setAccessLevel:", e));
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((e) => console.error("sidePanel behavior:", e));
+  if (hasSidePanel())
+    chrome.sidePanel
+      .setPanelBehavior({ openPanelOnActionClick: true })
+      .catch((e) => console.error("sidePanel behavior:", e));
   void buildMenus();
   void setupSelfCheck();
   void setupAutoBackup();
 }
 
 chrome.runtime.onInstalled.addListener(setup);
+// Браузер без боковых панелей расширений (старые Яндекс Браузер и т. п.): значок и
+// Alt+Shift+Y открывают панель окном. Где sidePanel есть, событие не приходит —
+// значок открывает панель сам (openPanelOnActionClick).
+if (!hasSidePanel()) chrome.action.onClicked.addListener(() => void openPanelWindow().catch(() => {}));
 chrome.runtime.onStartup.addListener(setup);
 
 // Доступ контент-скрипта к storage.session нужен с первой секунды жизни
@@ -379,7 +385,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (action === "panel") {
     // sidePanel.open разрешён только в ответ на действие пользователя — клик
     // по пункту меню им и является; вызываем сразу, без await до него.
-    chrome.sidePanel.open({ tabId: tab.id }).catch((e) => console.error("sidePanel.open:", e));
+    if (hasSidePanel()) chrome.sidePanel.open({ tabId: tab.id }).catch((e) => console.error("sidePanel.open:", e));
+    else void openPanelWindow().catch(() => {});
     return;
   }
 
@@ -571,7 +578,7 @@ async function openLibrary(q = "", from = null, view = "", extra = {}) {
   if (where === "panel" && !extra.forceTab) {
     // сначала — открыть панель (пока действие пользователя «свежее»), потом сказать ей, что показать
     const target = from?.id ? { tabId: from.id } : from?.windowId ? { windowId: from.windowId } : null;
-    const opened = target ? await chrome.sidePanel.open(target).then(() => true, () => false) : false;
+    const opened = target ? await openPanel(target) : false;
     if (opened) {
       await chrome.storage.session.set({ panelLibrary: { at: Date.now(), q: q.trim().slice(0, 200), view } });
       return;
@@ -934,8 +941,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "panel") {
     // Клик по кнопке в плеере — действие пользователя; открываем сразу,
     // до любых await, иначе Chrome сочтёт вызов не связанным с кликом.
-    chrome.sidePanel
-      .open({ tabId: tab.id })
+    (hasSidePanel() ? chrome.sidePanel.open({ tabId: tab.id }) : openPanelWindow())
       .then(() => sendResponse({ ok: true }))
       .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
     return true;
