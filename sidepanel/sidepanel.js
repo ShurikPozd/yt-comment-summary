@@ -38,6 +38,7 @@ import {
 import { DEFAULTS } from "../config.js";
 import { icon, hydrateIcons } from "./icons.js";
 import { renderSummaryCard } from "./card.js";
+import { NOT_SET_UP, SHARE_KEY_PREFIX, SHARE_PATH, SHARE_TIMEOUT_MS, linkRecord, revokeResult, savedLink, shareBody, shareResult } from "../share-core.js";
 import { initSelfCheckUI } from "./selfcheck-ui.js";
 import { initVideoTldr, renderVideoTldr } from "./video-tldr.js";
 
@@ -1832,6 +1833,7 @@ function renderSummary() {
     $("btn-copy-summary").classList.add("hidden");
     $("btn-image-summary").classList.add("hidden");
     $("btn-export-summary").classList.add("hidden");
+    $("btn-share-summary").classList.add("hidden");
     $("summary-topics").classList.add("hidden");
     $("summary-sentiment").classList.add("hidden");
     $("summary-text").textContent = "";
@@ -1844,6 +1846,7 @@ function renderSummary() {
   $("btn-copy-summary").classList.remove("hidden");
   $("btn-image-summary").classList.remove("hidden");
   $("btn-export-summary").classList.remove("hidden");
+  $("btn-share-summary").classList.remove("hidden");
 
   const chips = (s.topics || []).slice(0, 5);
   const chipWrap = $("summary-topics");
@@ -2813,13 +2816,99 @@ function blobToDataURL(blob) {
 
 // Всплывающее уведомление внизу панели. Раньше подсказки писались в строку
 // статуса сбора и затирали её.
+// action — { label, run }: кнопка в тосте (например «Отозвать»); такой тост висит
+// дольше и не исчезает, пока над ним мышь.
 let toastTimer = null;
-function showToast(text) {
+let toastHide = null;
+function showToast(text, action = null) {
   const el = $("toast");
-  el.textContent = text;
+  el.textContent = "";
+  el.append(text);
+  el.classList.toggle("has-action", Boolean(action));
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "toast-action";
+    b.textContent = action.label;
+    b.addEventListener("click", () => {
+      el.classList.remove("show");
+      action.run();
+    });
+    el.append(b);
+  }
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), Math.min(7000, 2200 + text.length * 35));
+  const ms = action ? 9000 : Math.min(7000, 2200 + text.length * 35);
+  toastHide = () => {
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), ms);
+  };
+  toastHide();
+}
+$("toast").addEventListener("mouseenter", () => clearTimeout(toastTimer));
+$("toast").addEventListener("mouseleave", () => toastHide?.());
+
+// ---------------- «Ссылка» на сводку (страница в боте, см. share-core.js) ----------------
+
+async function botCall(method, path, body) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), SHARE_TIMEOUT_MS);
+  try {
+    const r = await fetch(`${proxy.baseUrl.replace(/\/+$/, "")}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", "X-Sec-Token": proxy.token },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ac.signal,
+    });
+    let data = null;
+    try {
+      data = await r.json();
+    } catch {}
+    return [r.status, data];
+  } catch (e) {
+    return [ac.signal.aborted ? -1 : 0, null];
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function shareSummary() {
+  const s = state.summary;
+  const vid = state.videoId;
+  if (!s || !vid) return;
+  if (!proxy.baseUrl || !proxy.token) return showToast(NOT_SET_UP.text);
+  const btn = $("btn-share-summary");
+  const key = SHARE_KEY_PREFIX + vid;
+  let link = savedLink((await chrome.storage.local.get(key))[key], s, proxy.baseUrl);
+  if (!link) {
+    const body = shareBody(s, state.meta, vid);
+    if (!body) return showToast("Нечего отправить — сначала сделайте сводку");
+    btn.disabled = true;
+    const slow = setTimeout(() => showToast("Бот просыпается — ссылка будет через несколько секунд…"), 3000);
+    const [status, data] = await botCall("POST", SHARE_PATH, body);
+    clearTimeout(slow);
+    btn.disabled = false;
+    const r = shareResult(status, data);
+    if (!r.ok) return showToast(r.text);
+    link = linkRecord(r, s, proxy.baseUrl);
+    await chrome.storage.local.set({ [key]: link });
+  }
+  try {
+    await navigator.clipboard.writeText(link.url);
+  } catch (e) {
+    return showToast("Буфер недоступен. Ссылка: " + link.url, { label: "Отозвать", run: () => revokeShare(vid, link) });
+  }
+  showToast("Ссылка скопирована", { label: "Отозвать", run: () => revokeShare(vid, link) });
+}
+
+async function revokeShare(vid, link) {
+  const [status, data] = await botCall("DELETE", `${SHARE_PATH}/${encodeURIComponent(link.id)}`);
+  const r = revokeResult(status, data);
+  if (!r.ok) return showToast(r.text);
+  const key = SHARE_KEY_PREFIX + vid;
+  const cur = (await chrome.storage.local.get(key))[key];
+  if (cur?.id === link.id) await chrome.storage.local.remove(key);
+  showToast("Ссылка отозвана — по ней больше ничего не откроется");
 }
 
 // ---------------- События от контент-скрипта ----------------
@@ -3174,6 +3263,7 @@ function bindEvents() {
       btn.disabled = false;
     }
   });
+  $("btn-share-summary").addEventListener("click", () => void shareSummary());
   $("btn-export-summary").addEventListener("click", async () => {
     const s = state.summary;
     if (!s) return;
