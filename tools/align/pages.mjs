@@ -8,6 +8,8 @@
 //   extra  — дополнительные селекторы элементов с подписью (плашки, тосты).
 const LIB = "/library/library.html?mem=1&queue=24";
 const libReady = "document.querySelector('.card, .empty') && performance.now() > 1500";
+// «Плейлисты»: каталог собран (карточки видео), а не заглушка «Собираю ваши плейлисты»
+const plReady = "document.querySelector('#grid .card') && document.querySelector('#pl-list .pl') && performance.now() > 2500";
 const click = (sel) => `document.querySelector(${JSON.stringify(sel)})?.click()`;
 // Ctrl+щелчок по двум карточкам — включается выбор и полоса «Выбрано: N»
 const pickTwo = `(() => { const cs = [...document.querySelectorAll('#grid .card, #cont .card, #digest .card')].slice(0, 2);
@@ -38,8 +40,15 @@ export const PAGES = [
   { key: "lib-queue", url: LIB + "#v=queue", w: 1200, h: 2000, wait: libReady },
   { key: "lib-digest", url: LIB + "#v=digest", w: 1200, h: 2000, wait: libReady },
   { key: "lib-stats", url: LIB + "#v=stats", w: 1200, h: 2000, wait: libReady + " && performance.now() > 2500" },
+  // «Плейлисты» с выбранным плейлистом: плашка в поле поиска, «Плейлист: … ▾», строка над видео —
+  // панель 360 (тёмная) и 750 (светлая), широкая библиотека; открытый список плейлистов
+  { key: "lib-pl-360", url: LIB + "&panel=1#pl=P12", w: 360, h: 1400, wait: plReady, roots: "[document.querySelector('.search'), document.querySelector('.side'), document.getElementById('list-bar')]", extra: ".pl-chip" },
+  { key: "lib-pl-750", url: LIB + "&panel=1&theme=light#pl=P12", w: 750, h: 1400, wait: plReady, roots: "[document.querySelector('.search'), document.querySelector('.side'), document.getElementById('list-bar')]", extra: ".pl-chip" },
+  { key: "lib-pl-wide", url: LIB + "#pl=P12", w: 1440, h: 1400, wait: plReady, roots: "[document.querySelector('.search'), document.getElementById('list-bar')]", extra: ".pl-chip" },
+  { key: "lib-pl-1000", url: LIB + "&theme=light#pl=P2", w: 1000, h: 1400, wait: plReady, roots: "[document.querySelector('.search'), document.querySelector('.side'), document.getElementById('list-bar')]", extra: ".pl-chip" },
+  { key: "lib-pl-pop", url: LIB + "&panel=1#pl=P2", w: 360, h: 1400, wait: plReady, act: click("#pl-pick"), settle: 500, roots: "[document.getElementById('pl-pop'), document.getElementById('pl-pick')]" },
   // очередь в боковой панели: строка над видео — «27 видео · ≈ 13 ч», порядок, длина (#q-bar)
-  { key: "lib-queue-bar", url: LIB + "&panel=1#v=queue", w: 400, h: 1400, wait: libReady, roots: "[document.getElementById('q-bar'), document.getElementById('q-play')]" },
+  { key: "lib-queue-bar", url: LIB + "&panel=1#v=queue", w: 400, h: 1400, wait: libReady, roots: "[document.getElementById('list-bar'), document.getElementById('q-play')]" },
   // своё меню по правому щелчку на карточке (ctxmenu.js): очередь, «Подписки» (светлая тема), выбрано несколько
   { key: "lib-ctxmenu", url: LIB + "#v=queue", w: 1200, h: 1400, wait: libReady, act: ctxMenu("#grid .card", 3), roots: "[document.getElementById('ctx-menu')]" },
   { key: "lib-ctxmenu-digest", url: LIB + "&digest=1&theme=light#v=digest", w: 1200, h: 1400, wait: "document.querySelector('#digest .card') && performance.now() > 1500", act: ctxMenu("#digest .card", 1), roots: "[document.getElementById('ctx-menu')]" },

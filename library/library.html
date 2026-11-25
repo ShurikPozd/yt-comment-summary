@@ -20,6 +20,8 @@
       </nav>
       <label class="search">
         <span class="search-icon" data-icon="search" data-size="20"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
+        <!-- выбранный плейлист — плашкой в поле: поиск идёт по нему; × или Backspace в пустом поле — снова по всем -->
+        <span id="pl-chip" class="pl-chip lib-only" hidden><span class="pl-chip-t"></span><button type="button" class="pl-chip-x" aria-label="Искать во всех плейлистах" title="Искать во всех плейлистах (Backspace)"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></button></span>
         <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Поиск по плейлистам" aria-label="Поиск по видео в ваших плейлистах" />
         <kbd class="hint" title="Поиск — клавиша /">/</kbd>
       </label>
@@ -52,28 +54,6 @@
     </header>
 
     <div class="filters" role="toolbar" aria-label="Фильтры">
-      <label class="side-search lib-only">
-        <span data-icon="search" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
-        <input id="pl-q" type="search" autocomplete="off" placeholder="Найти плейлист" aria-label="Найти плейлист" />
-      </label>
-      <!-- две группы: режимы поиска и длительность — не влезают в строку, переносятся целиком -->
-      <div class="seg">
-        <span class="modes lib-only">
-          <button type="button" id="sem-btn" class="sem-btn lib-only" aria-pressed="false" title="Искать по теме, а не только по словам: «что приготовить утром» найдёт «Шакшука на завтрак»"><span data-icon="sparkles" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 3l1.9 4.8L17.7 9.7l-4.8 1.9L11 16.4l-1.9-4.8L4.3 9.7l4.8-1.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span>По смыслу</button>
-          <button type="button" id="subs-btn" class="sem-btn lib-only" aria-pressed="false" aria-expanded="false" aria-controls="subs-info" title="Искать и по тому, что говорят в видео, — и открывать с нужного места"><span data-icon="subtitles" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h4"/><path d="M14 15h3"/><path d="M7 11h10"/></svg></span>В субтитрах<span class="subs-pct" hidden></span></button>
-        </span>
-        <span class="durs" role="radiogroup" aria-label="Длительность" id="dur">
-          <button type="button" role="radio" data-dur="" aria-checked="true">Любая длина</button>
-          <button type="button" role="radio" data-dur="0-61">Shorts и до 1 мин</button>
-          <button type="button" role="radio" data-dur="61-600">1–10 мин</button>
-          <button type="button" role="radio" data-dur="600-1800">10–30 мин</button>
-          <button type="button" role="radio" data-dur="1800-">Больше 30 мин</button>
-        </span>
-      </div>
-      <label class="sort">
-        <span>Порядок</span>
-        <select id="sort"></select>
-      </label>
       <!-- «Подписки»: «Всё просмотрено», что показывать, как группировать, Shorts -->
       <button id="d-read" type="button" class="primary digest-only" title="Отметить все видео просмотренными — счётчик новых обнулится"><span data-icon="check" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Всё просмотрено</button>
       <div class="seg d-seg digest-only">
@@ -98,6 +78,15 @@
       <aside class="side" aria-label="Плейлисты">
         <!-- «Смотреть очередь» — над колонкой очереди (в узком окне и в панели — первой строкой) -->
         <button id="q-play" type="button" class="primary queue-only" title="Открыть первое видео в отдельной вкладке очереди"><span data-icon="play" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span>Смотреть очередь</button>
+        <label class="side-search lib-only">
+          <span data-icon="search" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
+          <input id="pl-q" type="search" autocomplete="off" placeholder="Найти плейлист" aria-label="Найти плейлист" />
+        </label>
+        <!-- «Плейлисты» в узком окне и в панели: выбор плейлиста одной кнопкой-списком (library/pl-pick.js) -->
+        <div class="pl-pick lib-only">
+          <button id="pl-pick" type="button" class="pl-pick-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="pl-pop"><span class="pl-pick-k">Плейлист:</span><span class="pl-pick-v">Все</span></button>
+          <div id="pl-pop" class="pl-pop" hidden></div>
+        </div>
         <nav id="pl-list" class="pl-list lib-only"></nav>
         <div id="q-side" class="q-side queue-only"></div>
         <div id="d-side" class="d-side digest-only"></div>
@@ -105,17 +94,21 @@
 
       <main class="main">
         <div id="qtidy" class="queue-only" hidden></div>
-        <!-- очередь: заголовок списка — сколько видео, порядок и длина прямо над видео -->
-        <div id="q-bar" class="q-bar queue-only">
-          <div class="q-bar-row">
-            <div id="q-count" class="q-count" role="status"></div>
-            <label class="sort q-sort">
+        <!-- «Плейлисты» и «Очередь»: заголовок списка — сколько видео и где, порядок, режимы поиска и длина — прямо над видео -->
+        <div id="list-bar" class="list-bar">
+          <div class="lb-row">
+            <div id="list-count" class="lb-count" role="status"></div>
+            <label class="sort lb-sort">
               <span>Порядок</span>
-              <select id="q-sort" aria-label="Порядок видео в очереди"></select>
+              <select id="sort" aria-label="Порядок видео"></select>
             </label>
           </div>
-          <div class="seg q-seg">
-            <span class="durs" role="radiogroup" aria-label="Длительность" id="q-dur">
+          <div class="seg lb-seg">
+            <span class="modes lib-only">
+              <button type="button" id="sem-btn" class="sem-btn lib-only" aria-pressed="false" title="Искать по теме, а не только по словам: «что приготовить утром» найдёт «Шакшука на завтрак»"><span data-icon="sparkles" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 3l1.9 4.8L17.7 9.7l-4.8 1.9L11 16.4l-1.9-4.8L4.3 9.7l4.8-1.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span>По смыслу</button>
+              <button type="button" id="subs-btn" class="sem-btn lib-only" aria-pressed="false" aria-expanded="false" aria-controls="subs-info" title="Искать и по тому, что говорят в видео, — и открывать с нужного места"><span data-icon="subtitles" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h4"/><path d="M14 15h3"/><path d="M7 11h10"/></svg></span>В субтитрах<span class="subs-pct" hidden></span></button>
+            </span>
+            <span class="durs" role="radiogroup" aria-label="Длительность" id="dur">
               <button type="button" role="radio" data-dur="" aria-checked="true">Любая длина</button>
               <button type="button" role="radio" data-dur="0-61">Shorts и до 1 мин</button>
               <button type="button" role="radio" data-dur="61-600">1–10 мин</button>

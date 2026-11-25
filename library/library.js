@@ -21,6 +21,7 @@ import "./cover-actions.js"; // «Превью» и «О чём видео» н�
 import "./digest.js"; // «Подписки» — дайджест новых видео из подписок
 import "./multi.js"; // выбор нескольких видео: кружок на обложке, Ctrl/Shift, полоса действий внизу
 import "./ctxmenu.js"; // своё меню по правому щелчку на карточке видео
+import "./pl-pick.js"; // «Плейлист: Все ▾» — выбор плейлиста кнопкой-списком (узкое окно, панель)
 
 // ---------- адрес страницы: #q=…&pl=… (можно добавить в закладки) ----------
 export function readHash() {
@@ -57,9 +58,6 @@ export function setView(v, { silent = false } = {}) {
     $("#sort").innerHTML = SORTS[v].map(([val, label]) => `<option value="${val}">${label}</option>`).join("");
     state.sort = "auto";
     $("#sort").value = "auto";
-    // у очереди свой список порядка — в строке над видео (#q-bar)
-    if (!$("#q-sort").options.length) $("#q-sort").innerHTML = SORTS.queue.map(([val, label]) => `<option value="${val}">${label}</option>`).join("");
-    $("#q-sort").value = "auto";
   }
   document.title = TITLES[v] || TITLES.lib;
   if (v === "queue") void refreshTabsCount();
@@ -115,7 +113,11 @@ $("#q").addEventListener("input", (e) => {
   qTimer = setTimeout(update, 70);
 });
 $("#q").addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && e.target.value) {
+  // Backspace в пустом поле — убрать плашку плейлиста: поиск снова по всем
+  if (e.key === "Backspace" && !e.target.value && state.view === "lib" && state.pl) {
+    e.preventDefault();
+    setPl("");
+  } else if (e.key === "Escape" && e.target.value) {
     e.preventDefault();
     e.target.value = state.q = "";
     update();
@@ -128,6 +130,12 @@ $("#q").addEventListener("keydown", (e) => {
 $("#pl-q").addEventListener("input", (e) => {
   state.plQ = e.target.value;
   renderSide();
+});
+$("#pl-chip").addEventListener("click", (e) => {
+  if (!e.target.closest(".pl-chip-x")) return;
+  e.preventDefault(); // плашка внутри <label> поля — щелчок не уводит фокус куда попало
+  setPl("");
+  $("#q").focus();
 });
 $("#pl-list").addEventListener("click", (e) => {
   const b = e.target.closest("[data-pl]");
@@ -161,23 +169,21 @@ $("#grid").addEventListener("click", (e) => {
       .join("");
   }
 });
-// длина видео: фильтры над списком плейлистов (#dur) и в строке очереди (#q-dur) — общие
+// длина видео — в строке над видео (#list-bar), общая для «Плейлистов» и «Очереди»
 export function setDur(v) {
   state.dur = v;
-  for (const x of document.querySelectorAll(".durs [data-dur]")) x.setAttribute("aria-checked", String(x.dataset.dur === v));
+  for (const x of $("#dur").children) x.setAttribute("aria-checked", String(x.dataset.dur === v));
 }
-for (const g of [$("#dur"), $("#q-dur")])
-  g.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-dur]");
-    if (!b) return;
-    setDur(b.dataset.dur);
-    update();
-  });
-for (const s of [$("#sort"), $("#q-sort")])
-  s.addEventListener("change", (e) => {
-    state.sort = e.target.value;
-    update();
-  });
+$("#dur").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-dur]");
+  if (!b) return;
+  setDur(b.dataset.dur);
+  update();
+});
+$("#sort").addEventListener("change", (e) => {
+  state.sort = e.target.value;
+  update();
+});
 // «Обновить» — только изменившиеся плейлисты; с Shift — перечитать все
 $("#sync").addEventListener("click", (e) => sync({ full: e.shiftKey }));
 document.addEventListener("click", (e) => {

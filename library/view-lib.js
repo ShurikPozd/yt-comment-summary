@@ -5,7 +5,8 @@ import { sync } from "./catalog.js";
 import { saveHash } from "./library.js";
 import { qCardHtml, updateQueue } from "./queue-view.js";
 import { highlight, search } from "./search.js";
-import { $, PAGE, SPECIAL, esc, nf, plWord, plural, state, videosWord } from "./state.js";
+import { $, PAGE, SPECIAL, esc, inPlWord, nf, plWord, plural, setSearchHint, state, videosWord } from "./state.js";
+import { renderPick } from "./pl-pick.js";
 import { watch } from "./watch.js";
 import { yt } from "./youtube.js";
 import "./tidy.js";
@@ -107,7 +108,38 @@ export function compute() {
   return { list, meta, perPl };
 }
 
+// «Порядок»: без запроса «Как в плейлисте» — первым и по умолчанию, «Сначала лучшие
+// совпадения» — только когда что-то ищут (без запроса это одно и то же)
+let sortKey = "";
+function renderLibSort() {
+  const q = Boolean(state.q.trim());
+  const as = state.pl ? "Как в плейлисте" : "Как в плейлистах";
+  if (!q && state.sort === "order") state.sort = "auto";
+  const key = `${q}|${as}`;
+  if (key !== sortKey) {
+    sortKey = key;
+    const opts = [...(q ? [["auto", "Сначала лучшие совпадения"], ["order", as]] : [["auto", as]]), ["long", "Сначала длинные"], ["short", "Сначала короткие"], ["channel", "По каналу (А–Я)"]];
+    $("#sort").innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  }
+  $("#sort").value = state.sort;
+}
+
+// верхнее поле поиска в «Плейлистах»: подсказка — где ищем, выбранный плейлист — плашкой в поле
+function renderLibSearch() {
+  const p = state.pl ? state.plById.get(state.pl) : null;
+  const chip = $("#pl-chip");
+  chip.hidden = !p;
+  if (p) chip.querySelector(".pl-chip-t").textContent = p.title;
+  chip.title = p ? `Поиск идёт в «${p.title}»` : "";
+  const n = state.cat.videos.length;
+  if (p) setSearchHint($("#q"), `Поиск в «${p.title}»: ${videosWord(p.count || 0)}`, `Поиск: ${videosWord(p.count || 0)}`, "Поиск");
+  else setSearchHint($("#q"), `Поиск по ${videosWord(n)} в ${inPlWord(state.cat.playlists.length)}`, `Поиск по ${videosWord(n)}`, "Поиск видео", "Поиск");
+}
+
 export function update({ keep = false } = {}) {
+  // «Плейлисты» ещё собираются — строка над видео не нужна (ни счёта, ни порядка)
+  document.body.classList.toggle("l-none", state.view === "lib" && !state.cat);
+  $("#pl-chip").hidden = state.view !== "lib" || !state.pl;
   if (state.view === "queue") return updateQueue({ keep });
   if (state.view === "digest") return updateDigest({ keep });
   if (!state.cat) {
@@ -116,6 +148,8 @@ export function update({ keep = false } = {}) {
     $("#grid").textContent = "";
     return renderEmpty();
   }
+  renderLibSort();
+  renderLibSearch();
   const { list, meta, perPl } = compute();
   const was = state.shown;
   const y = window.scrollY;
@@ -125,6 +159,7 @@ export function update({ keep = false } = {}) {
   state.shown = 0;
   $("#grid").textContent = "";
   renderSide();
+  renderPick();
   renderSummary();
   if (keep) {
     // перерисовать столько же карточек и вернуть прокрутку на место
@@ -165,8 +200,9 @@ export function cardHtml({ d, hits, subs: s }) {
   const v = state.cat.videos[d];
   const list = state.pl && inPl(v, state.pl) ? `&list=${encodeURIComponent(state.pl)}` : "";
   const href = v.short ? `https://www.youtube.com/shorts/${encodeURIComponent(v.id)}` : `https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}${list}`;
-  const pls = v.in.map(([id]) => state.plById.get(id)).filter(Boolean);
-  pls.sort((a, b) => (a.id === state.pl) - (b.id === state.pl) || a.rank - b.rank);
+  // плашка открытого плейлиста не нужна — он и так в строке над видео и в поле поиска
+  const pls = v.in.map(([id]) => state.plById.get(id)).filter((p) => p && p.id !== state.pl);
+  pls.sort((a, b) => a.rank - b.rank);
   const shown = pls.slice(0, 3);
   const rest = pls.length - shown.length;
   const info = (v.info || "").replace(/\s*•\s*/g, " · "); // у YouTube то «•», то «·»
@@ -194,19 +230,22 @@ export function more() {
 }
 
 export function renderSummary() {
-  const el = $("#summary");
+  // итог — в строке над видео (#list-bar): «748 видео в «…»» рядом с «Порядком»
+  $("#summary").textContent = "";
+  const el = $("#list-count");
   const empty = $("#empty");
   const n = state.list.length;
   const pl = state.pl ? state.plById.get(state.pl) : null;
   const where = pl ? ` в «${esc(pl.title)}»` : "";
+  const whereAll = pl ? where : ` в ${inPlWord(state.cat.playlists.length)}`;
   if (!n && state.meta?.subsPending) {
     // по названиям ничего, а субтитры ещё ищутся — не пугаем «ничего не нашлось»
-    el.innerHTML = `<span class="swap">Ищу в субтитрах…</span>`;
+    el.innerHTML = `<span class="lb-n"><b>Ищу в субтитрах…</b></span>`;
     empty.hidden = true;
     return;
   }
   if (!n) {
-    el.innerHTML = "";
+    el.innerHTML = `<span class="lb-n"><b>Нет подходящих видео</b></span>`;
     empty.hidden = false;
     const filtered = state.pl || state.dur;
     empty.innerHTML = `<div class="empty-box">
@@ -222,14 +261,16 @@ export function renderSummary() {
     return;
   }
   empty.hidden = true;
-  let text = state.q.trim() ? `Найдено <b>${videosWord(n)}</b>${where}` : `<b>${videosWord(n)}</b>${where}`;
-  if (state.meta?.semantic) text += ` · <span class="swap">с похожими по смыслу</span>`;
+  let text = `<span class="lb-n">${state.q.trim() ? "Найдено " : ""}<b>${videosWord(n)}</b></span><span class="lb-where">${whereAll}</span>`;
+  const notes = [];
+  if (state.meta?.semantic) notes.push("с похожими по смыслу");
   if (state.meta?.subs) {
     const k = state.list.filter((r) => r.subs && !r.hits).length; // нашлись только по субтитрам
-    if (k) text += ` · <span class="swap">${k === n ? "все" : nf.format(k)} — по словам из субтитров</span>`;
+    if (k) notes.push(`${k === n ? "все" : nf.format(k)} — по словам из субтитров`);
   }
-  if (state.meta?.swapped) text += ` · <span class="swap">запрос понят как «${esc(state.meta.swapped)}»</span>`;
-  if (state.meta?.partial) text += ` · <span class="swap">точных совпадений нет — показаны похожие</span>`;
+  if (state.meta?.swapped) notes.push(`запрос понят как «${esc(state.meta.swapped)}»`);
+  if (state.meta?.partial) notes.push("точных совпадений нет — показаны похожие");
+  if (notes.length) text += `<span class="swap">${notes.join(" · ")}</span>`;
   el.innerHTML = text;
 }
 

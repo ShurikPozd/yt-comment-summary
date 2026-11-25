@@ -161,9 +161,9 @@ export function qCardHtml({ d, hits }) {
 }
 
 export function renderQueueSummary() {
-  // в очереди итог — в строке над видео (#q-bar, рядом с «Порядком»), а не между блоками
+  // итог — в строке над видео (#list-bar, рядом с «Порядком»), а не между блоками
   $("#summary").innerHTML = "";
-  const el = $("#q-count");
+  const el = $("#list-count");
   const empty = $("#empty");
   const found = state.qFound || state.list;
   const n = found.length;
@@ -189,8 +189,8 @@ export function renderQueueSummary() {
   empty.hidden = true;
   // осталось смотреть — у показанных (с фильтром длины — только у них)
   const left = found.reduce((a, { d }) => a + qLeft(state.queue[d]), 0);
-  let text = `<span class="q-n">${state.q.trim() ? "Найдено " : ""}<b>${videosWord(n)}</b></span>`;
-  if (left) text += `<span class="q-left"> · <span class="q-left-w">осталось </span>${fmtHours(left)}</span>`;
+  let text = `<span class="lb-n">${state.q.trim() ? "Найдено " : ""}<b>${videosWord(n)}</b></span>`;
+  if (left) text += `<span class="lb-left"> · <span class="lb-left-w">осталось </span>${fmtHours(left)}</span>`;
   if (state.meta?.swapped) text += `<span class="swap">запрос понят как «${esc(state.meta.swapped)}»</span>`;
   if (state.meta?.partial) text += `<span class="swap">точных совпадений нет — показаны похожие</span>`;
   el.innerHTML = text;
