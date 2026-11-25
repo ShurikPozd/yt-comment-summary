@@ -1008,6 +1008,41 @@
   // остановить видео до первого кадра.
   const isWatchPage = () => location.pathname === "/watch" || OUR_EMBED;
 
+  // ---------------- Слой для плашек над новым встроенным плеером ----------------
+  // Новый встроенный плеер (библиотека, ноябрь 2026) рисует панель управления отдельным
+  // слоем #player-controls поверх всего #movie_player: у #movie_player свой слой
+  // (z-index: 0), а слой управления идёт в разметке позже. Плашки модулей внутри
+  // #movie_player видны, но нажатия до них не доходят (поле заметки, «Вернуть» у
+  // SponsorBlock, «Сбросить» у скорости и громкости канала, таймер сна, лимит).
+  // Модули кладут плашку не прямо в плеер, а в globalThis.__ytcsPlayerLayer(плеер):
+  // на YouTube это сам плеер, в новом встроенном — слой над ним той же величины.
+  // Слой прозрачен для мыши, у самих плашек мышь ловит только показанная часть.
+  let embedLayer = null;
+  let embedLayerFor = null;
+  function fitEmbedLayer() {
+    const r = embedLayerFor?.getBoundingClientRect();
+    if (!embedLayer || !r) return;
+    Object.assign(embedLayer.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
+  }
+  function playerLayer(p) {
+    if (!OUR_EMBED || !p || !document.getElementById("player-controls")) return p;
+    // плеер во весь экран сам по себе (а не вся страница встроенного плеера) — слой не был бы виден
+    const fs = document.fullscreenElement;
+    if (fs && !fs.contains(document.body)) return p;
+    if (!embedLayer) {
+      embedLayer = document.createElement("div");
+      embedLayer.id = "ytcs-embed-layer";
+      embedLayer.style.cssText = "position: fixed; z-index: 2147482000; margin: 0; padding: 0; border: 0; pointer-events: none;";
+      addEventListener("resize", fitEmbedLayer);
+      document.addEventListener("fullscreenchange", () => setTimeout(fitEmbedLayer, 50));
+    }
+    if (embedLayer.parentElement !== document.body) document.body.appendChild(embedLayer);
+    embedLayerFor = p;
+    fitEmbedLayer();
+    return embedLayer;
+  }
+  globalThis.__ytcsPlayerLayer = playerLayer;
+
   // ---------------- Кнопка и меню в плеере YouTube ----------------
   // Своё меню в стиле плеера (системное контекстное меню Chrome не
   // стилизуется). Кнопка встаёт рядом с шестерёнкой настроек и наследует
@@ -1030,6 +1065,16 @@
     }
     /* закрытое меню невидимо и для клавиатуры (visibility) — после анимации исчезновения */
     .ytcs-menu.open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition-delay: 0s; }
+    /* новый встроенный плеер (библиотека): кнопка в строке сверху справа рядом с ⚙ — 48×48, как соседние;
+       меню — под ней, поверх слоя управления плеера (top/right/max-height ставит placeTopMenu) */
+    .ytcs-btn-wrap { display: flex; align-items: center; }
+    .ytcs-btn.ytcs-btn-top { display: grid; place-items: center; box-sizing: border-box; width: 48px; height: 48px; margin: 0; padding: 0;
+      border: 0; border-radius: 50%; background: none; color: #fff; cursor: pointer; opacity: 1;
+      filter: drop-shadow(0 0 2px rgba(0, 0, 0, .55)); transition: background-color .12s ease; }
+    .ytcs-btn.ytcs-btn-top:hover, .ytcs-btn.ytcs-btn-top:focus-visible, .ytcs-btn.ytcs-btn-top[aria-expanded="true"] { background: rgba(255, 255, 255, .14); outline: none; }
+    .ytcs-btn.ytcs-btn-top svg { width: 26px; height: 26px; }
+    .ytcs-menu.ytcs-top { position: fixed; bottom: auto; z-index: 2147483000; transform: translateY(-6px) scale(.97); transform-origin: 100% 0; }
+    .ytcs-menu.ytcs-top.open { transform: none; }
     /* значок и подпись шапки — на одной линии со значками и подписями пунктов (20 px + 14 px) */
     .ytcs-head { display: flex; align-items: center; gap: 14px; padding: 6px 16px 10px; font-size: 12px; font-weight: 600;
       letter-spacing: .02em; color: rgba(255, 255, 255, .6); }
@@ -1278,14 +1323,28 @@
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) m.addEventListener(t, (e) => e.stopPropagation());
     m.addEventListener("click", onMenuClick);
     player.appendChild(m);
-    // во встроенном плеере библиотеки: «отложить» закрыло бы саму библиотеку,
-    // а окна плейлистов и клипа там пока не работают
-    // (в архив — с карточки библиотеки, своя кнопка на обложке)
-    if (OUR_EMBED) for (const act of ["defer", "library", "playlists", "clip", "archive"]) m.querySelector(`[data-act="${act}"]`)?.remove();
-    if (OUR_EMBED) m.querySelector('[data-toggle="dualSubs"]')?.remove(); // двойные субтитры — только на YouTube
-    // во встроенном плеере раздела «Сохранить» нет совсем — ни строки, ни экрана
-    if (OUR_EMBED) for (const el of m.querySelectorAll('[data-pane="save"], [data-pane-open="save"]')) el.remove();
+    if (OUR_EMBED) trimEmbedMenu(m);
     return m;
+  }
+
+  // Встроенный плеер «Моей библиотеки»: в меню только то, что там работает, —
+  // скорость, громкость, заметка, таймер сна и «Плеер ›».
+  //  - «Открыть сводку» — у библиотеки своя кнопка «Комментарии и сводка» под плеером;
+  //  - «Моя библиотека» — мы уже в ней; «Отложить» закрыло бы саму библиотеку;
+  //  - «Сохранить ›» и «Видео и превью ›» — окна плейлистов, клипа и превью грузятся
+  //    только в верхней рамке YouTube (lazy.js), в архив — кнопкой на обложке библиотеки;
+  //  - «Не запускать само» — видео в библиотеке запускаете вы сами, щелчком (early.js
+  //    во встроенном плеере автозапуск не трогает); «Пропускать тишину» и «Двойные
+  //    субтитры» во встроенном плеере выключены (silence.js, dualsubs.js — только YouTube).
+  function trimEmbedMenu(m) {
+    const drop = [
+      ...["panel", "library", "defer", "playlists", "quicksave", "clip", "archive", "preview", "download"].map((a) => `[data-act="${a}"]`),
+      ...["noAutoplay", "silenceSkip", "dualSubs"].map((t) => `[data-toggle="${t}"]`),
+      ...["save", "video"].flatMap((p) => [`[data-pane="${p}"]`, `[data-pane-open="${p}"]`]),
+    ];
+    for (const el of m.querySelectorAll(drop.join(", "))) el.remove();
+    // группа, в которой ничего не осталось, — долой (иначе лишняя линия под шапкой)
+    for (const g of m.querySelectorAll(".ytcs-group")) if (!g.querySelector(".ytcs-item")) g.remove();
   }
 
   function syncMenuToggles() {
@@ -1380,7 +1439,7 @@
     // закрываем, а фокус был внутри меню — возвращаем его на нашу кнопку,
     // иначе следующий Enter сработал бы на невидимом пункте
     if (!open && uiMenu.contains(document.activeElement)) {
-      document.querySelector("#movie_player .ytcs-btn")?.focus({ preventScroll: true });
+      ourButton()?.focus({ preventScroll: true });
     }
     // открываем — закрываем меню настроек самого YouTube (⚙), чтобы окна не наложились
     if (open) closeYtSettings();
@@ -1394,7 +1453,7 @@
     if (open) fitMenu();
     if (open) syncQuickSave();
     if (open) syncArchiveItem();
-    document.querySelector(".ytcs-btn")?.setAttribute("aria-expanded", String(open));
+    ourButton()?.setAttribute("aria-expanded", String(open));
     if (open) uiMenu.querySelector(".ytcs-item")?.focus({ preventScroll: true });
   }
 
@@ -1404,12 +1463,25 @@
     if (!uiMenu) return;
     uiMenu.style.removeProperty("--ytcs-ih");
     const player = uiMenu.parentElement;
-    const avail = (player?.clientHeight || 0) - 76;
+    const avail = uiMenu.classList.contains("ytcs-top") ? placeTopMenu() : (player?.clientHeight || 0) - 76;
     const extra = uiMenu.scrollHeight - avail;
     // пункты только открытого экрана (остальные скрыты); высота — кратная 4 px: середина строки
     // на целом пикселе экрана и на 150 % (подписи и значки не «плывут»)
     const items = uiMenu.querySelectorAll(".ytcs-pane:not([hidden]) .ytcs-item:not([hidden])").length;
     if (avail > 0 && extra > 0 && items) uiMenu.style.setProperty("--ytcs-ih", `${Math.max(32, 40 - 4 * Math.ceil(extra / items / 4))}px`);
+  }
+
+  // Новый встроенный плеер: кнопка сверху справа — меню раскрывается вниз, прямо под ней.
+  // Возвращает, сколько места по высоте у меню.
+  function placeTopMenu() {
+    const r = ourButton()?.getBoundingClientRect();
+    const top = Math.round(r && r.height ? r.bottom + 6 : 60);
+    const right = Math.max(8, Math.round(r && r.width ? innerWidth - r.right : 12));
+    uiMenu.style.top = top + "px";
+    uiMenu.style.right = right + "px";
+    const avail = Math.max(120, innerHeight - top - 10);
+    uiMenu.style.maxHeight = avail + "px";
+    return avail;
   }
 
   // «Сохранить в «…»» — последний плейлист, куда вы сохраняли в окне
@@ -1638,7 +1710,8 @@
   function showPageToast(text, iconSvg = "", ms = 2600) {
     ensureUiStyle();
     let t = document.getElementById("ytcs-toast");
-    const host = (isWatchPage() && document.querySelector("#movie_player")) || document.body;
+    const p = isWatchPage() && document.querySelector("#movie_player");
+    const host = (p && playerLayer(p)) || document.body;
     if (!t) {
       t = document.createElement("div");
       t.id = "ytcs-toast";
@@ -1673,27 +1746,56 @@
   // Само окно — thumb-preview.js (общее с кнопкой «Превью» на обложках и «Моей библиотекой»).
   const openPreviewOverlay = (msg) => globalThis.__ytcsPreview?.open(msg) ?? Promise.resolve(false);
 
+  // Кнопка расширения: в привычном плеере — в #movie_player рядом с ⚙ (.ytp-settings-button).
+  // Новый встроенный плеер (ноябрь 2026) рисует панель отдельным слоем #player-controls
+  // поверх #movie_player, ⚙ там — button.player-settings-icon в строке сверху справа
+  // (громкость, субтитры, ⚙); кнопка встаёт перед ⚙, меню — поверх всего плеера в <body>.
+  const BTN_SEL = "#movie_player .ytcs-btn, #player-controls .ytcs-btn";
+  const ourButton = () => document.querySelector(BTN_SEL);
+  const newEmbedSettings = () => (OUR_EMBED ? document.querySelector("#player-controls .player-settings-icon") : null);
+
   function ensurePlayerButton() {
     if (!alive() || !isWatchPage()) return;
-    const settingsBtn = document.querySelector("#movie_player .ytp-settings-button");
     const player = document.querySelector("#movie_player");
+    const oldSettings = document.querySelector("#movie_player .ytp-settings-button");
+    const newSettings = oldSettings ? null : newEmbedSettings();
+    const settingsBtn = oldSettings || newSettings;
     if (!settingsBtn || !player) return;
     ensureUiStyle();
-    if (!uiMenu || !player.contains(uiMenu)) uiMenu = buildMenu(player);
-    if (document.querySelector("#movie_player .ytcs-btn")) return;
+    const host = newSettings ? document.body : player;
+    if (!uiMenu || uiMenu.parentElement !== host) {
+      uiMenu?.remove();
+      uiMenu = buildMenu(host);
+    }
+    uiMenu.classList.toggle("ytcs-top", Boolean(newSettings));
+    if (!newSettings) uiMenu.style.removeProperty("top"), uiMenu.style.removeProperty("right"), uiMenu.style.removeProperty("max-height");
+    if (ourButton()) return;
     const b = document.createElement("button");
-    b.className = "ytp-button ytcs-btn";
+    b.type = "button";
+    b.className = newSettings ? "icon-button ytcs-btn ytcs-btn-top" : "ytp-button ytcs-btn";
     b.dataset.ytcsVersion = chrome.runtime.getManifest().version; // видно, какая версия работает на странице
     b.setAttribute("aria-label", "Сводка комментариев");
     b.setAttribute("aria-haspopup", "menu");
     b.setAttribute("aria-expanded", "false");
     b.title = "Сводка комментариев";
     b.innerHTML = UI_ICONS.brand;
+    // плеер перерисовал панель и кнопку пришлось поставить заново — точка таймера сна (sleep.js) остаётся
+    const sl = globalThis.__ytcsSleep?.state?.();
+    if (sl && sl.mode !== "off") b.classList.add("ytcs-sleep-on");
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       openMenu(!uiMenu.classList.contains("open"));
     });
-    settingsBtn.parentElement.insertBefore(b, settingsBtn);
+    if (newSettings) {
+      // ⚙ нового плеера обёрнута в <div> — ставим свою обёртку рядом, а не внутрь чужой;
+      // нажатия по кнопке не доходят до слоя управления (иначе он ставит видео на паузу / прячется)
+      for (const t of ["mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend", "dblclick"]) b.addEventListener(t, (e) => e.stopPropagation());
+      const wrap = document.createElement("div");
+      wrap.className = "ytcs-btn-wrap";
+      wrap.appendChild(b);
+      const slot = settingsBtn.parentElement.parentElement === settingsBtn.closest(".player-controls-top-right") ? settingsBtn.parentElement : settingsBtn;
+      slot.parentElement.insertBefore(wrap, slot);
+    } else settingsBtn.parentElement.insertBefore(b, settingsBtn);
   }
 
   // закрытие по клику мимо и по Esc

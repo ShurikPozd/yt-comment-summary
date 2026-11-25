@@ -451,7 +451,9 @@
       notice.host = host;
       notice.root = root;
     }
-    if (notice.host.parentElement !== p) p.appendChild(notice.host);
+    // в новом встроенном плеере — слой над его панелью управления (content.js), иначе «Вернуть»/«Сбросить» не нажать
+    const into = globalThis.__ytcsPlayerLayer?.(p) || p;
+    if (notice.host.parentElement !== into) into.appendChild(notice.host);
     return notice.host;
   }
 

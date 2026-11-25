@@ -19,6 +19,8 @@ const shadow = (id) => `[document.getElementById(${JSON.stringify(id)})?.shadowR
 // шрифт YouTube (Roboto с Google Fonts) загружен — без сети стенды YouTube не откроются
 const roboto = `[...document.fonts].some((f) => f.family.replace(/["']/g, "") === "Roboto" && f.status === "loaded")`;
 const ytReady = roboto + " && document.querySelector('.ytcs-btn') && performance.now() > 1200";
+// встроенный плеер: кнопка встала в строку нового плеера (#player-controls)
+const embedReady = roboto + " && document.querySelector('#player-controls .ytcs-btn') && performance.now() > 1200";
 
 // блок «Мягкий лимит» в панели: стенд панели без скриптов — подключаем модуль с заглушкой хранилища
 const limitPanel = `(async () => { const L = await import("/limit-core.js");
@@ -77,6 +79,13 @@ export const PAGES = [
   { key: "yt-note", url: "/watch?v=dQw4w9WgXcQ&notes=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
   // поле заметки при «Двойных субтитрах» — над строкой перевода, а не поверх неё
   { key: "yt-note-dual", url: "/watch?v=dQw4w9WgXcQ&notes=1&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks') && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
+  // встроенный плеер «Моей библиотеки» (новая разметка YouTube, stands/embed.html): кнопка расширения
+  // в строке сверху справа, меню раскрывается вниз — первый экран и «Плеер ›»; в узкой библиотеке тоже
+  { key: "yt-embed-menu", url: "/embed/dQw4w9WgXcQ", w: 988, h: 556, wait: embedReady, act: "__stand.menu()", settle: 900, roots: "[document.querySelector('.ytcs-menu'), document.querySelector('.ytcs-btn')]" },
+  { key: "yt-embed-player", url: "/embed/dQw4w9WgXcQ?volume=1", w: 988, h: 556, wait: embedReady, act: "__stand.playerPane()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
+  { key: "yt-embed-narrow", url: "/embed/dQw4w9WgXcQ", w: 560, h: 315, wait: embedReady, act: "__stand.playerPane()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
+  // поле заметки во встроенном плеере — в слое над панелью управления (нажатия доходят)
+  { key: "yt-embed-note", url: "/embed/dQw4w9WgXcQ?notes=1", w: 988, h: 556, wait: embedReady, act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
   // «Моя библиотека» → «Заметки» и заметки под встроенным плеером (notes-view.js)
   { key: "lib-notes", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 2000, wait: "document.querySelector('.nt-card') && performance.now() > 1500", roots: "[document.getElementById('notes')]" },
   // правка заметки (поле и кнопки в строке) и плашка «Заметка удалена · Вернуть»
