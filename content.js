@@ -1451,7 +1451,8 @@
     opts.hidden = !open;
     // высоту строк не пересчитываем (меню не «прыгает»): не помещается — прокручиваем к вариантам
     // (только само меню — scrollIntoView прокрутил бы и страницу)
-    if (open) uiMenu.scrollTop = Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight);
+    // прокрутка — на чётное число пикселей: строки меню остаются на целых пикселях экрана и на 150 %
+    if (open) uiMenu.scrollTop = Math.ceil(Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight) / 2) * 2;
   }
 
   // ---- «Повтор отрезка» (abloop.js): «1:23–1:41» в пункте, отмеченные A и B подсвечены ----
@@ -1481,7 +1482,8 @@
     if (!item || !opts) return;
     item.setAttribute("aria-expanded", String(open));
     opts.hidden = !open;
-    if (open) uiMenu.scrollTop = Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight);
+    // прокрутка — на чётное число пикселей: строки меню остаются на целых пикселях экрана и на 150 %
+    if (open) uiMenu.scrollTop = Math.ceil(Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight) / 2) * 2;
   }
 
   // «Пропускать тишину» — вторая строка: сколько сэкономлено (silence.js)
