@@ -151,7 +151,8 @@
         "dualsubs-core.js",
         "dualsubs.js",
         "intro-core.js",
-        "intro.js"
+        "intro.js",
+        "frame-shot.js"
       ],
       "run_at": "document_idle"
     },
@@ -174,7 +175,8 @@
         "audio-graph.js",
         "volume.js",
         "intro-core.js",
-        "intro.js"
+        "intro.js",
+        "frame-shot.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
