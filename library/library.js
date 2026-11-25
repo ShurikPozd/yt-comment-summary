@@ -91,6 +91,10 @@ const statsFromHash = () => void loadStats().then((m) => !document.body.dataset.
 $("#st-tab").addEventListener("click", () => void loadStats().then((m) => m.toggleStats()));
 window.addEventListener("hashchange", () => statsHash() && statsFromHash());
 if (statsHash()) statsFromHash();
+// «Заметки» (notes-view.js): раздел и заметки под встроенным плеером. Адрес #notes запоминаем
+// сразу (как у статистики), модуль грузится, когда библиотека уже на экране.
+const notesAtStart = location.hash === "#notes";
+void import("./notes-view.js").then((m) => m.init(notesAtStart));
 setInterval(() => state.view === "queue" && document.visibilityState === "visible" && refreshTabsCount(), 10000);
 
 // ---------- события ----------

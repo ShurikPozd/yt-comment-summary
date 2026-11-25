@@ -7,6 +7,7 @@
 // по желанию. Сами плейлисты на YouTube файл не меняет.
 
 import { collectBackup } from "../backup-core.js";
+import "../notes-core.js"; // заметки с таймкодами: globalThis.__ytcsNotesCore
 import { icon } from "../sidepanel/icons.js";
 import { useCatalog } from "./catalog.js";
 import { loadQueue, qmsg, renderQueueSide } from "./queue-view.js";
@@ -34,8 +35,25 @@ async function exportFile() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   bk.err = "";
-  bk.msg = `Сохранено: очередь — ${videosWord(data.queue.length)}${data.catalog ? `, плейлисты — ${nf.format(data.catalog.playlists.length)} (${videosWord(data.catalog.videos.length)})` : ""}. Секрет бота в файл не попал.`;
+  bk.msg = `Сохранено: очередь — ${videosWord(data.queue.length)}${data.catalog ? `, плейлисты — ${nf.format(data.catalog.playlists.length)} (${videosWord(data.catalog.videos.length)})` : ""}${notesLine(data.notes)}. Секрет бота в файл не попал.`;
   render();
+}
+
+// «, заметки — 12» (в файле есть заметки с таймкодами)
+function notesLine(notes) {
+  const n = globalThis.__ytcsNotesCore?.count(globalThis.__ytcsNotesCore.cleanStore(notes)).notes || 0;
+  return n ? `, заметки — ${nf.format(n)}` : "";
+}
+
+// заметки из файла — к своим (ничего не удаляется, повторы не удваиваются)
+async function restoreNotes(notes) {
+  const N = globalThis.__ytcsNotesCore;
+  if (!N || !notes) return 0;
+  const KEY = N.KEY; // chrome.storage.local.tcNotes
+  const cur = (await chrome.storage.local.get(KEY))[KEY];
+  const { store, added } = N.mergeStores(cur, notes);
+  if (added) await chrome.storage.local.set({ [KEY]: store });
+  return added;
 }
 
 function readFile(file) {
@@ -80,6 +98,7 @@ async function restore(mode) {
     if (p.libraryWhere === "tab" || p.libraryWhere === "panel") patch.libraryWhere = p.libraryWhere;
     await chrome.storage.local.set(patch);
   }
+  const notesAdded = await restoreNotes(d.notes);
   let catMsg = "";
   if (d.catalog?.videos?.length && (!state.cat || d.catalog.syncedAt > state.cat.syncedAt)) {
     const cat = { v: 1, ...d.catalog };
@@ -90,7 +109,7 @@ async function restore(mode) {
   await loadQueue();
   if (state.view === "queue") renderQueueSide();
   bk.file = null;
-  bk.msg = `Восстановлено: в очередь — ${videosWord(r?.added?.length ?? items.length)} ${mode === "replace" ? "(очередь заменена)" : "(добавлено к вашей)"}${catMsg}.`;
+  bk.msg = `Восстановлено: в очередь — ${videosWord(r?.added?.length ?? items.length)} ${mode === "replace" ? "(очередь заменена)" : "(добавлено к вашей)"}${catMsg}${notesAdded ? `, заметки — добавлено ${nf.format(notesAdded)}` : ""}.`;
   render();
 }
 
@@ -99,7 +118,7 @@ function html() {
   const preview = d
     ? `<div class="bk-file">
         <div><b>Файл от ${esc(new Date(d.at).toLocaleString("ru-RU", { dateStyle: "long", timeStyle: "short" }))}</b></div>
-        <div>Очередь — ${videosWord(d.queue.length)}${d.catalog ? ` · плейлисты — ${nf.format(d.catalog.playlists.length)} (${videosWord(d.catalog.videos.length)})` : ""}</div>
+        <div>Очередь — ${videosWord(d.queue.length)}${d.catalog ? ` · плейлисты — ${nf.format(d.catalog.playlists.length)} (${videosWord(d.catalog.videos.length)})` : ""}${notesLine(d.notes).replace(", ", " · ")}</div>
         <label class="bk-check"><input type="checkbox" id="bk-opts" checked /><span>Восстановить и настройки (секрет бота не трогается)</span></label>
         <div class="row">
           <button type="button" class="primary" data-bk="add">${icon("download", { size: 16 })}Добавить к очереди</button>
@@ -112,7 +131,7 @@ function html() {
     <div class="td-top"><b>Резервная копия</b><button type="button" class="ghost" data-bk="close">${icon("close", { size: 16 })}Закрыть</button></div>
     <div class="td-grid">
       <div class="td-sec">
-        <div class="td-h"><b>Сохранить в файл</b><span>Очередь и где вы остановились, настройки, список плейлистов — ${state.cat ? `${nf.format(state.cat.videos.length)} видео в ${inPlWord(state.cat.playlists.length)}` : "ещё не собран"}. Без секрета бота.</span></div>
+        <div class="td-h"><b>Сохранить в файл</b><span>Очередь и где вы остановились, настройки, заметки, список плейлистов — ${state.cat ? `${nf.format(state.cat.videos.length)} видео в ${inPlWord(state.cat.playlists.length)}` : "ещё не собран"}. Без секрета бота.</span></div>
         <button type="button" class="primary" data-bk="export">${icon("file", { size: 16 })}Сохранить копию</button>
       </div>
       <div class="td-sec">

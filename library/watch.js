@@ -20,12 +20,12 @@ export function watchHere() {
   return state.watchHere && !EMBED; // в узкой боковой панели плеер негде показать
 }
 
-// откуда видео: очередь, «Подписки» (показанный дайджест) или каталог плейлистов
-const pool = (source) => (source === "queue" ? state.queue : source === "digest" ? state.digestList || [] : state.cat?.videos || []);
+// откуда видео: очередь, «Подписки» (показанный дайджест), «Заметки» (notes-view.js) или каталог плейлистов
+const pool = (source) => (source === "queue" ? state.queue : source === "digest" ? state.digestList || [] : source === "notes" ? state.notesList || [] : state.cat?.videos || []);
 
 export function watchList() {
   // что показывать в «Дальше»: очередь (по её порядку) или текущий список результатов
-  if (watch.source === "queue" || watch.source === "digest") return pool(watch.source);
+  if (watch.source === "queue" || watch.source === "digest" || watch.source === "notes") return pool(watch.source);
   return state.list.map(({ d }) => state.cat?.videos[d]).filter(Boolean);
 }
 
@@ -94,7 +94,7 @@ export function renderWatch() {
 
 export function watchSideHtml(upNext) {
   return `<aside class="w-next" aria-label="Дальше">
-      <div class="w-h">${watch.source === "queue" ? "Дальше в очереди" : watch.source === "digest" ? "Дальше в подписках" : "Дальше в списке"}<span>${nf.format(upNext.length)}</span></div>
+      <div class="w-h">${watch.source === "queue" ? "Дальше в очереди" : watch.source === "digest" ? "Дальше в подписках" : watch.source === "notes" ? "Дальше в заметках" : "Дальше в списке"}<span>${nf.format(upNext.length)}</span></div>
       <div class="w-list">${upNext
         .slice(0, 60)
         .map((x) => {

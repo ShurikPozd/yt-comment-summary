@@ -13,6 +13,7 @@
   .ytp-chrome-bottom { position: absolute; left: 12px; right: 12px; bottom: 0; height: 59px; }
   .ytp-progress-bar-container { position: absolute; left: 0; right: 0; top: 0; height: 5px; background: rgba(255,255,255,.3); }
   .ytp-progress-bar-container::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 58%; background: #f03; }
+  .ytp-progress-bar { position: absolute; inset: 0; z-index: 1; } /* сюда заметки ставят точки (notes.js) */
   .ytp-chrome-controls { position: absolute; left: 0; right: 0; bottom: 4px; height: 48px; display: flex; align-items: center; justify-content: space-between;
     background: linear-gradient(transparent, rgba(0,0,0,.6)); }
   .ytp-time-display { color: #eee; font-size: 13px; padding-left: 12px; }
@@ -28,7 +29,7 @@
   <div id="movie_player">
     <video></video>
     <div class="ytp-chrome-bottom">
-      <div class="ytp-progress-bar-container"></div>
+      <div class="ytp-progress-bar-container"><div class="ytp-progress-bar"></div></div>
       <div class="ytp-chrome-controls">
         <div class="ytp-time-display"><span class="ytp-time-current">1:43</span><span class="ytp-time-separator"> / </span><span class="ytp-time-duration">3:33</span></div>
         <div class="ytp-right-controls">
@@ -60,5 +61,7 @@
 <script src="/volume.js"></script>
 <script src="/dualsubs-core.js"></script>
 <script src="/dualsubs.js"></script>
+<script src="/notes-core.js"></script>
+<script src="/notes.js"></script>
 </body>
 </html>

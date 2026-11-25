@@ -73,4 +73,11 @@ export const PAGES = [
   // «Двойные субтитры»: плашка над полосой прогресса — одна строка (замер) и две (оригинал + перевод)
   { key: "yt-dualsubs", url: "/watch?v=dQw4w9WgXcQ&dual=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden])')", settle: 600, roots: shadow("ytcs-dualsubs"), extra: ".box" },
   { key: "yt-dualsubs-2", url: "/watch?v=dQw4w9WgXcQ&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", settle: 600, roots: shadow("ytcs-dualsubs"), extra: ".box" },
+  // заметки с таймкодами (notes.js): поле поверх плеера и плашка «Заметка сохранена»
+  { key: "yt-note", url: "/watch?v=dQw4w9WgXcQ&notes=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
+  // «Моя библиотека» → «Заметки» и заметки под встроенным плеером (notes-view.js)
+  { key: "lib-notes", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 2000, wait: "document.querySelector('.nt-card') && performance.now() > 1500", roots: "[document.getElementById('notes')]" },
+  // правка заметки (поле и кнопки в строке) и плашка «Заметка удалена · Вернуть»
+  { key: "lib-notes-edit", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 1600, wait: "document.querySelector('.nt-card') && performance.now() > 1500", act: `(async () => { document.querySelectorAll(".nt-row [data-nt=del]")[1].click(); await new Promise((r) => setTimeout(r, 300)); document.querySelector(".nt-row [data-nt=edit]").click(); })()`, settle: 900, roots: "[document.querySelector('.nt-card'), document.getElementById('nt-toast')]" },
+  { key: "lib-notes-watch", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 1600, wait: "document.querySelector('.nt-card') && performance.now() > 1500", act: click(".nt-row a.nt-tc"), settle: 1200, roots: "[document.getElementById('w-notes')]" },
 ];

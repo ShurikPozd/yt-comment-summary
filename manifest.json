@@ -138,7 +138,9 @@
         "sleep.js",
         "stats.js",
         "resume-core.js",
-        "resume.js"
+        "resume.js",
+        "notes-core.js",
+        "notes.js"
       ],
       "run_at": "document_idle"
     },
@@ -153,7 +155,9 @@
         "silence.js",
         "sleep-core.js",
         "sleep.js",
-        "stats.js"
+        "stats.js",
+        "notes-core.js",
+        "notes.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

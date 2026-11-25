@@ -1915,5 +1915,76 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(D.LANGS[0][0] === "ru" && D.LANGS.every(([c, n]) => c && n) && new Set(D.LANGS.map(([c]) => c)).size === D.LANGS.length, "список языков: русский первым, без повторов");
 }
 
+// ---------- заметки с таймкодами (notes-core.js) ----------
+{
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL("../notes-core.js", import.meta.url), "utf8"), ctx);
+  const N = ctx.__ytcsNotesCore;
+  const J = (o) => JSON.stringify(o);
+  const A = "dQw4w9WgXcQ";
+  const B = "jNQXAC9IVRw";
+  ok(N.fmtTime(0) === "0:00" && N.fmtTime(75.9) === "1:15" && N.fmtTime(3725) === "1:02:05" && N.fmtTime(-3) === "0:00", "время: 0:00, 1:15, 1:02:05");
+  ok(N.cleanText("  два\n\tслова \u0000 ") === "два слова" && N.cleanText("x".repeat(900)).length === N.MAX_TEXT, "текст: одна строка, до 500 знаков");
+  let r = N.addNote({}, A, { t: 754.6, text: "  важная мысль ", at: 1000 }, { title: "Рик", channel: "Канал", len: 213 });
+  let s = r.store;
+  ok(r.note && J(r.note) === J({ t: 754, text: "важная мысль", at: 1000 }) && s[A].title === "Рик" && s[A].len === 213, "заметка: целая секунда, текст без пробелов, название и канал");
+  s = N.addNote(s, A, { t: 10, text: "раньше", at: 1000 }).store;
+  ok(J(s[A].items.map((x) => x.t)) === J([10, 754]) && s[A].items[0].at === 1001, "по порядку в видео; одинаковое время записи — разведено");
+  ok(s[A].title === "Рик", "без названия — прежнее остаётся");
+  ok(N.addNote(s, A, { t: 5, text: "   " }).note === null && N.addNote(s, "плохой id", { t: 5, text: "x" }).why === "id", "пустая заметка и чужой id не сохраняются");
+  const upd = N.updateNote(s, A, 1000, "новый текст");
+  ok(upd.note?.text === "новый текст" && s[A].items[1].text === "важная мысль", "правка — новое хранилище, старое не тронуто");
+  ok(N.updateNote(s, A, 1000, "  ").note === null && N.updateNote(s, A, 42, "x").note === null, "правка: пустой текст и чужая заметка — без изменений");
+  s = upd.store;
+  const rm = N.removeNote(s, A, 1001);
+  ok(rm.note?.text === "раньше" && rm.store[A].items.length === 1, "удаление одной из двух");
+  const back = N.restoreNote(rm.store, A, rm.note, rm.meta);
+  ok(J(back.store[A].items) === J(s[A].items), "«Вернуть» — та же заметка на том же месте");
+  const rm2 = N.removeNote(N.removeNote(s, A, 1001).store, A, 1000);
+  ok(!(A in rm2.store) && rm2.meta.title === "Рик", "удалили последнюю — видео пропало из заметок, название помним для «Вернуть»");
+  ok(N.restoreNote(rm2.store, A, rm2.note, rm2.meta).store[A]?.title === "Рик", "«Вернуть» последнюю — видео с названием вернулось");
+  // чистка того, что пришло из файла или чужой версии
+  const dirty = { [A]: { title: "Рик", items: [{ t: 5, text: "ok", at: 3 }, { t: -1, text: "x", at: 4 }, { t: 7, text: "", at: 5 }, "мусор"] }, bad: { items: [{ t: 1, text: "x" }] }, [B]: { items: [] } };
+  const cl = N.cleanStore(dirty);
+  ok(J(Object.keys(cl)) === J([A]) && cl[A].items.length === 1 && cl[A].channel === "" && cl[A].at === 3, "чистка: чужие id, пустые списки и битые заметки отброшены");
+  ok(J(N.cleanStore(null)) === "{}" && J(N.cleanStore([1, 2])) === "{}", "чистка: не объект — пусто");
+  // объединение (восстановление из резервной копии)
+  const mine = N.addNote({}, A, { t: 1, text: "моя", at: 10 }, { title: "Рик" }).store;
+  let theirs = N.addNote({}, A, { t: 1, text: "моя", at: 10 }).store;
+  theirs = N.addNote(theirs, A, { t: 2, text: "из файла", at: 20 }).store;
+  theirs = N.addNote(theirs, B, { t: 3, text: "другое видео", at: 30 }, { title: "Первое видео" }).store;
+  const mg = N.mergeStores(mine, theirs);
+  ok(mg.added === 2 && mg.store[A].items.length === 2 && mg.store[B].title === "Первое видео" && mg.store[A].title === "Рик", "из копии добавлены только новые заметки");
+  ok(N.mergeStores(mg.store, theirs).added === 0, "повторное восстановление ничего не удваивает");
+  // список и поиск
+  const vs = N.videos(mg.store);
+  ok(vs.length === 2 && vs.every((v) => v.id && v.items.length) && J(N.count(mg.store)) === J({ videos: 2, notes: 3 }), "список видео и счёт: 2 видео, 3 заметки");
+  ok(N.search(mg.store, "ФАЙЛА").length === 1 && N.search(mg.store, "файла")[0].items.length === 1 && N.search(mg.store, "файла")[0].total === 2, "поиск по тексту без учёта регистра; total — все заметки видео");
+  ok(N.search(mg.store, "рик").length === 1 && N.search(mg.store, "рик")[0].items.length === 2, "поиск по названию — все заметки видео");
+  ok(N.search(mg.store, "моя файла").length === 0 && N.search(mg.store, "  ").length === 2, "все слова должны найтись; пустой запрос — всё");
+  const yo = N.addNote({}, A, { t: 0, text: "Ёлка", at: 1 }).store;
+  ok(N.search(yo, "елка").length === 1 && N.search(yo, "0:00").length === 1, "ё = е; ищется и время «0:00»");
+  // текст для «Копировать все» и Telegram
+  ok(N.noteLink(A, 754) === `https://youtu.be/${A}?t=754` && N.noteLink(A, 0) === `https://youtu.be/${A}` && N.watchUrl(A, 61) === `https://www.youtube.com/watch?v=${A}&t=61s`, "ссылки с секундой");
+  const one = N.search(mg.store, "рик");
+  const txt = N.exportText(one);
+  ok(txt === `Рик\nhttps://youtu.be/${A}\n0:01 — моя — https://youtu.be/${A}?t=1\n0:02 — из файла — https://youtu.be/${A}?t=2`, "текст: название, ссылка, заметки «0:01 — текст — ссылка»");
+  ok(N.exportText(vs).split("\n\n").length === 2, "видео — через пустую строку");
+  ok(N.tgText(one).cut === 0 && N.tgText(one).text === txt, "короткое — в Telegram целиком");
+  let big = {};
+  for (let i = 0; i < 60; i++) big = N.addNote(big, i < 30 ? A : B, { t: i * 10, text: "длинная заметка ".repeat(8) + i, at: 100 + i }, { title: i < 30 ? "Рик" : "Первое видео" }).store;
+  const tg = N.tgText(N.videos(big));
+  ok(tg.text.length <= N.TG_MAX && tg.cut > 0 && tg.cut < 60 && tg.text.includes(`и ещё ${N.notesWord(tg.cut)}`), "длинное — обрезано по целой заметке, сказано, сколько не вошло");
+  const kept = (tg.text.match(/ — https:\/\/youtu\.be\/[\w-]{11}(\?t=\d+)?$/gm) || []).length;
+  ok(kept + tg.cut === 60, "вошедшие + не вошедшие = все заметки");
+  ok(N.notesWord(1) === "1 заметка" && N.notesWord(3) === "3 заметки" && N.notesWord(11) === "11 заметок" && N.notesWord(21) === "21 заметка", "склонение «заметка»");
+  const nm = N.addNote({}, A, { t: 1, text: "x", at: 5 }).store;
+  ok(N.setMeta(nm, A, { title: "Из библиотеки", channel: "К", len: 99 }).store[A].title === "Из библиотеки" && N.setMeta(nm, A, {}).store === nm && N.setMeta(nm, B, { title: "y" }).store === nm, "название из библиотеки — подставляется; без изменений — то же хранилище");
+  // предел на видео
+  let full = {};
+  for (let i = 0; i < N.MAX_NOTES; i++) full = N.addNote(full, A, { t: i, text: "x", at: i + 1 }).store;
+  ok(N.addNote(full, A, { t: 1, text: "лишняя" }).why === "full", "больше 300 заметок у видео — нельзя");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

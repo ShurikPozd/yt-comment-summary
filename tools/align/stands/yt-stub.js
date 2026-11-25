@@ -17,6 +17,8 @@
   const store = { settings: {}, plRecent: ["PL19", "PL2", "PL9"] };
   const CH = "UC" + "m".repeat(22);
   if (q.get("volume")) store.channelVolumes = { [CH]: { v: 150, n: "Уютный Майнкрафт", t: Date.now() } };
+  // &notes=1 — заметки с таймкодами к этому видео (точки на полосе, notes.js)
+  if (q.get("notes")) store.tcNotes = { dQw4w9WgXcQ: { title: "Стенд", channel: "Канал", len: 213, at: 3, items: [{ t: 18, text: "Вступление: о чём ролик", at: 1 }, { t: 95, text: "Главная мысль — без неё дальше не понять", at: 2 }, { t: 176, text: "Итог и ссылки в описании", at: 3 }] } };
   if (q.get("resume")) store.resumeLong = { dQw4w9WgXcQ: { t: 150, d: 213, at: Date.now() - 3600000 } };
   const stub = {
     runtime: {
@@ -136,6 +138,9 @@
       await new Promise((r) => setTimeout(r, 300));
       document.querySelector('.ytcs-menu [data-pane-open="player"]')?.click();
     },
+    // поле заметки поверх плеера и подсказка у точки на полосе (notes.js)
+    note: () => globalThis.__ytcsNotes?.open(),
+    noteTip: () => document.getElementById("ytcs-note-marks")?.shadowRoot.querySelectorAll(".d")[1]?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true })),
     toast: () => stub.storage.local.set({ settings: { ...store.settings, focusMode: true } }),
     // плашка плейлистов на странице: «быстрое сохранение» в последний плейлист
     plToast: () => globalThis.__ytcsPlaylists?.quickSave(),
