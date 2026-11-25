@@ -70,4 +70,7 @@ export const PAGES = [
   // списки каналов со скоростью и громкостью в настройках панели
   { key: "panel-lists", url: "/sidepanel/stand.html?lists=1", w: 420, h: 7000, wait: "window.ok === 1", roots: "[document.getElementById('cs-list'), document.getElementById('cv-list')]" },
   { key: "yt-sleep", url: "/watch?v=dQw4w9WgXcQ&sleep=fade", w: 1280, h: 900, wait: ytReady, act: "__ytcsSleep.set('end')", settle: 900, roots: shadow("ytcs-sleep-notice") },
+  // «Двойные субтитры»: плашка над полосой прогресса — одна строка (замер) и две (оригинал + перевод)
+  { key: "yt-dualsubs", url: "/watch?v=dQw4w9WgXcQ&dual=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden])')", settle: 600, roots: shadow("ytcs-dualsubs"), extra: ".box" },
+  { key: "yt-dualsubs-2", url: "/watch?v=dQw4w9WgXcQ&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", settle: 600, roots: shadow("ytcs-dualsubs"), extra: ".box" },
 ];

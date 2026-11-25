@@ -3676,6 +3676,7 @@ async function main() {
     state.settings.channelSpeed = nv.channelSpeed; // скорость по каналам — channel-speed.js
     state.settings.watchStats = nv.watchStats; // «Собирать статистику» — библиотека и limit-settings.js
     for (const key of ["channelVolume", "volumeLeveler"]) state.settings[key] = nv[key]; // громкость — channel-volume.js
+    for (const key of ["dualSubs", "dualSubsLang"]) state.settings[key] = nv[key]; // двойные субтитры — dualsubs-settings.js
     // «Без отвлечений» ведёт focus-settings.js — тоже только не затираем
     for (const key of Object.keys(nv)) if (key.startsWith("focus")) state.settings[key] = nv[key];
     $("set-no-autoplay").checked = Boolean(nv.noAutoplay);

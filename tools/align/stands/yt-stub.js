@@ -8,6 +8,8 @@
 // до конца: таймер сна «в конце видео» сразу даёт плашку затухания с кнопкой (sleep.js).
 // С &volume=1 у канала видео запомнена громкость 150 % — плашка «Громкость 150 % для
 // канала «…» · Сбросить» (volume.js); __stand.playerPane() — экран меню «Плеер ›».
+// С &dual=1 — «Двойные субтитры» (dualsubs.js) с одной строкой (перевод не пришёл),
+// с &dual=2 — оригинал и перевод; ответы плеера и timedtext — вымышленные.
 (() => {
   const listeners = [];
   const msgListeners = [];
@@ -53,6 +55,22 @@
   if (q.get("sleep") || q.get("volume")) mv.classList.add("html5-main-video");
   if (q.get("sleep")) {
     Object.defineProperty(mv, "paused", { configurable: true, get: () => false });
+  }
+
+  // «Двойные субтитры»: список дорожек от «главного мира» (dualsubs-main.js) и json3
+  if (q.get("dual")) {
+    store.settings.dualSubs = true;
+    const ev = (s, d, t) => ({ tStartMs: s, dDurationMs: d, segs: [{ utf8: t }] });
+    const orig = { events: [ev(60000, 4000, "Hello, this is a cozy wooden house")] };
+    const tr = { events: q.get("dual") === "2" ? [ev(60000, 4000, "Привет, это уютный деревянный дом")] : [] };
+    const info = { vid: "dQw4w9WgXcQ", tracks: [{ lang: "en", kind: "", tr: true }], defaultIndex: 0, audioLang: "", url: "https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&lang=en&pot=STAND", live: false };
+    document.addEventListener("ytcs-ds:ask", () => document.dispatchEvent(new CustomEvent("ytcs-ds:info", { detail: JSON.stringify(info) })));
+    const realFetch = window.fetch.bind(window);
+    window.fetch = async (u, o) => {
+      const url = String(u);
+      if (!url.includes("/api/timedtext")) return realFetch(u, o);
+      return new Response(JSON.stringify(new URL(url).searchParams.get("tlang") ? tr : orig), { headers: { "Content-Type": "application/json" } });
+    };
   }
 
   const TITLE = "Как построить уютный дом в Майнкрафте — полный гайд для новичков";
