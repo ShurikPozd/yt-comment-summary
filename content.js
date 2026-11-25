@@ -950,7 +950,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, dualSubs: false };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -963,6 +963,7 @@
     playerPrefs.channelSpeed = settings?.channelSpeed !== false; // скорость по каналам — speed.js, по умолчанию вкл.
     playerPrefs.focusMode = Boolean(settings?.focusMode); // «Без отвлечений» — focus.js
     playerPrefs.silenceSkip = Boolean(settings?.silenceSkip); // «Пропускать тишину» — silence.js
+    playerPrefs.dualSubs = Boolean(settings?.dualSubs); // «Двойные субтитры» — dualsubs.js
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -981,6 +982,8 @@
         showPageToast(playerPrefs.focusMode ? "Режим без отвлечений включён" : "Режим без отвлечений выключен", UI_ICONS.focus);
       } else if (before.silenceSkip !== playerPrefs.silenceSkip) {
         showPageToast(playerPrefs.silenceSkip ? "Паузы в речи будут проходить быстрее" : "Паузы в речи — как обычно", UI_ICONS.silence);
+      } else if (before.dualSubs !== playerPrefs.dualSubs) {
+        showPageToast(playerPrefs.dualSubs ? "Двойные субтитры включены" : "Двойные субтитры выключены", UI_ICONS.subs);
       }
     }
   }
@@ -1176,6 +1179,8 @@
     chev: SVG('<path d="M7 10l5 5 5-5"/>'),
     // волна звука и «вперёд» — «Пропускать тишину» (паузы быстрее, silence.js)
     silence: SVG('<path d="M3 10.5v3M6.5 7v10M10 9.5v5"/><path d="M13.2 7.5l4.3 4.5-4.3 4.5M17.4 7.5l4.3 4.5-4.3 4.5"/>'),
+    // две строки в рамке — «Двойные субтитры» (оригинал и перевод, dualsubs.js)
+    subs: SVG('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 10.5h10M7 14.5h6.5"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1240,6 +1245,7 @@
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="hideProgress">${UI_ICONS.bar}<span class="ytcs-label">Скрыть полосу прогресса</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="sponsorSkip">${UI_ICONS.skip}<span class="ytcs-label">Пропускать рекламу</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="silenceSkip" title="Паузы между фразами проходят быстрее, речь — с вашей скоростью">${UI_ICONS.silence}<span class="ytcs-label">Пропускать тишину<span class="ytcs-sub" hidden></span></span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="dualSubs" title="Под строкой оригинала — перевод от YouTube (Shift+C)">${UI_ICONS.subs}<span class="ytcs-label">Двойные субтитры</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
         </div>
         <div class="ytcs-group">
@@ -1256,6 +1262,7 @@
     // а окна плейлистов и клипа там пока не работают
     // (в архив — с карточки библиотеки, своя кнопка на обложке)
     if (OUR_EMBED) for (const act of ["defer", "library", "playlists", "clip", "archive"]) m.querySelector(`[data-act="${act}"]`)?.remove();
+    if (OUR_EMBED) m.querySelector('[data-toggle="dualSubs"]')?.remove(); // двойные субтитры — только на YouTube
     // во встроенном плеере раздела «Сохранить» нет совсем — ни строки, ни экрана
     if (OUR_EMBED) for (const el of m.querySelectorAll('[data-pane="save"], [data-pane-open="save"]')) el.remove();
     return m;

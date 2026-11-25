@@ -1574,5 +1574,64 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   delete globalThis.chrome;
 }
 
+// ---------- двойные субтитры (dualsubs-core.js) ----------
+{
+  const ctx = vm.createContext({ URL });
+  vm.runInContext(readFileSync(new URL("../dualsubs-core.js", import.meta.url), "utf8"), ctx);
+  const D = ctx.__ytcsDualCore;
+  const J = (x) => JSON.stringify(x);
+  ok(D.langOf("de") === "de" && D.langOf("xx") === "ru" && D.langOf(undefined) === "ru", "язык перевода: известный — он, иначе русский");
+  ok(D.baseLang("en-US") === "en" && D.baseLang("zh-Hans") === "zh" && D.baseLang("") === "", "основа языка");
+  // выбор дорожек — на тех видах списка, что отдаёт YouTube
+  const man = { tracks: [{ lang: "en", kind: "", tr: true }, { lang: "en", kind: "asr", tr: true }, { lang: "es-419", kind: "", tr: true }], defaultIndex: 0 };
+  ok(J(D.pickTracks(man, "ru")) === J({ src: { lang: "en", kind: "" }, tr: { lang: "en", kind: "", tlang: "ru" } }), "ручные + автоматические: оригинал — ручная, перевод — автоперевод YouTube");
+  ok(J(D.pickTracks({ tracks: [{ lang: "en", kind: "asr", tr: true }], defaultIndex: 0 }, "ru")) === J({ src: { lang: "en", kind: "asr" }, tr: { lang: "en", kind: "asr", tlang: "ru" } }), "только автоматические — они и переводятся");
+  ok(D.pickTracks({ tracks: [{ lang: "ru", kind: "asr", tr: true }], defaultIndex: 0 }, "ru").skip === "same", "видео уже по-русски — ничего не делаем");
+  ok(D.pickTracks({ tracks: [{ lang: "en-GB", kind: "", tr: true }], defaultIndex: 0 }, "en").skip === "same", "en-GB при переводе на английский — тоже тот же язык");
+  ok(D.pickTracks({ tracks: [], defaultIndex: 0 }, "ru").skip === "none" && D.pickTracks(null, "ru").skip === "none", "нет субтитров — тихо ничего");
+  ok(D.pickTracks({ tracks: [{ lang: "en", kind: "", tr: false }], defaultIndex: 0 }, "ru").skip === "notr", "перевод запрещён — ничего");
+  const own = { tracks: [{ lang: "en", kind: "", tr: true }, { lang: "ru", kind: "", tr: true }, { lang: "en", kind: "asr", tr: true }], defaultIndex: 1 };
+  ok(J(D.pickTracks(own, "ru")) === J({ src: { lang: "en", kind: "" }, tr: { lang: "ru", kind: "", tlang: "" } }), "есть ручной русский — берём его, а не автоперевод; оригинал — по языку речи");
+  // автодубляж: автоматические дорожки на 20 языках, язык речи — по исходному звуку
+  const dub = { tracks: ["en", "ar", "ru", "de"].map((l) => ({ lang: l, kind: "asr", tr: true })), defaultIndex: 0, audioLang: "en-US" };
+  ok(J(D.pickTracks(dub, "ru")) === J({ src: { lang: "en", kind: "asr" }, tr: { lang: "en", kind: "asr", tlang: "ru" } }), "автодубляж: оригинал по исходному звуку, распознанный дубляж не берём");
+  ok(J(D.pickTracks({ ...dub, audioLang: "" }, "de")) === J({ src: { lang: "en", kind: "asr" }, tr: { lang: "en", kind: "asr", tlang: "de" } }), "автодубляж без языка звука — дорожка по умолчанию");
+  // адрес дорожки из адреса плеера: токен остаётся, язык и формат — наши
+  const cap = "https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&ei=x&lang=en&kind=asr&name=foo&potc=1&pot=TOKEN%3D&fmt=srv3&c=WEB";
+  const tu = new URL(D.trackUrl(cap, { lang: "en", kind: "", tlang: "ru" }));
+  ok(tu.searchParams.get("pot") === "TOKEN=" && tu.searchParams.get("lang") === "en" && !tu.searchParams.has("kind") && !tu.searchParams.has("name") && tu.searchParams.get("tlang") === "ru" && tu.searchParams.get("fmt") === "json3" && tu.searchParams.get("c") === "WEB", "адрес перевода: токен плеера, tlang, json3");
+  const tu2 = new URL(D.trackUrl(cap.replace("&kind=asr", ""), { lang: "en", kind: "asr" }));
+  ok(tu2.searchParams.get("kind") === "asr" && !tu2.searchParams.has("tlang"), "адрес оригинала: автоматическая дорожка без перевода");
+  ok(D.trackUrl("https://www.youtube.com/watch?v=x", { lang: "en" }) === "" && D.trackUrl("::", { lang: "en" }) === "", "чужой адрес — пусто");
+  ok(D.urlVideo(cap) === "dQw4w9WgXcQ" && D.urlVideo("https://www.youtube.com/api/stats?v=x") === "", "id видео из адреса субтитров");
+  // разбор json3: ручная дорожка (как у YouTube: пустое событие, перенос строки внутри)
+  const manJ = { events: [{ tStartMs: 0, dDurationMs: 45200, id: 1, wpWinPosId: 1 }, { tStartMs: 45200, dDurationMs: 1880, segs: [{ utf8: "" }] }, { tStartMs: 47320, dDurationMs: 3800, segs: [{ utf8: "Never gonna run around\nand desert you" }] }, { tStartMs: 51480, dDurationMs: 2000, segs: [{ utf8: "[Music]" }] }, { tStartMs: 53600, dDurationMs: 1920, segs: [{ utf8: "Never gonna say goodbye" }] }] };
+  const mc = D.parseJson3(manJ);
+  ok(J(mc) === J([{ s: 47320, e: 51120, text: "Never gonna run around and desert you" }, { s: 53600, e: 55520, text: "Never gonna say goodbye" }]), "json3: пустые, служебные и окна без текста отброшены, перенос — пробел");
+  // автоматическая по словам: tOffsetMs, строки-переносы aAppend, наезд друг на друга
+  const asrJ = { events: [{ tStartMs: 29119, dDurationMs: 5241, wWinId: 1, segs: [{ utf8: "думаю" }] }, { tStartMs: 30269, dDurationMs: 4091, wWinId: 1, aAppend: 1, segs: [{ utf8: "\n" }] }, { tStartMs: 30279, dDurationMs: 9280, wWinId: 1, segs: [{ utf8: ".  " }, { utf8: "От ", tOffsetMs: 485 }, { utf8: "любого ", tOffsetMs: 970 }, { utf8: "парня", tOffsetMs: 1455 }] }, { tStartMs: 34360, dDurationMs: 8760, wWinId: 1, segs: [{ utf8: "Я " }, { utf8: "хочу", tOffsetMs: 542 }] }] };
+  const ac = D.parseJson3(asrJ);
+  ok(J(ac.map((c) => c.text)) === J(["думаю", ". От любого парня", "Я хочу"]), "json3 по словам: слова склеены, точка в начале — от прошлой фразы, не теряем");
+  ok(J(D.pairCues([{ s: 29000, e: 44000, text: ". So" }], ac).map((c) => [c.text, c.tr])) === J([["So", "думаю. От любого парня Я хочу"]]), "склейка: точка прилипает к прошлому куску, в начале строки — убрана");
+  ok(D.joinParts(["потемнела", ". Мы вернулись", ", ребята"]) === "потемнела. Мы вернулись, ребята" && D.clean("…, да") === "да" && D.clean("") === "", "склейка кусков и чистка начала");
+  ok(ac[0].e === 30279 && ac[1].e === 34360 && ac[2].e === 43120, "наезжающие строки — каждая до начала следующей");
+  ok(J(D.parseJson3({ events: [{ tStartMs: 10, dDurationMs: 5, segs: [{ utf8: "a" }] }, { tStartMs: 10, dDurationMs: 9, segs: [{ utf8: "b" }] }] })) === J([{ s: 10, e: 19, text: "a b" }]), "одно начало — одна реплика");
+  ok(J(D.parseJson3(null)) === "[]" && J(D.parseJson3({ events: [{ tStartMs: "x", dDurationMs: 1, segs: [{ utf8: "a" }] }] })) === "[]", "пустой и битый ответ — без ошибок");
+  // сведение: ручная — один к одному, автоматическая — по пересечению
+  const tr1 = D.parseJson3({ events: [{ tStartMs: 47320, dDurationMs: 3800, segs: [{ utf8: "Никогда не брошу" }] }, { tStartMs: 53600, dDurationMs: 1920, segs: [{ utf8: "Никогда не попрощаюсь" }] }] });
+  ok(J(D.pairCues(mc, tr1).map((c) => c.tr)) === J(["Никогда не брошу", "Никогда не попрощаюсь"]), "ручная: перевод к своей реплике");
+  const o2 = [{ s: 0, e: 6000, text: "one two three four" }, { s: 6000, e: 12000, text: "five six" }, { s: 12000, e: 20000, text: "seven" }];
+  const t2 = [{ s: 0, e: 2500, text: "раз" }, { s: 2500, e: 5800, text: "два три" }, { s: 5800, e: 11000, text: "пять" }, { s: 14000, e: 30000, text: "семь" }];
+  ok(J(D.pairCues(o2, t2).map((c) => c.tr)) === J(["раз два три", "пять", "семь"]), "автоматическая: куски перевода собраны к реплике по пересечению");
+  const t3 = [{ s: 0, e: 20000, text: "всё сразу" }];
+  ok(J(D.pairCues(o2, t3).map((c) => c.tr)) === J(["всё сразу", "всё сразу", "всё сразу"]), "длинный кусок перевода — у каждой реплики, что под него попала");
+  ok(J(D.pairCues(o2, []).map((c) => c.tr)) === J(["", "", ""]) && J(D.pairCues([], t2)) === "[]", "перевода нет — пустые строки, оригинала нет — пусто");
+  // выбор строки по времени (перемотка, скорость — просто другое время)
+  ok(D.indexAt(mc, 47320) === 0 && D.indexAt(mc, 51119) === 0 && D.indexAt(mc, 51120) === -1 && D.indexAt(mc, 54000) === 1 && D.indexAt(mc, 10) === -1 && D.indexAt(mc, 99999) === -1 && D.indexAt([], 5) === -1, "строка по времени: границы, промежутки, до и после");
+  ok(J(D.words(" Never  gonna\tgive ")) === J([{ w: "Never", sp: " " }, { w: "gonna", sp: " " }, { w: "give", sp: " " }]) && J(D.words("")) === "[]", "слова строки");
+  ok(D.fontPx(225) === 14 && D.fontPx(720) === 30 && D.fontPx(2160) === 40 && D.fontPx(NaN) === 14, "кегль по высоте плеера: мини-плеер, обычный, 4К");
+  ok(D.LANGS[0][0] === "ru" && D.LANGS.every(([c, n]) => c && n) && new Set(D.LANGS.map(([c]) => c)).size === D.LANGS.length, "список языков: русский первым, без повторов");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

@@ -121,6 +121,7 @@ const TOGGLES = [
   ["sponsorSkip", "Пропускать рекламные вставки", true],
   ["focusMode", "Без отвлечений", false], // что именно прячется — focus.js, настройки — в панели
   ["silenceSkip", "Пропускать тишину", false], // паузы в речи быстрее — silence.js
+  ["dualSubs", "Двойные субтитры", false], // оригинал + перевод YouTube — dualsubs.js
 ];
 const toggleOn = (s, key) => {
   const t = TOGGLES.find(([k]) => k === key);

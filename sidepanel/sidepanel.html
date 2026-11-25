@@ -219,6 +219,17 @@
               <input type="checkbox" id="set-channel-speed" class="switch" />
             </label>
             <div id="cs-list" class="cs-list"></div>
+            <!-- двойные субтитры: dualsubs-settings.js -->
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Двойные субтитры</span>
+                <span class="hint">В иностранных видео под строкой оригинала — перевод от самого YouTube. Наведите мышь на плашку — видео встанет на паузу, уберёте — пойдёт дальше. На странице видео — <kbd>Shift</kbd>+<kbd>C</kbd>.</span>
+              </span>
+              <input type="checkbox" id="set-dualsubs" class="switch" />
+            </label>
+            <label>Язык перевода
+              <select id="set-dualsubs-lang"></select>
+            </label>
             <div class="shortcuts">
               <div class="sc"><span>Автозапуск вкл/выкл</span><span class="sc-keys"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></span></div>
               <div class="sc"><span>Полоса прогресса</span><span class="sc-keys"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></span></div>
@@ -340,6 +351,8 @@
     <script src="../speed-core.js"></script>
     <script type="module" src="channel-speed.js"></script>
     <script type="module" src="focus-settings.js"></script>
+    <script src="../dualsubs-core.js"></script>
+    <script type="module" src="dualsubs-settings.js"></script>
     <script type="module" src="../welcome/link.js"></script>
   </body>
 </html>

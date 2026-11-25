@@ -53,4 +53,7 @@ export const PAGES = [
   // плашки поверх плеера: «Вы остановились на 2:30 · Продолжить» и затухание таймера сна
   { key: "yt-resume", url: "/watch?v=dQw4w9WgXcQ&resume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-resume-offer')", settle: 700, roots: shadow("ytcs-resume-offer") },
   { key: "yt-sleep", url: "/watch?v=dQw4w9WgXcQ&sleep=fade", w: 1280, h: 900, wait: ytReady, act: "__ytcsSleep.set('end')", settle: 900, roots: shadow("ytcs-sleep-notice") },
+  // «Двойные субтитры»: плашка над полосой прогресса — одна строка (замер) и две (оригинал + перевод)
+  { key: "yt-dualsubs", url: "/watch?v=dQw4w9WgXcQ&dual=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden])')", settle: 600, roots: shadow("ytcs-dualsubs"), extra: ".box" },
+  { key: "yt-dualsubs-2", url: "/watch?v=dQw4w9WgXcQ&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", settle: 600, roots: shadow("ytcs-dualsubs"), extra: ".box" },
 ];
