@@ -950,7 +950,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, channelVolume: true, volumeLeveler: false };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -963,6 +963,8 @@
     playerPrefs.channelSpeed = settings?.channelSpeed !== false; // скорость по каналам — speed.js, по умолчанию вкл.
     playerPrefs.focusMode = Boolean(settings?.focusMode); // «Без отвлечений» — focus.js
     playerPrefs.silenceSkip = Boolean(settings?.silenceSkip); // «Пропускать тишину» — silence.js
+    playerPrefs.channelVolume = settings?.channelVolume !== false; // громкость по каналам — volume.js, по умолчанию вкл.
+    playerPrefs.volumeLeveler = Boolean(settings?.volumeLeveler); // «Выравнивать громкость» — volume.js
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -981,6 +983,10 @@
         showPageToast(playerPrefs.focusMode ? "Режим без отвлечений включён" : "Режим без отвлечений выключен", UI_ICONS.focus);
       } else if (before.silenceSkip !== playerPrefs.silenceSkip) {
         showPageToast(playerPrefs.silenceSkip ? "Паузы в речи будут проходить быстрее" : "Паузы в речи — как обычно", UI_ICONS.silence);
+      } else if (before.channelVolume !== playerPrefs.channelVolume) {
+        showPageToast(playerPrefs.channelVolume ? "Громкость будет запоминаться для каждого канала" : "Громкость больше не запоминается по каналам", UI_ICONS.volume);
+      } else if (before.volumeLeveler !== playerPrefs.volumeLeveler) {
+        showPageToast(playerPrefs.volumeLeveler ? "Громкость выравнивается: тихое громче, громкое тише" : "Громкость — как в видео", UI_ICONS.leveler);
       }
     }
   }
@@ -1151,7 +1157,8 @@
     // стопка плейлистов — «Моя библиотека»
     library: SVG('<rect x="3" y="8" width="14" height="12" rx="2"/><path d="M7 4.5h11a2.5 2.5 0 0 1 2.5 2.5v9"/><path d="M8.5 11.5v5l4-2.5z"/>'),
     // «перескок» через вставку — «Пропускать рекламные вставки»
-    skip: SVG('<path d="M3 19h3M18 19h3"/><path d="M8.5 19h7" stroke-dasharray="1 2.5" opacity=".6"/><path d="M4.5 15.5c1.8-6.5 13.2-6.5 15 0"/><path d="M19.5 11.5v4h-4"/>'),
+    // (рисунок поднят на 2,5 — раньше «чернила» стояли ниже середины, и значок уходил вниз от подписи)
+    skip: SVG('<path d="M3 16.5h3M18 16.5h3"/><path d="M8.5 16.5h7" stroke-dasharray="1 2.5" opacity=".6"/><path d="M4.5 13c1.8-6.5 13.2-6.5 15 0"/><path d="M19.5 9v4h-4"/>'),
     // ножницы — «Вырезать клип»
     clip: SVG('<circle cx="6" cy="7" r="2.6"/><circle cx="6" cy="17" r="2.6"/><path d="M8.2 8.4L20 17"/><path d="M8.2 15.6L20 7"/>'),
     // бумажный самолётик Telegram — «В архив Telegram» (бот @SaveandSort_bot)
@@ -1176,6 +1183,10 @@
     chev: SVG('<path d="M7 10l5 5 5-5"/>'),
     // волна звука и «вперёд» — «Пропускать тишину» (паузы быстрее, silence.js)
     silence: SVG('<path d="M3 10.5v3M6.5 7v10M10 9.5v5"/><path d="M13.2 7.5l4.3 4.5-4.3 4.5M17.4 7.5l4.3 4.5-4.3 4.5"/>'),
+    // динамик с волнами — «Громкость» и «Громкость по каналам» (volume.js)
+    volume: SVG('<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/>'),
+    // столбики между двумя линиями — «Выравнивать громкость»
+    leveler: SVG('<path d="M3.5 5h17M3.5 19h17" opacity=".55"/><path d="M6.5 10v4M10.2 8.5v7M13.8 8.5v7M17.5 10v4"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1203,6 +1214,7 @@
         </div>
         <div class="ytcs-group">
         <div class="ytcs-item ytcs-rate" role="group" aria-label="Скорость воспроизведения">${UI_ICONS.speed}<span class="ytcs-label">Скорость</span><button type="button" class="ytcs-step" data-rate="-1" title="Медленнее — Shift+&lt;" aria-label="Медленнее">${UI_ICONS.minus}</button><span class="ytcs-rv">1×</span><button type="button" class="ytcs-step" data-rate="1" title="Быстрее — Shift+&gt;, до 4×" aria-label="Быстрее">${UI_ICONS.plus}</button></div>
+        <div class="ytcs-item ytcs-rate ytcs-vol" role="group" aria-label="Громкость">${UI_ICONS.volume}<span class="ytcs-label">Громкость</span><button type="button" class="ytcs-step" data-vol="-1" title="Тише" aria-label="Тише">${UI_ICONS.minus}</button><span class="ytcs-rv">100&nbsp;%</span><button type="button" class="ytcs-step" data-vol="1" title="Громче — до 300 %" aria-label="Громче">${UI_ICONS.plus}</button></div>
         <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
         <button class="ytcs-item" role="menuitem" data-act="sleep" aria-expanded="false" hidden>${UI_ICONS.moon}<span class="ytcs-label ytcs-ellipsis">Таймер сна</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
         <div class="ytcs-sleep-opts" role="group" aria-label="Остановить видео через" hidden>
@@ -1246,6 +1258,11 @@
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitem" data-act="speedreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить скорость канала</span><span class="ytcs-aside">1×</span></button>
         </div>
+        <div class="ytcs-group">
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelVolume">${UI_ICONS.volume}<span class="ytcs-label">Громкость по каналам</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="volumeLeveler" title="Тихие места громче, громкие тише — удобно для подкастов и фильмов">${UI_ICONS.leveler}<span class="ytcs-label">Выравнивать громкость</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitem" data-act="volreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить громкость канала</span><span class="ytcs-aside">100&nbsp;%</span></button>
+        </div>
       </div>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
@@ -1267,6 +1284,7 @@
       b.setAttribute("aria-checked", String(Boolean(playerPrefs[b.dataset.toggle])));
     });
     syncSpeedItem();
+    syncVolumeItem();
     syncSleepItem();
     syncSilenceItem();
   }
@@ -1379,7 +1397,10 @@
     const avail = (player?.clientHeight || 0) - 76;
     const extra = uiMenu.scrollHeight - avail;
     const items = uiMenu.querySelectorAll(".ytcs-item:not([hidden])").length;
-    if (avail > 0 && extra > 0 && items) uiMenu.style.setProperty("--ytcs-ih", `${Math.max(32, 40 - Math.ceil(extra / items))}px`);
+    // высота строки — 36 или 32 px: на экранах 150 % строка тогда в целых пикселях экрана,
+    // и значки стоят ровно по подписи (при 38 px они уходили на пиксель)
+    const ih = Math.max(32, Math.floor((40 - Math.ceil(extra / items)) / 4) * 4);
+    if (avail > 0 && extra > 0 && items) uiMenu.style.setProperty("--ytcs-ih", `${ih}px`);
   }
 
   // «Сохранить в «…»» — последний плейлист, куда вы сохраняли в окне
@@ -1465,6 +1486,21 @@
     item.title = sp.name ? `Сбросить скорость канала «${sp.name}» — вернуть 1×` : "Сбросить скорость канала — вернуть 1×";
   }
 
+  // «Громкость − 150 % +» и «Сбросить громкость канала · 150 %» (volume.js)
+  function syncVolumeItem() {
+    const vv = uiMenu?.querySelector(".ytcs-vol .ytcs-rv");
+    const api = globalThis.__ytcsVolume;
+    if (vv && api) vv.textContent = api.label();
+    const item = uiMenu?.querySelector('[data-act="volreset"]');
+    if (!item) return;
+    const cv = playerPrefs.channelVolume ? api?.current?.() : null;
+    item.hidden = !cv;
+    if (!cv) return;
+    item.querySelector(".ytcs-aside").textContent = cv.label;
+    item.title = `Сбросить громкость канала${cv.name ? ` «${cv.name}»` : ""} — вернуть обычную (${cv.normal})`;
+  }
+  document.addEventListener("volumechange", () => uiMenu?.classList.contains("open") && syncVolumeItem(), true);
+
   async function onMenuClick(e) {
     const nav = e.target.closest("[data-pane-open]");
     if (nav) return showPane(nav.dataset.paneOpen, true);
@@ -1489,6 +1525,14 @@
       if (!alive() || !globalThis.__ytcsSpeed?.step) return setNote("Расширение обновилось — обновите страницу (F5).");
       globalThis.__ytcsSpeed.step(Number(step.dataset.rate));
       syncRateRow();
+      return;
+    }
+    const vstep = e.target.closest("[data-vol]");
+    if (vstep) {
+      // меню не закрываем — можно нажать несколько раз
+      if (!alive() || !globalThis.__ytcsVolume?.step) return setNote("Расширение обновилось — обновите страницу (F5).");
+      globalThis.__ytcsVolume.step(Number(vstep.dataset.vol));
+      syncVolumeItem();
       return;
     }
     const item = e.target.closest(".ytcs-item");
@@ -1543,6 +1587,12 @@
     if (act === "speedreset") {
       openMenu(false);
       void globalThis.__ytcsSpeed?.reset?.();
+      return;
+    }
+    // громкость канала — забыть и вернуть обычную (volume.js покажет плашку)
+    if (act === "volreset") {
+      openMenu(false);
+      void globalThis.__ytcsVolume?.reset?.();
       return;
     }
     // клип — окно рисует clip.js здесь же, на странице

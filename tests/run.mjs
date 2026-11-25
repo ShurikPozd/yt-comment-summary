@@ -657,6 +657,206 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(P({ stored: 1, current: 1.5, carried: 1.5 }) === JSON.stringify({ rate: 1, why: "channel" }), "музыка 1× после лекций 1,5×");
 }
 
+// ---------- громкость по каналам (volume-core.js) ----------
+{
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(new URL("../volume-core.js", import.meta.url), "utf8"), ctx);
+  const C = ctx.__ytcsVolumeCore;
+  const A = "UC" + "a".repeat(22);
+  const B = "UC" + "b".repeat(22);
+  ok(C.fmtVol(150) === "150 %" && C.fmtVol(99.6) === "100 %" && C.fmtVol(0) === "", "громкость по-русски: 150 % с неразрывным пробелом");
+  ok(C.cleanVol(450) === 300 && C.cleanVol(0.4) === 1 && C.cleanVol(0) === null && C.cleanVol("x") === null && C.cleanVol(-5) === null, "громкость в пределах 1…300, ноль не запоминаем");
+  ok(JSON.stringify(C.split(150)) === JSON.stringify({ slider: 100, gain: 1.5 }) && JSON.stringify(C.split(40)) === JSON.stringify({ slider: 40, gain: 1 }), "выше 100 % — ползунок 100 и усиление");
+  ok(C.split(300).gain === 3 && C.split(100).gain === 1 && C.total(100, 1.5) === 150 && C.total(47.6, 1) === 48 && C.total(0, 2) === null, "ползунок × усиление");
+  ok(C.step(100, 1) === 110 && C.step(105, -1) === 100 && C.step(300, 1) === 300 && C.step(10, -1) === 5 && C.step(5, -1) === 5 && C.step(48, 1, 5) === 55, "шаг − / + и колесо, тише 5 % — некуда");
+  let m = C.remember({}, A, 150, "  Подкаст  ", 10);
+  ok(m[A].v === 150 && m[A].n === "Подкаст" && m[A].t === 10, "запомнить громкость канала");
+  ok(Object.keys(C.remember(m, "@handle", 50, "x")).length === 1 && Object.keys(C.remember(m, B, 0, "x")).length === 1, "без id канала и без громкости не запоминаем");
+  ok(C.remember(m, A, 60, "", 20)[A].n === "Подкаст" && !(A in C.forget(m, A)) && A in m, "пустое название не затирает прежнее; забыть — исходный объект цел");
+  let big = {};
+  for (let i = 0; i < 5; i++) big = C.remember(big, "UC" + String(i).repeat(22), 120, "c" + i, i, 3);
+  ok(Object.keys(big).length === 3 && !("UC" + "0".repeat(22) in big), "больше предела — вытесняются самые старые");
+  big = C.touch(big, "UC" + "2".repeat(22), "", 100);
+  big = C.remember(big, B, 70, "b", 101, 3);
+  ok("UC" + "2".repeat(22) in big && !("UC" + "3".repeat(22) in big), "открытый недавно канал не вытесняется");
+  ok(C.entryOf({ [A]: { v: "abc" } }, A) === null && C.entryOf({ [A]: { v: 70 } }, A).v === 70, "битая запись не читается");
+  ok(JSON.stringify(C.list({ [A]: { v: 150, n: "a", t: 1 }, [B]: { v: 40, n: "b", t: 5 } }).map((e) => e.id)) === JSON.stringify([B, A]), "список: сначала недавние");
+  const base = { enabled: true, stored: null, current: 80, normal: 80, ours: null, userChose: false, live: false };
+  const P = (o) => JSON.stringify(C.plan({ ...base, ...o }));
+  ok(P({ stored: 150 }) === JSON.stringify({ vol: 150, why: "channel" }), "у канала 150 % — ставим");
+  ok(P({ stored: 150, current: 150 }) === "null" && P({ stored: 80, current: 80.4 }) === "null", "уже так — ничего не делаем");
+  ok(P({ stored: 150, userChose: true }) === "null" && P({ stored: 150, live: true }) === "null" && P({ stored: 150, enabled: false }) === "null", "ваш выбор, эфир, выключено — не трогаем");
+  ok(P({ current: 150, ours: 150 }) === JSON.stringify({ vol: 80, why: "restore" }), "громкость прошлого канала не переезжает — ваша обычная");
+  ok(P({ current: 60, ours: 150 }) === "null" && P({ current: 60, ours: null }) === "null", "громкость сменили не мы — не трогаем");
+  ok(P({ current: 150, ours: 150, normal: null }) === "null", "обычная ещё неизвестна — не гадаем");
+  ok(P({ current: 100, ours: 150 }) === JSON.stringify({ vol: 80, why: "restore" }), "после перезагрузки: ползунок 100 от канала 150 % — тоже вернуть обычную");
+  ok(P({ current: 100, ours: 60 }) === "null" && C.carried(100, 150) && !C.carried(100, 90) && !C.carried(null, 150), "ползунок 100 — «перенесено», только если у канала было громче 100 %");
+  ok(JSON.stringify(C.observe({ normal: 80, ours: 150 }, 150)) === JSON.stringify({ normal: 80, ours: 150 }), "перенесённая громкость канала — не обычная");
+  ok(JSON.stringify(C.observe({ normal: 80, ours: 150 }, 60)) === JSON.stringify({ normal: 60, ours: null }), "громкость сменили вне каналов — это новая обычная");
+  ok(JSON.stringify(C.cleanState({ normal: "x", ours: 900 })) === JSON.stringify({ normal: null, ours: 300 }), "состояние из хранилища — только правильное");
+}
+
+// ---------- громкость по каналам на странице (volume.js с заглушкой плеера) ----------
+{
+  const A = "UC" + "a".repeat(22);
+  const B = "UC" + "b".repeat(22);
+  const C2 = "UC" + "c".repeat(22);
+  const docL = {};
+  const intervals = [];
+  let timeouts = [];
+  let now = 1_000_000;
+  const store = { settings: {}, channelVolumes: { [A]: { v: 150, n: "Тихий подкаст", t: 1 } } };
+  const sets = [];
+  const wants = [];
+  const fakeEl = () => {
+    const cls = new Set();
+    const el = {
+      style: {},
+      title: "",
+      hidden: false,
+      textContent: "",
+      innerHTML: "",
+      parentElement: null,
+      scrollWidth: 0,
+      clientWidth: 0,
+      offsetHeight: 0,
+      classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), contains: (c) => cls.has(c) },
+      addEventListener() {},
+      appendChild(ch) {
+        ch.parentElement = el;
+      },
+      attachShadow: () => el,
+      querySelector: () => fakeEl(),
+      getBoundingClientRect: () => ({ top: 0, bottom: 0, height: 0 }),
+    };
+    return el;
+  };
+  class HTMLVideoElement {}
+  const video = new HTMLVideoElement();
+  const player = Object.assign(fakeEl(), { ad: false, querySelector: (sel) => (sel.includes("video") ? video : fakeEl()) });
+  player.classList = { contains: (c) => c === "ad-showing" && player.ad };
+  // ползунок YouTube и ответы мира страницы
+  const yt = { volume: 80, muted: false, info: { videoId: "aaaaaaaaaaa", channelId: A, name: "Тихий подкаст", live: false } };
+  const ctx = {
+    console,
+    JSON,
+    Math,
+    Number,
+    Object,
+    String,
+    Set,
+    Map,
+    Promise,
+    URLSearchParams,
+    HTMLVideoElement,
+    location: { pathname: "/watch", search: "?v=aaaaaaaaaaa" },
+    setInterval: (fn, ms) => (intervals.push({ fn, ms }), intervals.length),
+    clearInterval() {},
+    setTimeout: (fn, ms) => (timeouts.push({ fn, at: now + ms }), timeouts.length),
+    clearTimeout() {},
+    Date: { now: () => now },
+    CustomEvent: class {
+      constructor(type, o) {
+        this.type = type;
+        this.detail = o?.detail;
+      }
+    },
+    document: {
+      getElementById: (id) => (id === "movie_player" ? player : null),
+      querySelector: () => null,
+      createElement: () => fakeEl(),
+      addEventListener: (ev, fn) => (docL[ev] ||= []).push(fn),
+      removeEventListener: (ev, fn) => (docL[ev] = (docL[ev] || []).filter((f) => f !== fn)),
+      dispatchEvent: (e) => (docL[e.type] || []).slice().forEach((f) => f(e)),
+    },
+    window: { addEventListener() {} },
+    chrome: {
+      runtime: { id: "ext" },
+      storage: {
+        local: {
+          get: async (k) => Object.fromEntries([].concat(k).filter((x) => x in store).map((x) => [x, structuredClone(store[x])])),
+          set: async (o) => Object.assign(store, structuredClone(o)),
+        },
+        onChanged: { addListener() {} },
+      },
+    },
+  };
+  ctx.window.top = ctx.window;
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  const fire = (type, detail, target) => ctx.document.dispatchEvent(Object.assign(new ctx.CustomEvent(type, { detail }), target ? { target } : {}));
+  ctx.document.addEventListener("ytcs-speed:ask", () => fire("ytcs-speed:info", JSON.stringify(yt.info)));
+  ctx.document.addEventListener("ytcs-vol:ask", () => fire("ytcs-vol:info", JSON.stringify({ volume: yt.volume, muted: yt.muted })));
+  // setVolume у YouTube: ползунок меняется, <video> сообщает volumechange
+  ctx.document.addEventListener("ytcs-vol:set", (e) => {
+    sets.push(Number(e.detail));
+    yt.volume = Number(e.detail);
+    fire("volumechange", null, video);
+  });
+  ctx.__ytcsAudio = { want: (v, o) => (wants.push(o), "ok") };
+  vm.runInContext(readFileSync(new URL("../volume-core.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext(readFileSync(new URL("../volume.js", import.meta.url), "utf8"), ctx);
+  await new Promise((r) => setTimeout(r, 0)); // хранилище прочитано
+  const wait = (ms) => {
+    now += ms;
+    const due = timeouts.filter((t) => t.at <= now);
+    timeouts = timeouts.filter((t) => t.at > now);
+    due.forEach((t) => t.fn());
+  };
+  const tick = () => intervals.find((t) => t.ms === 500).fn();
+  const open = (id, info) => {
+    ctx.location.search = "?v=" + id;
+    yt.info = { videoId: id, ...info };
+    tick();
+  };
+  const gain = () => wants[wants.length - 1]?.gain;
+  const V = ctx.__ytcsVolume;
+  tick();
+  ok(sets.at(-1) === 100 && gain() === 1.5 && V.vol() === 150, "канал с 150 %: ползунок 100 и усиление 1,5");
+  wait(400);
+  ok(store.channelVolumeState?.normal === 80 && store.channelVolumeState?.ours === 150, "обычная громкость (80 %) запомнена до нашей смены");
+  open("bbbbbbbbbbb", { channelId: B, name: "Музыка", live: false });
+  ok(sets.at(-1) === 80 && gain() === 1 && V.vol() === 80, "канал без своей громкости — снова ваши 80 %, без усиления");
+  // вы тянете ползунок YouTube
+  ctx.document.dispatchEvent({ type: "pointerdown", target: { closest: (sel) => (sel.includes("ytp-volume-area") ? {} : null) } });
+  yt.volume = 50;
+  fire("volumechange", null, video);
+  ctx.document.dispatchEvent({ type: "pointerup", target: {} });
+  wait(500);
+  ok(store.channelVolumes?.[B]?.v === undefined, "запись — не сразу (пауза, пока тянете)");
+  wait(900);
+  wait(400); // запись в хранилище — с паузой 0,3 с
+  ok(store.channelVolumes?.[B]?.v === 50 && store.channelVolumes[B].n === "Музыка", "ваша громкость 50 % запомнена для канала");
+  open("ccccccccccc", { channelId: C2, name: "Лекции", live: false });
+  ok(sets.at(-1) === 80, "следующий канал без громкости — снова 80 %, а не 50 %");
+  // кнопка + в меню расширения: 80 → 90 → … → 120 — усиление
+  for (let i = 0; i < 4; i++) V.step(1);
+  ok(V.vol() === 120 && sets.at(-1) === 100 && Math.abs(gain() - 1.2) < 1e-9, "кнопка + выше 100 % — усиление 1,2");
+  wait(1000);
+  wait(400);
+  ok(store.channelVolumes?.[C2]?.v === 120, "громкость из меню тоже запоминается для канала");
+  open("ddddddddddd", { channelId: C2, name: "Лекции", live: false });
+  ok(V.vol() === 120 && Math.abs(gain() - 1.2) < 1e-9, "другое видео того же канала — 120 %");
+  // эфир: громкость не трогаем, но усиление не переносим
+  const n0 = sets.length;
+  open("eeeeeeeeeee", { channelId: A, name: "Тихий подкаст", live: true });
+  ok(sets.length === n0 && gain() === 1, "эфир: ползунок не трогаем, усиление снято");
+  // реклама: граф без усиления и выравнивания
+  open("fffffffffff", { channelId: A, name: "Тихий подкаст", live: false });
+  ok(gain() === 1.5, "снова канал 150 %");
+  player.ad = true;
+  tick();
+  ok(gain() === 1 && wants.at(-1).level === false, "реклама — без усиления");
+  player.ad = false;
+  tick();
+  ok(gain() === 1.5, "после рекламы — снова 150 %");
+  // «Сбросить» — канал забыт, ваша обычная громкость
+  await V.reset();
+  wait(400);
+  ok(!(A in store.channelVolumes) && sets.at(-1) === 80 && gain() === 1, "«Сбросить»: канал забыт, снова 80 %");
+}
+
 // ---------- с того же места после обновления (resume-core.js) ----------
 {
   const ctx = vm.createContext({});

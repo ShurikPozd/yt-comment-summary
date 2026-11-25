@@ -64,5 +64,10 @@ export const PAGES = [
   { key: "lib-limit", url: LIB + "&limit=1#v=stats", w: 1200, h: 1400, wait: libReady + " && document.querySelector('#st-limit .st-limit')", roots: "[document.getElementById('st-limit')]" },
   { key: "lib-limit-narrow", url: LIB + "&limit=over#v=stats", w: 420, h: 1600, wait: libReady + " && document.querySelector('#st-limit .st-limit')", roots: "[document.getElementById('st-limit')]" },
   { key: "panel-limit", url: "/sidepanel/stand.html", w: 420, h: 7000, wait: "window.ok === 1", act: limitPanel, settle: 300, roots: "[document.querySelector('.lim-block')]" },
+  // громкость по каналам: плашка «Громкость 150 % для канала «…» · Сбросить» и экран меню «Плеер ›»
+  { key: "yt-volume", url: "/watch?v=dQw4w9WgXcQ&volume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-volume-notice')", settle: 700, roots: shadow("ytcs-volume-notice") },
+  { key: "yt-menu-player", url: "/watch?v=dQw4w9WgXcQ&volume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-volume-notice')", act: "__stand.playerPane()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
+  // списки каналов со скоростью и громкостью в настройках панели
+  { key: "panel-lists", url: "/sidepanel/stand.html?lists=1", w: 420, h: 7000, wait: "window.ok === 1", roots: "[document.getElementById('cs-list'), document.getElementById('cv-list')]" },
   { key: "yt-sleep", url: "/watch?v=dQw4w9WgXcQ&sleep=fade", w: 1280, h: 900, wait: ytReady, act: "__ytcsSleep.set('end')", settle: 900, roots: shadow("ytcs-sleep-notice") },
 ];

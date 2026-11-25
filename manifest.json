@@ -167,6 +167,29 @@
       ],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "volume-main.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "volume-core.js",
+        "audio-graph.js",
+        "volume.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "omnibox": {
