@@ -231,7 +231,7 @@ await step("меню кнопки открывается", async () => {
 // Все модули плеера встали на странице видео (модуль без своего ядра или без записи
 // в content_scripts тихо не работает — снаружи этого не видно).
 const PLAYER_MODS = ["SpeedCore", "Speed", "SilenceCore", "Silence", "SleepCore", "Sleep", "Stats", "ResumeCore", "Resume",
-  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual"];
+  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual", "FrameShot"];
 await step("модули плеера загружены", async () => {
   const ctx = extCtx.get(W);
   must(ctx, "мир контент-скриптов расширения на странице не найден");

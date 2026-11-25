@@ -8,6 +8,8 @@
 // до конца: таймер сна «в конце видео» сразу даёт плашку затухания с кнопкой (sleep.js).
 // С &volume=1 у канала видео запомнена громкость 150 % — плашка «Громкость 150 % для
 // канала «…» · Сбросить» (volume.js); __stand.playerPane() — экран меню «Плеер ›».
+// С &frame=1 — «Снимок кадра» (frame-shot.js), __stand.frame() — как Shift+S, __stand.videoPane() —
+// экран меню «Видео и превью ›».
 // С &dual=1 — «Двойные субтитры» (dualsubs.js) с одной строкой (перевод не пришёл),
 // с &dual=2 — оригинал и перевод; ответы плеера и timedtext — вымышленные.
 (() => {
@@ -57,6 +59,15 @@
   if (q.get("sleep") || q.get("volume")) mv.classList.add("html5-main-video");
   if (q.get("sleep")) {
     Object.defineProperty(mv, "paused", { configurable: true, get: () => false });
+  }
+  // «Снимок кадра» (frame-shot.js): &frame=1 — кадр 1280×720, буфер обмена принимает;
+  // &frame=nocopy — буфер отказал (плашка длиннее, с «Сохранить»); &frame=wait — кадр не загружен
+  if (q.get("frame")) {
+    const fw = q.get("frame") === "wait" ? 0 : 1280;
+    Object.defineProperty(mv, "videoWidth", { configurable: true, get: () => fw });
+    Object.defineProperty(mv, "videoHeight", { configurable: true, get: () => (fw ? 720 : 0) });
+    const deny = q.get("frame") === "nocopy";
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { write: async () => { if (deny) throw new DOMException("нет фокуса", "NotAllowedError"); } } });
   }
 
   // «Двойные субтитры»: список дорожек от «главного мира» (dualsubs-main.js) и json3
@@ -132,6 +143,14 @@
     clip: () => globalThis.__ytcsClip?.open(),
     playlists: () => globalThis.__ytcsPlaylists?.open({ videoId: "dQw4w9WgXcQ", title: TITLE }),
     menu: () => document.querySelector(".ytcs-btn")?.click(),
+    // «Снимок кадра»: как клавиша Shift+S
+    frame: () => globalThis.__ytcsFrameShot?.shoot(),
+    // меню, экран «Видео и превью ›» (клип, снимок кадра, превью)
+    videoPane: async () => {
+      document.querySelector(".ytcs-btn")?.click();
+      await new Promise((r) => setTimeout(r, 300));
+      document.querySelector('.ytcs-menu [data-pane-open="video"]')?.click();
+    },
     // меню, экран «Плеер ›» (переключатели, «Сбросить громкость канала»)
     playerPane: async () => {
       document.querySelector(".ytcs-btn")?.click();

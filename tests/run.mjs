@@ -1986,5 +1986,27 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(N.addNote(full, A, { t: 1, text: "лишняя" }).why === "full", "больше 300 заметок у видео — нельзя");
 }
 
+// ---------- снимок кадра (frame-shot.js, чистая часть) ----------
+{
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL("../frame-shot.js", import.meta.url), "utf8"), ctx);
+  const F = ctx.__ytcsFrameCore;
+  ok(F && !ctx.__ytcsFrameShot, "без страницы — только чистая часть, плеер не трогается");
+  ok(F.clock(754.9) === "12:34" && F.clock(3723) === "1:02:03" && F.clock(0) === "0:00" && F.clock(-3) === "0:00" && F.clock(NaN) === "0:00", "время кадра");
+  ok(F.fileStem("Как устроен «Ютуб»", 754, "abcdefghijk") === "Как устроен «Ютуб» — 12-34", "имя файла: название — 12-34");
+  ok(F.fileStem('A/B: "что?" <нет> | да*', 3723, "x") === "AB что нет да — 1-02-03", "запрещённые в Windows знаки — прочь, часы через дефис");
+  ok(F.fileStem("", 5, "abcdefghijk") === "abcdefghijk — 0-05" && F.fileStem("  ...  ", 5, "") === "Кадр — 0-05", "без названия — id видео, без него — «Кадр»");
+  const long = F.fileStem("Очень ".repeat(40), 61, "x");
+  ok(long.endsWith(" — 1-01") && long.length <= 100 + 7, "длинное название обрезается, время остаётся");
+  ok(F.fileStem("con", 1, "x") === "_con — 0-01", "зарезервированное имя Windows");
+  const B = (o) => F.blocker(o);
+  ok(B(null) === "novideo" && B({ ad: true, width: 1, height: 1, readyState: 4 }) === "ad", "нет видео / реклама");
+  ok(B({ protected: true, width: 1920, height: 1080, readyState: 4 }) === "drm", "защищённое видео (DRM)");
+  ok(B({ width: 0, height: 0, readyState: 4 }) === "notready" && B({ width: 1920, height: 1080, readyState: 1 }) === "notready", "кадр ещё не загружен");
+  ok(B({ width: 1920, height: 1080, readyState: 2 }) === null, "готово — снимаем");
+  ok(B({ width: 0, height: 0, readyState: 0, paused: true }) === "paused" && B({ width: 0, height: 0, readyState: 1, paused: true }) === "notready" && B({ width: 0, height: 0, readyState: 0, paused: false }) === "notready", "на паузе без единого кадра — подсказать запустить видео");
+  ok(F.errorKind({ name: "SecurityError" }) === "tainted" && F.errorKind({ name: "NotAllowedError" }) === "clipboard" && F.errorKind(new Error("x")) === "fail" && F.errorKind(null) === "fail", "ошибки: испорченный canvas, буфер обмена, прочее");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

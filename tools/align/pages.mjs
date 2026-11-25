@@ -77,6 +77,12 @@ export const PAGES = [
   { key: "yt-note", url: "/watch?v=dQw4w9WgXcQ&notes=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
   // поле заметки при «Двойных субтитрах» — над строкой перевода, а не поверх неё
   { key: "yt-note-dual", url: "/watch?v=dQw4w9WgXcQ&notes=1&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks') && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
+  // «Снимок кадра» (frame-shot.js): «Кадр 1:01 скопирован · Сохранить», узкий плеер с отказом буфера
+  // (плашка переносится карточкой) и экран меню «Видео и превью ›» с новым пунктом
+  { key: "yt-frame", url: "/watch?v=dQw4w9WgXcQ&frame=1", w: 1280, h: 900, wait: ytReady + " && window.__ytcsFrameShot", act: "__stand.frame()", settle: 900, roots: shadow("ytcs-frame-notice") },
+  { key: "yt-frame-narrow", url: "/watch?v=dQw4w9WgXcQ&frame=nocopy", w: 560, h: 900, wait: ytReady + " && window.__ytcsFrameShot", act: "(document.getElementById('movie_player').style.width = '420px', __stand.frame())", settle: 900, roots: shadow("ytcs-frame-notice") },
+  { key: "yt-frame-wait", url: "/watch?v=dQw4w9WgXcQ&frame=wait", w: 1280, h: 900, wait: ytReady + " && window.__ytcsFrameShot", act: "__stand.frame()", settle: 900, roots: shadow("ytcs-frame-notice"), extra: ".n" },
+  { key: "yt-menu-video", url: "/watch?v=dQw4w9WgXcQ&frame=1", w: 1280, h: 900, wait: ytReady + " && window.__ytcsFrameShot", act: "__stand.videoPane()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
   // «Моя библиотека» → «Заметки» и заметки под встроенным плеером (notes-view.js)
   { key: "lib-notes", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 2000, wait: "document.querySelector('.nt-card') && performance.now() > 1500", roots: "[document.getElementById('notes')]" },
   // правка заметки (поле и кнопки в строке) и плашка «Заметка удалена · Вернуть»

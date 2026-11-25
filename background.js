@@ -476,6 +476,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// «Снимок кадра» (frame-shot.js): «Сохранить» на плашке — PNG в «Загрузки» под именем
+// «Название видео — 12-34.png». Шлёт контент-скрипт рамки YouTube (страница видео или
+// встроенный плеер библиотеки); картинка — data:image/png (у фона нет доступа к холсту страницы).
+const FRAME_FROM_RE = /^https:\/\/(www|m)\.youtube\.com\//;
+const FRAME_MAX = 60 * 1024 * 1024; // 8K-кадр в PNG — до ~40 МБ в base64; больше — не наше
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== "frame:save" || !FRAME_FROM_RE.test(String(sender?.url || ""))) return;
+  const url = String(msg.dataUrl || "");
+  if (!url.startsWith("data:image/png;base64,") || url.length > FRAME_MAX) return sendResponse({ ok: false, error: "bad" });
+  const filename = sanitizeFilename(String(msg.stem || ""), 140) + ".png";
+  chrome.downloads
+    .download({ url, filename, conflictAction: "uniquify", saveAs: false })
+    .then(() => sendResponse({ ok: true, filename }))
+    .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
+  return true;
+});
+
 // ---------------- Рекламные вставки (SponsorBlock) ----------------
 // Открытая бесплатная база сообщества SponsorBlock (sponsor.ajay.app, данные —
 // CC BY-NC-SA 4.0). Спрашиваем приватно: по первым 4 символам sha256 от id

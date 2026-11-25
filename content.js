@@ -1194,6 +1194,8 @@
     subs: SVG('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 10.5h10M7 14.5h6.5"/>'),
     // листок с загнутым углом и строками — «Заметка» к моменту видео (notes.js)
     note: SVG('<path d="M5 4h14v10.5L13.5 20H5z"/><path d="M13.5 20v-5.5H19"/><path d="M8.5 8.5h7M8.5 12h4"/>'),
+    // фотоаппарат — «Снимок кадра» (frame-shot.js)
+    camera: SVG('<path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.5-2h4.4l1.5 2h1.8A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1249,6 +1251,7 @@
         <button class="ytcs-back" type="button" data-back aria-label="Назад">${UI_ICONS.chevl}<span>Видео и превью</span></button>
         <div class="ytcs-group">
         <button class="ytcs-item" role="menuitem" data-act="clip">${UI_ICONS.clip}<span class="ytcs-label">Вырезать клип</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="frameshot" title="Кадр в буфер обмена как PNG — Shift+S">${UI_ICONS.camera}<span class="ytcs-label">Снимок кадра</span></button>
         <button class="ytcs-item" role="menuitem" data-act="preview">${UI_ICONS.eye}<span class="ytcs-label">Превью видео</span></button>
         <button class="ytcs-item" role="menuitem" data-act="download">${UI_ICONS.download}<span class="ytcs-label">Скачать превью</span></button>
         </div>
@@ -1562,6 +1565,13 @@
       if (!globalThis.__ytcsNotes) return setNote("Обновите страницу видео (F5).");
       openMenu(false);
       globalThis.__ytcsNotes.open();
+      return;
+    }
+    // снимок кадра — в буфер обмена; плашку «Кадр 12:34 скопирован · Сохранить» рисует frame-shot.js
+    if (act === "frameshot") {
+      if (!globalThis.__ytcsFrameShot) return setNote("Обновите страницу видео (F5).");
+      openMenu(false);
+      globalThis.__ytcsFrameShot.shoot();
       return;
     }
     // отложить — в очередь с местом, где остановились, и закрыть вкладку
