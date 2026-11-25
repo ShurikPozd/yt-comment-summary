@@ -106,7 +106,9 @@
         "https://www.youtube.com/embed/*"
       ],
       "js": [
-        "speed-main.js"
+        "speed-main.js",
+        "volume-main.js",
+        "dualsubs-main.js"
       ],
       "run_at": "document_idle",
       "world": "MAIN"
@@ -116,7 +118,8 @@
         "https://www.youtube.com/embed/*"
       ],
       "js": [
-        "speed-main.js"
+        "speed-main.js",
+        "volume-main.js"
       ],
       "run_at": "document_idle",
       "world": "MAIN",
@@ -140,7 +143,13 @@
         "resume-core.js",
         "resume.js",
         "notes-core.js",
-        "notes.js"
+        "notes.js",
+        "limit.js",
+        "volume-core.js",
+        "audio-graph.js",
+        "volume.js",
+        "dualsubs-core.js",
+        "dualsubs.js"
       ],
       "run_at": "document_idle"
     },
@@ -157,69 +166,14 @@
         "sleep.js",
         "stats.js",
         "notes-core.js",
-        "notes.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": true
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "js": [
-        "limit.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": true
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "js": [
-        "volume-main.js"
-      ],
-      "run_at": "document_idle",
-      "world": "MAIN",
-      "all_frames": true
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "js": [
+        "notes.js",
+        "limit.js",
         "volume-core.js",
         "audio-graph.js",
         "volume.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "exclude_matches": [
-        "https://www.youtube.com/embed/*"
-      ],
-      "js": [
-        "dualsubs-main.js"
-      ],
-      "run_at": "document_idle",
-      "world": "MAIN"
-    },
-    {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "exclude_matches": [
-        "https://www.youtube.com/embed/*"
-      ],
-      "js": [
-        "dualsubs-core.js",
-        "dualsubs.js"
-      ],
-      "run_at": "document_idle"
     }
   ],
   "omnibox": {

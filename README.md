@@ -715,16 +715,16 @@ YouTube — он заметно легче полной страницы сай�
 - **Сразу, только верхняя рамка** `youtube.com` (www и m): на `document_start` — `early.js`,
   `focus.js`, в мире страницы `early-main.js`; на `document_idle` — `lazy.js`, `transcript.js`,
   `content.js`, `queue.js`, `video-actions.js`, `select.js`; только www — `sponsor.js`,
-  `speed-main.js` (мир страницы), затем по порядку `speed-core.js` → `speed.js` →
-  `silence-core.js` → `silence.js` → `sleep-core.js` → `sleep.js` → `stats.js` →
-  `resume-core.js` → `resume.js` → `notes-core.js` → `notes.js`.
-  Отдельная запись с `all_frames` — `limit.js` (плашка мягкого лимита; сам пропускает чужие
-  рамки, как `stats.js`).
+  `speed-main.js`, `volume-main.js`, `dualsubs-main.js` (мир страницы), затем по порядку
+  `speed-core.js` → `speed.js` → `silence-core.js` → `silence.js` → `sleep-core.js` →
+  `sleep.js` → `stats.js` → `resume-core.js` → `resume.js` → `notes-core.js` → `notes.js` →
+  `limit.js` → `volume-core.js` → `audio-graph.js` → `volume.js` → `dualsubs-core.js` →
+  `dualsubs.js`.
   Служебные рамки YouTube внутри страницы (чат трансляций и т. п.) ничего не получают.
 - **Встроенный плеер** `youtube.com/embed/*` в любой рамке (в том числе плеер «Моей
   библиотеки») — отдельные записи с `all_frames`: `early.js`, `focus.js`; `transcript.js`,
-  `content.js`, `sponsor.js`; `speed-main.js`; `speed-core.js` … `stats.js`, `notes-core.js`,
-  `notes.js`. Для верхней
+  `content.js`, `sponsor.js`; `speed-main.js`, `volume-main.js`; `speed-core.js` … `stats.js`,
+  `notes-core.js`, `notes.js`, `limit.js`, `volume-core.js`, `audio-graph.js`, `volume.js`. Для верхней
   рамки `/embed/` записи «только верхняя рамка» исключены (`exclude_matches`), чтобы ничего не
   вставлялось дважды.
 - **По требованию** (`lazy-bg.js` в фоне, `chrome.scripting.executeScript` в ту рамку, где

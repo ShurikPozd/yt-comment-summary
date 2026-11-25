@@ -48,6 +48,7 @@ setTimeout(() => {
 // ---------- сети нет: каждая цель (вкладка, фон расширения) идёт через перехват ----------
 const sessions = new Map(); // sessionId → targetInfo
 const errors = []; // исключения в коде расширения на страницах
+const extCtx = new Map(); // вкладка → id мира контент-скриптов расширения
 b.on(async (m) => {
   if (m.method === "Target.attachedToTarget") {
     const { sessionId, targetInfo, waitingForDebugger } = m.params;
@@ -88,6 +89,10 @@ b.on(async (m) => {
       },
       sid
     ).catch(() => {});
+  } else if (m.method === "Runtime.executionContextCreated") {
+    // мир контент-скриптов расширения (isolated) — по нему проверяем, что модули встали
+    const c = m.params.context;
+    if (c.auxData?.type === "isolated" && c.auxData?.isDefault === false && c.origin.startsWith("chrome-extension://")) extCtx.set(m.sessionId, c.id);
   } else if (m.method === "Runtime.exceptionThrown") {
     const d = m.params.exceptionDetails;
     const where = d.url || d.stackTrace?.callFrames?.[0]?.url || "";
@@ -221,6 +226,27 @@ await step("меню кнопки открывается", async () => {
   const closed = await until(W, "!document.querySelector('#movie_player .ytcs-menu.open')", 3000);
   must(closed, "меню не закрылось по Esc");
   return `пунктов: ${n}`;
+});
+
+// Все модули плеера встали на странице видео (модуль без своего ядра или без записи
+// в content_scripts тихо не работает — снаружи этого не видно).
+const PLAYER_MODS = ["SpeedCore", "Speed", "SilenceCore", "Silence", "SleepCore", "Sleep", "Stats", "ResumeCore", "Resume",
+  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual"];
+await step("модули плеера загружены", async () => {
+  const ctx = extCtx.get(W);
+  must(ctx, "мир контент-скриптов расширения на странице не найден");
+  const expr = `(${JSON.stringify(PLAYER_MODS)}).filter((n) => !globalThis["__ytcs" + n])`;
+  let miss = [];
+  for (let i = 0; i < 20; i++) {
+    const r = await b.send("Runtime.evaluate", { expression: expr, contextId: ctx, returnByValue: true }, W);
+    miss = r.result?.value || ["?"];
+    if (!miss.length) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  must(!miss.length, "не загрузились: " + miss.join(", "));
+  const main = await evalIn(W, "[window.__ytcsVolumeMain, window.__ytcsDualMain].every(Boolean)");
+  must(main, "скрипты мира страницы (volume-main.js, dualsubs-main.js) не встали");
+  return `${PLAYER_MODS.length} модулей + 2 в мире страницы`;
 });
 
 await step("комментарии собираются через youtubei", async () => {
