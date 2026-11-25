@@ -6,11 +6,15 @@
 // Адрес с &resume=1 — ролик открыт заново с нуля, а место сохранено: плашка
 // «Вы остановились на 2:30 · Продолжить» (resume.js). С &sleep=fade — видео «играет» за 8 с
 // до конца: таймер сна «в конце видео» сразу даёт плашку затухания с кнопкой (sleep.js).
+// С &volume=1 у канала видео запомнена громкость 150 % — плашка «Громкость 150 % для
+// канала «…» · Сбросить» (volume.js); __stand.playerPane() — экран меню «Плеер ›».
 (() => {
   const listeners = [];
   const msgListeners = [];
   const q = new URLSearchParams(location.search);
   const store = { settings: {}, plRecent: ["PL19", "PL2", "PL9"] };
+  const CH = "UC" + "m".repeat(22);
+  if (q.get("volume")) store.channelVolumes = { [CH]: { v: 150, n: "Уютный Майнкрафт", t: Date.now() } };
   if (q.get("resume")) store.resumeLong = { dQw4w9WgXcQ: { t: 150, d: 213, at: Date.now() - 3600000 } };
   const stub = {
     runtime: {
@@ -46,8 +50,8 @@
   let ct = q.get("resume") ? 0 : q.get("sleep") ? 205 : 61.4;
   Object.defineProperty(mv, "currentTime", { configurable: true, get: () => ct, set: (v) => (ct = v) });
   Object.defineProperty(mv, "readyState", { configurable: true, get: () => 4 });
+  if (q.get("sleep") || q.get("volume")) mv.classList.add("html5-main-video");
   if (q.get("sleep")) {
-    mv.classList.add("html5-main-video");
     Object.defineProperty(mv, "paused", { configurable: true, get: () => false });
   }
 
@@ -58,6 +62,12 @@
     const post = (m) => window.postMessage({ __ytcsClip: r.id, ...m }, "*");
     if (r.op === "info") post({ type: "info", ok: true, title: TITLE, duration: 213, currentTime: 61.4, levels: ["hd1080", "hd720", "large"], live: false, ad: false });
   });
+  // speed-main.js и volume-main.js: канал видео и громкость ползунка YouTube
+  let ytVolume = 80;
+  const answer = (type, data) => document.dispatchEvent(new CustomEvent(type, { detail: JSON.stringify(data) }));
+  document.addEventListener("ytcs-speed:ask", () => answer("ytcs-speed:info", { videoId: "dQw4w9WgXcQ", channelId: CH, name: "Уютный Майнкрафт", live: false }));
+  document.addEventListener("ytcs-vol:ask", () => answer("ytcs-vol:info", { volume: ytVolume, muted: false }));
+  document.addEventListener("ytcs-vol:set", (e) => (ytVolume = Number(e.detail)));
   // playlists-main.js: вымышленные плейлисты
   const names = ["Музыка в дорогу", "Смотреть позже", "Танцы", "Кулинария: быстро", "Котики", "Подкасты", "Ремонт своими руками", "Английский", "Лучшие клипы 2026", "Смешное", "Обзоры техники", "Путешествия", "Спорт: тренировки", "Мультфильмы", "Лекции", "Игры", "Стендап", "Фильмы: трейлеры", "Музыка для работы", "Шортсы: танцы"];
   const pls = names.map((t, i) => ({ id: "PL" + i, title: t, privacy: i % 5 === 0 ? "PUBLIC" : i % 7 === 0 ? "UNLISTED" : "PRIVATE", contains: i === 2 || i === 19 }));
@@ -102,6 +112,12 @@
     clip: () => globalThis.__ytcsClip?.open(),
     playlists: () => globalThis.__ytcsPlaylists?.open({ videoId: "dQw4w9WgXcQ", title: TITLE }),
     menu: () => document.querySelector(".ytcs-btn")?.click(),
+    // меню, экран «Плеер ›» (переключатели, «Сбросить громкость канала»)
+    playerPane: async () => {
+      document.querySelector(".ytcs-btn")?.click();
+      await new Promise((r) => setTimeout(r, 300));
+      document.querySelector('.ytcs-menu [data-pane-open="player"]')?.click();
+    },
     toast: () => stub.storage.local.set({ settings: { ...store.settings, focusMode: true } }),
     // плашка плейлистов на странице: «быстрое сохранение» в последний плейлист
     plToast: () => globalThis.__ytcsPlaylists?.quickSave(),

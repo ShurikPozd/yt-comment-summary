@@ -52,5 +52,10 @@ export const PAGES = [
   { key: "yt-playlists", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.playlists()", settle: 1200, roots: shadow("ytcs-playlists") },
   // плашки поверх плеера: «Вы остановились на 2:30 · Продолжить» и затухание таймера сна
   { key: "yt-resume", url: "/watch?v=dQw4w9WgXcQ&resume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-resume-offer')", settle: 700, roots: shadow("ytcs-resume-offer") },
+  // громкость по каналам: плашка «Громкость 150 % для канала «…» · Сбросить» и экран меню «Плеер ›»
+  { key: "yt-volume", url: "/watch?v=dQw4w9WgXcQ&volume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-volume-notice')", settle: 700, roots: shadow("ytcs-volume-notice") },
+  { key: "yt-menu-player", url: "/watch?v=dQw4w9WgXcQ&volume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-volume-notice')", act: "__stand.playerPane()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
+  // списки каналов со скоростью и громкостью в настройках панели
+  { key: "panel-lists", url: "/sidepanel/stand.html?lists=1", w: 420, h: 7000, wait: "window.ok === 1", roots: "[document.getElementById('cs-list'), document.getElementById('cv-list')]" },
   { key: "yt-sleep", url: "/watch?v=dQw4w9WgXcQ&sleep=fade", w: 1280, h: 900, wait: ytReady, act: "__ytcsSleep.set('end')", settle: 900, roots: shadow("ytcs-sleep-notice") },
 ];

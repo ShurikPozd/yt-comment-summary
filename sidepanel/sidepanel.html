@@ -219,6 +219,22 @@
               <input type="checkbox" id="set-channel-speed" class="switch" />
             </label>
             <div id="cs-list" class="cs-list"></div>
+            <!-- громкость по каналам и выравнивание: channel-volume.js -->
+            <label class="switch-row cs-switch">
+              <span class="sw-text">
+                <span class="sw-title">Запоминать громкость по каналам</span>
+                <span class="hint">Поменяйте громкость в видео (ползунок YouTube, <span class="cs-keys"><kbd>↑</kbd> / <kbd>↓</kbd></span> или колесо над громкостью плеера) — она запомнится для канала и сама включится в его следующих видео. Можно громче 100 % — до 300 %: колесом или кнопкой + в меню расширения в плеере. У остальных каналов — ваша обычная громкость. Реклама, прямые эфиры и Shorts не трогаются.</span>
+              </span>
+              <input type="checkbox" id="set-channel-volume" class="switch" />
+            </label>
+            <div id="cv-list" class="cs-list"></div>
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Выравнивать громкость</span>
+                <span class="hint">Тихие места громче, громкие тише — не нужно то прибавлять, то убавлять звук в подкастах и фильмах. Рекламу не трогает.</span>
+              </span>
+              <input type="checkbox" id="set-volume-leveler" class="switch" />
+            </label>
             <div class="shortcuts">
               <div class="sc"><span>Автозапуск вкл/выкл</span><span class="sc-keys"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></span></div>
               <div class="sc"><span>Полоса прогресса</span><span class="sc-keys"><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></span></div>
@@ -339,6 +355,8 @@
     <script type="module" src="sponsor-settings.js"></script>
     <script src="../speed-core.js"></script>
     <script type="module" src="channel-speed.js"></script>
+    <script src="../volume-core.js"></script>
+    <script type="module" src="channel-volume.js"></script>
     <script type="module" src="focus-settings.js"></script>
     <script type="module" src="../welcome/link.js"></script>
   </body>
