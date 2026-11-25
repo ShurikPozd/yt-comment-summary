@@ -139,6 +139,20 @@ window.__errs = []; addEventListener("error", (e) => __errs.push(String(e.messag
     if (qp.get("real")) Object.assign(local.queue[0], { id: "jNQXAC9IVRw", title: "Me at the zoo", channel: "jawed", len: 19 });
     if (qp.get("undo")) local.queueUndo = { at: Date.now() - 60e3, added: [], tabs: pick.slice(0, 18).map((v) => ({ url: "https://www.youtube.com/watch?v=" + v.id })) };
   }
+  // ?notes=1 — заметки с таймкодами (раздел «Заметки», notes-view.js); &tg=1 — бот настроен
+  if (qp.get("notes")) {
+    const NOTES = [
+      [by.P2[0], ["Творог — 9 %, отжать через марлю, иначе сырники расплывутся", "Мука только в конце, 2 ложки на 400 г", "Жарить под крышкой 3 минуты с каждой стороны", "Подавать со сметаной и вареньем"], [42, 118, 305, 512]],
+      [by.P10[1], ["git switch -c — новая ветка одной командой", "rebase против merge: когда что", "Отменить последний коммит, но оставить правки: git reset --soft HEAD~1"], [65, 401, 733]],
+      [by.P7[0], ["Тбилиси → Мцхета на маршрутке, 1 час", "Сигнахи: смотровая площадка на закате"], [134, 1022]],
+      [by.P5[1], ["Present Simple — привычки и расписания, не «сейчас»"], [77]],
+    ];
+    local.tcNotes = {};
+    NOTES.forEach(([v, texts, ts], k) => {
+      local.tcNotes[v.id] = { title: v.title, channel: v.channel, len: v.len, at: Date.now() - k * 3600e3, items: texts.map((text, i) => ({ t: Math.min(ts[i], v.len - 5), text, at: Date.now() - k * 3600e3 - (texts.length - i) * 60e3 })) };
+    });
+  }
+  if (qp.get("tg")) local.settings = { ...(local.settings || {}), baseUrl: "https://bot.example", token: "stand" };
   async function onMsg(msg) {
     const q = local.queue || [];
     if (msg.type === "queue:count") return { ok: true, n: Number(qp.get("tabs") || 37) };

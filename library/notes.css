@@ -1,0 +1,623 @@
+/* =====================================================================
+   «Заметки» (library/notes-view.js): видео с заметками к моментам, поиск,
+   «Копировать все» и «В Telegram»; блок заметок под встроенным плеером.
+   Поверх остальных разделов, как «Статистика». Цвета — токены library.css.
+   ===================================================================== */
+body[data-notes] .filters,
+body[data-notes] .body,
+body[data-notes] .triage,
+body[data-notes] .stats {
+  display: none !important;
+}
+
+/* поиск и «Обновить» шапки разделу не нужны (у него свой поиск) — прячем, место держим */
+body[data-notes] .top .search,
+body[data-notes] .top .sync {
+  visibility: hidden;
+}
+
+body.embed[data-notes] .top .search {
+  display: none;
+}
+
+/* узкое окно: шапка в две строки — вторая (поиск и «Обновить») разделу не нужна, без пустой полосы */
+@media (max-width: 1000px) {
+  body:not(.embed)[data-notes] .top :is(.search, .sync) {
+    display: none;
+  }
+}
+
+/* видео из заметок открыто во встроенном плеере — список под ним не нужен */
+body[data-notes][data-watch] #notes {
+  display: none;
+}
+
+body:has(#notes:not([hidden])) .sel-bar {
+  display: none;
+}
+
+.notes {
+  padding: 26px var(--pad) 40px;
+}
+
+body.embed .notes {
+  padding: 16px var(--pad) 28px;
+}
+
+.nt-wrap {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* шапка раздела: заголовок слева, поиск и кнопки справа; линия снизу */
+.nt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nt-ttl {
+  min-width: 0;
+}
+
+.nt-ttl h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.nt-ttl p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.nt-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex: 1 1 34rem;
+  min-width: 0;
+}
+
+.nt-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 16rem;
+  max-width: 32rem;
+  height: round(2.6rem, 1px);
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease;
+}
+
+.nt-search:focus-within {
+  border-color: var(--accent);
+  background: var(--bg-2);
+}
+
+.nt-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+}
+
+.nt-search input::placeholder {
+  color: var(--muted);
+}
+
+.nt-search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.nt-btns {
+  display: flex;
+  gap: 10px;
+  flex: none;
+}
+
+.nt-btns button.ghost,
+.w-notes button.ghost,
+.nt-eb button.ghost,
+.nt-eb button.primary {
+  height: round(2.6rem, 1px);
+}
+
+.nt-btns button.ghost {
+  justify-content: center;
+}
+
+/* пусто — шапка сверху, подсказка — по центру оставшегося места */
+.nt-wrap.is-empty {
+  min-height: calc(100vh - 3.2rem - 33px - 66px);
+}
+
+.nt-wrap.is-empty .nt-tools {
+  display: none;
+}
+
+.nt-wrap.is-empty .nt-list {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+
+.nt-empty {
+  display: grid;
+  place-items: center;
+  min-height: 40vh;
+  padding: 24px 12px;
+  text-align: center;
+}
+
+.nt-empty .empty-text {
+  line-height: 1.55;
+}
+
+.notes kbd,
+.w-notes kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.7em;
+  height: 1.7em;
+  padding: 0 0.45em;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font: 600 0.82em/1 "Segoe UI", Roboto, sans-serif;
+}
+
+/* ---------- видео с заметками ---------- */
+.nt-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.nt-card {
+  display: grid;
+  grid-template-columns: clamp(11rem, 22cqw, 20rem) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "th vh" "th items";
+  gap: 10px 22px;
+  padding: 16px;
+  border-radius: var(--r-l);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.nt-th {
+  grid-area: th;
+  position: relative;
+  display: block;
+  align-self: start;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-m);
+  overflow: hidden;
+  background: var(--bg-3);
+}
+
+.nt-th img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--t) var(--ease);
+}
+
+.nt-th:hover img {
+  transform: scale(1.04);
+}
+
+.nt-th .dur {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.nt-vh {
+  grid-area: vh;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nt-vt {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.nt-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 1.12rem;
+  font-weight: 650;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.nt-title:hover {
+  color: var(--accent-ink);
+}
+
+.nt-sub {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.nt-vacts {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+/* круглые кнопки-значки: копировать, в Telegram, изменить, удалить */
+.nt-ib {
+  display: grid;
+  place-items: center;
+  width: round(2.3rem, 1px);
+  height: round(2.3rem, 1px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.nt-ib:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.nt-ib.del:hover {
+  color: var(--accent-ink);
+}
+
+.nt-ib:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- строки заметок (раздел и блок под плеером) ---------- */
+.nt-items {
+  grid-area: items;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: round(2.9rem, 1px);
+  padding: 4px 4px 4px 6px;
+  border-radius: var(--r-m);
+  transition: background-color var(--t-fast) ease;
+}
+
+.nt-row:hover,
+.nt-row:focus-within,
+.nt-row.editing {
+  background: var(--bg-3);
+}
+
+.nt-tc {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 4.4rem;
+  height: round(2.1rem, 1px);
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.nt-tc:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.nt-tx {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.nt-ra {
+  display: flex;
+  gap: 2px;
+  flex: none;
+  opacity: 0.5;
+  transition: opacity var(--t-fast) ease;
+}
+
+.nt-row:hover .nt-ra,
+.nt-row:focus-within .nt-ra {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .nt-ra {
+    opacity: 1;
+  }
+}
+
+.nt-edit {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nt-in {
+  flex: 1 1 14rem;
+  min-width: 0;
+  height: round(2.6rem, 1px);
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--fg);
+  outline: 0;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.nt-eb {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.nt-eb button.primary {
+  padding: 0 18px;
+}
+
+/* ---------- плашка: «Заметка удалена · Вернуть», «Скопировано», ошибки ---------- */
+.nt-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  min-height: round(3.2rem, 1px);
+  padding: 0 22px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  color: var(--fg);
+  font-weight: 550;
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  pointer-events: none;
+  transition: opacity var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.nt-toast:has(button) {
+  padding-right: 6px;
+}
+
+.nt-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.nt-toast.err span {
+  color: var(--accent-ink);
+}
+
+.nt-toast button.ghost {
+  flex: none;
+  height: round(2.4rem, 1px);
+  background: var(--bg-2);
+}
+
+/* ---------- заметки под встроенным плеером ---------- */
+.w-notes {
+  margin-top: 18px;
+  padding: 12px 12px 10px;
+  border-radius: var(--r-l);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+
+.w-nh {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: round(2.6rem, 1px);
+  padding: 0 4px 10px 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.w-nt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.w-nt svg {
+  color: var(--accent-ink);
+}
+
+.w-nt b {
+  font-size: 1.08rem;
+}
+
+.w-nt span {
+  color: var(--muted);
+}
+
+/* ---------- узко: телефон, боковая панель ---------- */
+@container (max-width: 760px) {
+  .nt-tools {
+    flex-basis: 100%;
+    justify-content: stretch;
+  }
+  .nt-search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  /* кнопки — строкой поровну, с подписями */
+  .nt-btns {
+    flex: 1 1 100%;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 640px) {
+  .nt-card {
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    grid-template-areas: "th vh" "items items";
+    gap: 12px;
+    padding: 12px;
+  }
+  .nt-title {
+    font-size: 1.02rem;
+  }
+  .nt-row {
+    gap: 10px;
+    padding-left: 2px;
+  }
+  .nt-tc {
+    min-width: 3.9rem;
+    padding: 0 10px;
+  }
+}
+
+@container (max-width: 420px) {
+  .nt-vh {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .nt-vacts {
+    margin-left: -8px;
+  }
+  .nt-eb {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .nt-eb button {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nt-toast,
+  .nt-th img,
+  .nt-row,
+  .nt-ra,
+  .nt-tc,
+  .nt-ib {
+    transition: none;
+  }
+}
+
+/* ---------- центровка подписей (замер tools/align: lib-notes, lib-notes-watch) ----------
+   Кнопки раздела ровно 2.6rem — общая добавка .ghost (library.css) им лишняя. */
+:is(.nt-btns, .w-nh, .nt-eb, .nt-toast) button.ghost {
+  padding-bottom: 0;
+}
+
+/* Segoe UI: заглавные ниже середины строки — по замеру подпись на 1 px выше (целым пикселем) */
+.nt-btns button.ghost,
+.nt-eb button.ghost,
+.nt-eb button.primary,
+.nt-toast button.ghost {
+  padding-bottom: 1px;
+}
+
+:is(.nt-btns, .w-nh, .nt-eb, .nt-toast) button.ghost > :is(svg, span) {
+  top: 0;
+}
+
+/* строки текста — целой высоты: кнопки и плашки ниже встают на целые пиксели, а не на
+   доли (кегль страницы плавает с шириной окна) */
+.nt-ttl h1 {
+  line-height: round(2.1rem, 1px);
+}
+
+/* время заметки: Segoe UI — цифры ниже середины строки; по замеру — на 1 px выше */
+.nt-tc {
+  padding-bottom: 1px;
+}
+
+.nt-ttl p,
+.nt-sub {
+  line-height: round(1.4rem, 1px);
+}
+
+.nt-title {
+  line-height: round(1.45rem, 1px);
+}
+
+.nt-tx {
+  line-height: round(1.45rem, 1px);
+}
+
+.notes kbd,
+.w-notes kbd {
+  min-width: round(1.45rem, 1px);
+  height: round(1.45rem, 1px);
+  padding: 0 5px 1px;
+  font-size: round(0.78rem, 1px);
+  line-height: 1;
+}

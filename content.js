@@ -1176,6 +1176,8 @@
     chev: SVG('<path d="M7 10l5 5 5-5"/>'),
     // волна звука и «вперёд» — «Пропускать тишину» (паузы быстрее, silence.js)
     silence: SVG('<path d="M3 10.5v3M6.5 7v10M10 9.5v5"/><path d="M13.2 7.5l4.3 4.5-4.3 4.5M17.4 7.5l4.3 4.5-4.3 4.5"/>'),
+    // листок с загнутым углом и строками — «Заметка» к моменту видео (notes.js)
+    note: SVG('<path d="M5 4h14v10.5L13.5 20H5z"/><path d="M13.5 20v-5.5H19"/><path d="M8.5 8.5h7M8.5 12h4"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1204,6 +1206,7 @@
         <div class="ytcs-group">
         <div class="ytcs-item ytcs-rate" role="group" aria-label="Скорость воспроизведения">${UI_ICONS.speed}<span class="ytcs-label">Скорость</span><button type="button" class="ytcs-step" data-rate="-1" title="Медленнее — Shift+&lt;" aria-label="Медленнее">${UI_ICONS.minus}</button><span class="ytcs-rv">1×</span><button type="button" class="ytcs-step" data-rate="1" title="Быстрее — Shift+&gt;, до 4×" aria-label="Быстрее">${UI_ICONS.plus}</button></div>
         <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="note" title="Заметка к этому моменту — клавиша N">${UI_ICONS.note}<span class="ytcs-label">Заметка</span></button>
         <button class="ytcs-item" role="menuitem" data-act="sleep" aria-expanded="false" hidden>${UI_ICONS.moon}<span class="ytcs-label ytcs-ellipsis">Таймер сна</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
         <div class="ytcs-sleep-opts" role="group" aria-label="Остановить видео через" hidden>
           ${[15, 30, 45, 60, 90].map((m) => `<button type="button" class="ytcs-chip" data-sleep="${m}" aria-pressed="false" aria-label="Через ${m} минут">${m}<small>мин</small></button>`).join("")}
@@ -1378,8 +1381,10 @@
     const player = uiMenu.parentElement;
     const avail = (player?.clientHeight || 0) - 76;
     const extra = uiMenu.scrollHeight - avail;
-    const items = uiMenu.querySelectorAll(".ytcs-item:not([hidden])").length;
-    if (avail > 0 && extra > 0 && items) uiMenu.style.setProperty("--ytcs-ih", `${Math.max(32, 40 - Math.ceil(extra / items))}px`);
+    // пункты только открытого экрана (остальные скрыты); высота — кратная 4 px: середина строки
+    // на целом пикселе экрана и на 150 % (подписи и значки не «плывут»)
+    const items = uiMenu.querySelectorAll(".ytcs-pane:not([hidden]) .ytcs-item:not([hidden])").length;
+    if (avail > 0 && extra > 0 && items) uiMenu.style.setProperty("--ytcs-ih", `${Math.max(32, 40 - 4 * Math.ceil(extra / items / 4))}px`);
   }
 
   // «Сохранить в «…»» — последний плейлист, куда вы сохраняли в окне
@@ -1504,6 +1509,13 @@
       return;
     }
     const act = item.dataset.act;
+    // заметка к этому моменту — поле поверх плеера рисует notes.js
+    if (act === "note") {
+      if (!globalThis.__ytcsNotes) return setNote("Обновите страницу видео (F5).");
+      openMenu(false);
+      globalThis.__ytcsNotes.open();
+      return;
+    }
     // отложить — в очередь с местом, где остановились, и закрыть вкладку
     if (act === "defer") {
       openMenu(false);
