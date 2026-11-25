@@ -101,6 +101,16 @@ window.__errs = []; addEventListener("error", (e) => __errs.push(String(e.messag
     if (qp.get("fail") && op === "playlists") return { ok: false, error: qp.get("fail") };
     if (op === "playlists") return reply(PL.filter(([id]) => id !== "LL").map(([id, title]) => ({ id, title, privacy: "PRIVATE" })));
     if (op === "library") return reply([]);
+    // «Подписки»: &digest=1 — лента из вымышленных видео (без него YouTube «не отвечает», как раньше)
+    if (op === "subsFeed") {
+      if (!qp.get("digest")) return { ok: false, error: "fail" };
+      const items = vids.filter((_, i) => i % 7 === 3).slice(0, 18).map((v, i) => ({
+        id: v.id, title: v.title, channel: v.channel, channelId: "UC" + ("stand" + v.channel.length + "x".repeat(22)).slice(0, 22),
+        avatar: "", len: v.len, views: `${(i + 1) * 7} тыс. просмотров`, ago: "", at: Date.now() - (i + 1) * 3 * 3600e3,
+        short: false, live: false, upAt: 0, upText: "",
+      }));
+      return reply({ items, next: null });
+    }
     if (op === "editMany") return reply(a.videoIds.length);
     if (op === "removeItems") return reply(a.items.length);
     if (op === "page") {
@@ -194,10 +204,12 @@ window.__errs = []; addEventListener("error", (e) => __errs.push(String(e.messag
       setLocal({ queue: out, queuePos: pos });
       return { ok: true, back: items.length, total: out.length };
     }
-    if (msg.type === "queue:top") {
-      const i = q.findIndex((x) => x.id === msg.id);
-      if (i > 0) q.unshift(...q.splice(i, 1));
-      setLocal({ queue: q });
+    if (msg.type === "queue:top" || msg.type === "queue:bottom") {
+      // как qMove в background.js: выбранные — в начало или в конец, в порядке очереди
+      const want = new Set(msg.ids || [msg.id]);
+      const moved = q.filter((x) => want.has(x.id));
+      const rest = q.filter((x) => !want.has(x.id));
+      setLocal({ queue: msg.type === "queue:top" ? [...moved, ...rest] : [...rest, ...moved] });
       return { ok: true };
     }
     if (msg.type === "queue:opts") {

@@ -85,7 +85,7 @@ function fitSearchHint(input) {
   const variants = input.__hints;
   if (!variants?.length) return;
   const cs = getComputedStyle(input);
-  const room = input.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 4;
+  const room = input.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 12; // запас: холст меряет Segoe UI Variable чуть уже, чем рисует поле
   hintCanvas ||= document.createElement("canvas").getContext("2d");
   hintCanvas.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
   input.placeholder = variants.find((v) => hintCanvas.measureText(v).width <= room) || variants[variants.length - 1];

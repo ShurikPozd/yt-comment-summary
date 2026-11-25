@@ -384,35 +384,6 @@ body[data-view="queue"] .seg .modes {
   display: none;
 }
 
-/* средняя ширина: в одну строку не влезает — режимы в строке с поиском плейлиста
-   и «Порядком», длительность — второй строкой во всю ширину (ровно, без переносов внутри) */
-@media (min-width: 1101px) and (max-width: 1580px) {
-  body:not([data-view="queue"]) .filters .seg {
-    display: contents;
-  }
-  body:not([data-view="queue"]) .filters .side-search {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  body:not([data-view="queue"]) .filters .modes {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  body:not([data-view="queue"]) .filters .sort {
-    grid-column: 3;
-    grid-row: 1;
-  }
-  body:not([data-view="queue"]) .filters .durs {
-    grid-column: 2 / -1;
-    grid-row: 2;
-  }
-  /* под «Найти плейлист» вторая строка пустая — список плейлистов поднимается
-     на её высоту (строка длительности 2.3rem + промежуток 12px): без пустоты */
-  body:not([data-view="queue"]) .side {
-    margin-top: calc(-2.3rem - 12px);
-  }
-}
-
 .seg button,
 .chip {
   height: 2.3rem;
@@ -934,21 +905,6 @@ mark {
     flex: 1;
     width: 100%;
   }
-  body[data-view="queue"] .filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: "play sort" "seg seg";
-  }
-  body[data-view="queue"] #q-play {
-    grid-area: play;
-    width: 100%;
-    white-space: nowrap;
-  }
-  body[data-view="queue"] .filters .sort {
-    grid-area: sort;
-  }
-  body[data-view="queue"] .filters .seg {
-    grid-area: seg;
-  }
   /* очередь в узком окне: статистика — строкой над видео, подсказка клавиш не нужна */
   .q-side .q-stats {
     display: none;
@@ -1102,9 +1058,137 @@ body:not([data-view="queue"]) .queue-only {
 }
 
 #q-play {
+  flex: none;
   width: 100%;
   justify-content: center;
   height: 2.6rem;
+  margin-bottom: 12px;
+}
+
+/* строка фильтров под шапкой — только у «Подписок». В «Плейлистах» и «Очереди» над колонкой
+   слева — поиск плейлиста / «Смотреть очередь», а сколько видео, порядок, режимы поиска и
+   длина — в строке над самими видео (#list-bar); итог тоже там, отдельная строка не нужна */
+body:not([data-view="digest"]) .filters,
+#summary,
+body[data-view="queue"].q-none #q-play,
+body[data-view="queue"].q-none #list-bar,
+body.l-none #list-bar {
+  display: none;
+}
+
+/* ---------- строка над видео: «27 видео · осталось ≈ 13 ч» / «8 видео в «…»», порядок, длина ---------- */
+.list-bar {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* 23, а не 24: блоки ниже (резервная копия, уборка) сдвигаются на чётное число px и
+     остаются на той же доле пикселя экрана 150%, что и без строки, — подписи не «плывут» */
+  margin: 0 0 23px;
+}
+
+.lb-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  /* высоты строки — целыми px: иначе всё, что ниже (резервная копия, уборка, карточки),
+     встаёт на полпикселя и подписи в кнопках «плывут» (замер центровки) */
+  min-height: round(2.6rem, 1px);
+}
+
+.list-bar .lb-sort select,
+.list-bar .seg button {
+  height: round(2.3rem, 1px);
+}
+
+.lb-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0;
+  row-gap: 2px;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.lb-count .lb-n {
+  color: var(--fg);
+  font-size: 1.2rem;
+}
+
+.lb-count b {
+  font-weight: 700;
+}
+
+.lb-count .lb-left {
+  white-space: pre;
+}
+
+.lb-count .swap {
+  flex-basis: 100%;
+  color: var(--fg-2);
+  font-size: 0.92rem;
+}
+
+.list-bar .lb-sort {
+  margin-left: auto;
+}
+
+.list-bar .lb-sort select {
+  flex: none;
+  width: auto;
+}
+
+.list-bar .lb-seg .durs {
+  flex-wrap: wrap;
+}
+
+/* узко (боковая панель, телефон): «осталось» — без слова, «Порядок» — без подписи */
+@container (max-width: 520px) {
+  .lb-count .lb-left-w,
+  .list-bar .lb-sort > span {
+    display: none;
+  }
+  /* «Порядок» не помещается рядом со счётом — уходит строкой ниже во всю ширину, а не
+     прижимается вправо с пустотой слева */
+  .list-bar .lb-sort {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+  .list-bar .lb-sort select {
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+}
+
+/* режимы поиска и длина не помещаются одной строкой — без ленты вбок и без пустот:
+   «По смыслу» и «В субтитрах» — ровно по половине строки, длина — переносом, и каждая
+   строка кнопок растянута на всю ширину */
+@container (max-width: 899px) {
+  .list-bar .lb-seg {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .list-bar .lb-seg .modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
+  .list-bar .lb-seg .modes .sem-btn {
+    justify-content: center;
+    min-width: 0;
+  }
+  .list-bar .lb-seg .durs {
+    flex-wrap: wrap;
+  }
+  .list-bar .lb-seg .durs > button {
+    flex: 1 1 auto;
+  }
 }
 
 /* ---------- колонка очереди ---------- */
@@ -1437,8 +1521,14 @@ button.ghost.danger {
   #sync-text {
     display: none;
   }
+  /* «Смотреть очередь» — первой строкой, по ширине колонки очереди */
   #q-play {
-    width: auto;
+    width: 100%;
+    max-width: 760px;
+    /* +0,5 px: раньше над видео стояла строка длины высотой 2.3rem (34,5 px) — с ней всё ниже
+       было на половинной доле пикселя; так «Уборка очереди» и карточки остаются на прежней доле
+       (на 150% иначе подписи в кнопках съезжают на пиксель экрана — замер центровки) */
+    margin: 0 auto 12.5px;
   }
 }
 
@@ -5002,5 +5092,477 @@ button.primary .key {
   }
   .st-lim-range button {
     padding: 0 8px;
+  }
+}
+
+/* ---------- своё меню по правому щелчку на карточке видео (ctxmenu.js) ---------- */
+.ctx-menu {
+  position: fixed;
+  z-index: 2100; /* выше кнопок на обложке (video-actions.js, 2019) */
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 15rem;
+  max-width: min(22rem, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+  scrollbar-width: thin;
+  outline: none;
+  animation: ctx-in 0.12s var(--ease);
+}
+
+.ctx-menu[hidden] {
+  display: none;
+}
+
+@keyframes ctx-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-menu {
+    animation: none;
+  }
+}
+
+/* название видео (или «Выбрано: N видео») — о чём меню */
+.ctx-head {
+  padding: 6px 12px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 20px; /* высота — целыми px: пункты ниже не встают на долю пикселя */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctx-menu.multi .ctx-head {
+  color: var(--fg);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: round(2.5rem, 1px);
+  padding: 0 14px 0 12px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctx-item > svg {
+  flex: none;
+  color: var(--fg-2);
+}
+
+.ctx-item .lbl {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctx-item:hover,
+.ctx-item:focus {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+.ctx-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.ctx-item.danger,
+.ctx-item.danger > svg {
+  color: var(--accent-ink);
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--border);
+  flex: none;
+}
+
+/* в боковой панели и на телефоне — крупнее под палец, во всю доступную ширину */
+@media (max-width: 640px) {
+  .ctx-item {
+    height: round(2.75rem, 1px);
+    padding-bottom: 1px; /* крупный кегль: заглавные ниже середины — строку на 1 px выше (замер) */
+    font-size: 1rem;
+  }
+  .ctx-item > svg {
+    position: relative;
+    top: 1px; /* значок — на высоте заглавных (замер) */
+  }
+}
+
+/* ---------- «Плейлисты»: строка над видео, поиск плейлиста в колонке, кнопка-список ---------- */
+.lb-count .lb-where {
+  color: var(--fg-2);
+  font-size: 1.05rem;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* режимы поиска («По смыслу», «В субтитрах») и длина — две группы с чертой между ними
+   (когда помещаются одной строкой; уже — режимы отдельной строкой, см. @container ниже) */
+@container (min-width: 900px) {
+  .list-bar .lb-seg .modes {
+    padding-right: 16px;
+    margin-right: 8px;
+    border-right: 1px solid var(--border-strong);
+  }
+}
+
+/* поиск плейлиста — первой строкой колонки, той же высоты, что «Смотреть очередь» */
+.side .side-search {
+  flex: none;
+  height: round(2.6rem, 1px);
+  margin-bottom: 12px;
+}
+
+/* открыт плейлист — на карточках его плашки нет; если других плейлистов у видео нет — пусто */
+.card .pls:empty {
+  display: none;
+}
+
+/* выбранный плейлист — плашкой внутри верхнего поля поиска */
+.pl-chip {
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 60%;
+  height: round(2.1rem, 1px);
+  padding: 0 4px 0 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pl-chip[hidden] {
+  display: none;
+}
+
+/* в панели кегль мельче (15px) — подписи плашки и «Плейлист: …» на 1 px выше, иначе «садятся» (замер) */
+body.embed .pl-chip,
+body.embed .pl-pick-btn {
+  padding-bottom: 0.11em;
+}
+
+/* узкое поле (панель 360–420): без лупы — место плашке; пока печатают — плашка уже */
+.search:has(.pl-chip:not([hidden])) {
+  container-type: inline-size;
+}
+
+@container (max-width: 260px) {
+  .search .search-icon {
+    display: none;
+  }
+  .search .pl-chip {
+    max-width: 70%;
+    margin-left: -12px; /* к краю поля: отступ слева — у самого поля */
+    padding-left: 10px;
+  }
+  .search .pl-chip-x {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+  .search:focus-within .pl-chip {
+    max-width: 45%;
+  }
+}
+
+.pl-chip-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-chip-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pl-chip-x:hover,
+.pl-chip-x:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* кнопка-список «Плейлист: Все ▾» — в узком окне и в панели (в широком — колонка слева) */
+.pl-pick {
+  display: none;
+  position: relative;
+  flex: none;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.pl-pick-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: round(2.6rem, 1px);
+  padding: 0 14px 0 16px;
+  border-radius: var(--r-m);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t-fast) ease;
+}
+
+.pl-pick-btn:hover,
+.pl-pick-btn[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.pl-pick-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.pl-pick-k {
+  flex: none;
+  color: var(--muted);
+}
+
+.pl-pick-v {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+.pl-pick-btn::after {
+  content: "";
+  flex: none;
+  margin-left: auto;
+  width: 12px;
+  height: 12px;
+  background: var(--muted);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5l3-3'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: rotate var(--t-fast) var(--ease);
+}
+
+.pl-pick-btn[aria-expanded="true"]::after {
+  rotate: 180deg;
+}
+
+.pl-pop {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: round(min(70vh, 560px), 1px);
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  box-shadow: var(--shadow);
+  animation: ctx-in 0.12s var(--ease);
+}
+
+.pl-pop[hidden] {
+  display: none;
+}
+
+.pp-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: round(2.6rem, 1px);
+  padding: 0 12px;
+  margin-bottom: 6px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--border);
+  background: var(--bg-3);
+  color: var(--muted);
+}
+
+.pp-search:focus-within {
+  border-color: var(--border-strong);
+}
+
+.pp-q {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.pp-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pp-row {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto 1.25rem;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: round(2.6rem, 1px);
+  padding: 0 10px 0.11em; /* Segoe: заглавные ниже середины — строку чуть выше */
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--fg);
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pp-row.act {
+  background: var(--bg-hover);
+}
+
+.pp-row.on .pp-name {
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+.pp-row.dim {
+  opacity: 0.45;
+}
+
+.pp-ic {
+  transform: translateY(0.5px); /* значок — на высоте заглавных: целый px — уже ниже (замер) */
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+/* часы нарисованы ровно по центру квадрата, сердце и библиотека «тяжелее» внизу — часы ниже на ½ px */
+.pp-ic.ic-clock {
+  transform: translateY(1px);
+}
+
+.pp-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pp-n {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-check {
+  grid-column: 4;
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+}
+
+.pp-sep,
+.pp-none {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  height: 30px; /* целыми px: строки ниже не встают на долю пикселя */
+  padding: 0 10px 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pp-none {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.95rem;
+  height: 44px;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.pp-foot {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 8px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.pp-foot .ghost {
+  justify-content: center;
+}
+
+@media (max-width: 1100px) {
+  body[data-view="lib"] .pl-pick {
+    display: block;
+  }
+  body[data-view="lib"] .side .side-search,
+  body[data-view="lib"] .pl-list {
+    display: none;
+  }
+}
+
+/* совсем узко (360–420): «Порядок в плейлистах» и «Резервная копия» — друг под другом */
+@media (max-width: 420px) {
+  .pp-foot {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

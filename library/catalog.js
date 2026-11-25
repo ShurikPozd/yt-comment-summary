@@ -1,7 +1,7 @@
 // «Моя библиотека»: сбор каталога плейлистов и построение поискового индекса.
 
 import { buildIndex } from "./search.js";
-import { $, SPECIAL, WORKERS, inPlWord, setSearchHint, state, videosWord } from "./state.js";
+import { SPECIAL, WORKERS, state } from "./state.js";
 import { kv } from "./store.js";
 import { renderEmpty, renderSync, update } from "./view-lib.js";
 import { fullDue, listsOf, readPlaylist, syncSummary } from "./sync-plan.js";
@@ -168,6 +168,5 @@ export function useCatalog(cat, { keep = false } = {}) {
     return { d, key: best };
   });
   state.order.sort((a, b) => a.key - b.key);
-  setSearchHint($("#q"), `Поиск по ${videosWord(cat.videos.length)} в ${inPlWord(cat.playlists.length)}`, `Поиск по ${videosWord(cat.videos.length)}`, "Поиск видео", "Поиск");
   update({ keep });
 }

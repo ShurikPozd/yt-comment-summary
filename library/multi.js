@@ -21,7 +21,7 @@ const CARDS = "#grid .card, #cont .card, #digest .card";
 const CHUNK = 50; // видео в одном запросе к YouTube
 const svg = (body, size = 20) =>
   `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
-const IC = {
+export const IC = {
   check: (s) => svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', s),
   top: (s) => svg('<path d="M5 4h14"/><path d="M12 20V9"/><path d="M7.5 13.5L12 9l4.5 4.5"/>', s),
   bottom: (s) => svg('<path d="M5 20h14"/><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/>', s),
@@ -143,7 +143,8 @@ function selectAll() {
 document.addEventListener(
   "click",
   (e) => {
-    if (e.button !== 0 || e.altKey || sel.busy) return;
+    // e.ytcsMenu — «Смотреть» из своего меню по правому щелчку (ctxmenu.js): открыть, а не выбрать
+    if (e.button !== 0 || e.altKey || sel.busy || e.ytcsMenu) return;
     const card = e.target.closest?.(CARDS);
     const id = idOf(card);
     if (!id) return;
@@ -192,7 +193,7 @@ document.addEventListener(
 );
 
 // ---------- полоса действий ----------
-function actions() {
+export function actions() {
   if (state.view === "queue")
     return [
       ["top", IC.top, "Наверх", "Поставить выбранные первыми в очереди — в их нынешнем порядке", "accent"],
@@ -282,7 +283,7 @@ function fit() {
   document.body.style.setProperty("--selbar-h", `${Math.ceil(bar.getBoundingClientRect().height)}px`);
 }
 
-function picked() {
+export function picked() {
   const order = orderIds();
   const rank = new Map(order.map((id, i) => [id, i]));
   return [...sel.ids].sort((a, b) => (rank.get(a) ?? 1e9) - (rank.get(b) ?? 1e9));
@@ -300,29 +301,31 @@ function info(id) {
 function onBarClick(e) {
   const act = e.target.closest("[data-sel]")?.dataset.sel;
   if (!act || sel.busy) return;
-  const ids = picked();
   if (act === "clear") return clear();
   if (act === "all") return selectAll();
+  runSel(act, picked(), { fromSel: true });
+}
+
+// Действие над видео: из полосы «Выбрано: N» (fromSel — выбор после него снимается)
+// и из своего меню по правому щелчку (ctxmenu.js) — над одним видео или выбранными.
+export function runSel(act, ids, { fromSel = false } = {}) {
+  if (!ids.length || sel.busy) return;
+  // «В плейлисты» снимает выбор, когда сохранили; «Убрать из плейлиста» показывает ход в полосе
+  if (fromSel && act !== "save" && act !== "pldel") clear();
   if (act === "top" || act === "bottom") return void moveQueue(ids, act);
   if (act === "qdel") return void removeQueue(ids);
   if (act === "save") return void savePlaylists(ids);
   if (act === "queue") return void addQueue(ids);
   if (act === "pldel") return void removeFromPlaylist(ids);
-  if (act === "dq") {
-    clear();
-    return void queueMany(ids);
-  }
-  if (act === "dhide") {
-    clear();
-    return hideMany(ids);
-  }
+  if (act === "dq") return void queueMany(ids);
+  if (act === "dhide") return hideMany(ids);
 }
 
 // ---------- очередь ----------
 async function moveQueue(ids, where) {
   // в порядке очереди, а не как показано (порядок «Сначала короткие» и т. п.)
-  const inQ = state.queue.filter((x) => sel.ids.has(x.id)).map((x) => x.id);
-  clear();
+  const want = new Set(ids);
+  const inQ = state.queue.filter((x) => want.has(x.id)).map((x) => x.id);
   const r = await qmsg({ type: where === "top" ? "queue:top" : "queue:bottom", ids: inQ.length ? inQ : ids });
   if (!r?.ok) return toast("Не получилось — обновите страницу библиотеки");
   toast(where === "top" ? `${videosWord(inQ.length)} — в начале очереди` : `${videosWord(inQ.length)} — в конце очереди`);
@@ -330,8 +333,7 @@ async function moveQueue(ids, where) {
 
 async function removeQueue(ids) {
   const items = snapshot(state.queue, ids, state.qpos);
-  if (!items.length) return clear();
-  clear();
+  if (!items.length) return;
   for (const id of ids) document.querySelectorAll(`.card[data-qid="${CSS.escape(id)}"]`).forEach((c) => c.style.setProperty("opacity", ".4"));
   const r = await qmsg({ type: "queue:remove", ids: items.map((x) => x.rec.id), why: "drop" });
   if (!r?.ok) return toast("Не получилось убрать — обновите страницу библиотеки");
@@ -340,7 +342,6 @@ async function removeQueue(ids) {
 
 async function addQueue(ids) {
   const items = ids.map(info);
-  clear();
   const r = await qmsg({ type: "queue:add", items });
   if (!r?.ok) return toast("Не получилось добавить в очередь — обновите страницу библиотеки");
   const added = Array.isArray(r.added) ? r.added : [];

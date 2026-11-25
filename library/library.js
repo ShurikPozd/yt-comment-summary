@@ -20,6 +20,8 @@ import { yt } from "./youtube.js";
 import "./cover-actions.js"; // «Превью» и «О чём видео» на обложках
 import "./digest.js"; // «Подписки» — дайджест новых видео из подписок
 import "./multi.js"; // выбор нескольких видео: кружок на обложке, Ctrl/Shift, полоса действий внизу
+import "./ctxmenu.js"; // своё меню по правому щелчку на карточке видео
+import "./pl-pick.js"; // «Плейлист: Все ▾» — выбор плейлиста кнопкой-списком (узкое окно, панель)
 
 // ---------- адрес страницы: #q=…&pl=… (можно добавить в закладки) ----------
 export function readHash() {
@@ -111,7 +113,11 @@ $("#q").addEventListener("input", (e) => {
   qTimer = setTimeout(update, 70);
 });
 $("#q").addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && e.target.value) {
+  // Backspace в пустом поле — убрать плашку плейлиста: поиск снова по всем
+  if (e.key === "Backspace" && !e.target.value && state.view === "lib" && state.pl) {
+    e.preventDefault();
+    setPl("");
+  } else if (e.key === "Escape" && e.target.value) {
     e.preventDefault();
     e.target.value = state.q = "";
     update();
@@ -124,6 +130,12 @@ $("#q").addEventListener("keydown", (e) => {
 $("#pl-q").addEventListener("input", (e) => {
   state.plQ = e.target.value;
   renderSide();
+});
+$("#pl-chip").addEventListener("click", (e) => {
+  if (!e.target.closest(".pl-chip-x")) return;
+  e.preventDefault(); // плашка внутри <label> поля — щелчок не уводит фокус куда попало
+  setPl("");
+  $("#q").focus();
 });
 $("#pl-list").addEventListener("click", (e) => {
   const b = e.target.closest("[data-pl]");
@@ -157,11 +169,15 @@ $("#grid").addEventListener("click", (e) => {
       .join("");
   }
 });
+// длина видео — в строке над видео (#list-bar), общая для «Плейлистов» и «Очереди»
+export function setDur(v) {
+  state.dur = v;
+  for (const x of $("#dur").children) x.setAttribute("aria-checked", String(x.dataset.dur === v));
+}
 $("#dur").addEventListener("click", (e) => {
   const b = e.target.closest("[data-dur]");
   if (!b) return;
-  state.dur = b.dataset.dur;
-  for (const x of $("#dur").children) x.setAttribute("aria-checked", String(x === b));
+  setDur(b.dataset.dur);
   update();
 });
 $("#sort").addEventListener("change", (e) => {
@@ -177,8 +193,7 @@ document.addEventListener("click", (e) => {
   else if (a.dataset.act === "open-yt") chrome.tabs.create({ url: "https://www.youtube.com/" });
   else if (a.dataset.act === "reset") {
     state.pl = "";
-    state.dur = "";
-    for (const x of $("#dur").children) x.setAttribute("aria-checked", String(!x.dataset.dur));
+    setDur("");
     update();
   }
 });
