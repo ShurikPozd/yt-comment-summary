@@ -231,7 +231,7 @@ await step("меню кнопки открывается", async () => {
 // Все модули плеера встали на странице видео (модуль без своего ядра или без записи
 // в content_scripts тихо не работает — снаружи этого не видно).
 const PLAYER_MODS = ["SpeedCore", "Speed", "SilenceCore", "Silence", "SleepCore", "Sleep", "Stats", "ResumeCore", "Resume",
-  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual", "IntroCore", "Intro", "FrameShot", "Words", "SpeechCore", "Speech"];
+  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual", "IntroCore", "Intro", "FrameShot", "Words", "SpeechCore", "Speech", "AudioOnlyCore", "AudioOnly"];
 await step("модули плеера загружены", async () => {
   const ctx = extCtx.get(W);
   must(ctx, "мир контент-скриптов расширения на странице не найден");
@@ -244,9 +244,40 @@ await step("модули плеера загружены", async () => {
     await new Promise((r) => setTimeout(r, 250));
   }
   must(!miss.length, "не загрузились: " + miss.join(", "));
-  const main = await evalIn(W, "[window.__ytcsVolumeMain, window.__ytcsDualMain].every(Boolean)");
-  must(main, "скрипты мира страницы (volume-main.js, dualsubs-main.js) не встали");
-  return `${PLAYER_MODS.length} модулей + 2 в мире страницы`;
+  const main = await evalIn(W, "[window.__ytcsVolumeMain, window.__ytcsDualMain, window.__ytcsAudioOnlyMain].every(Boolean)");
+  must(main, "скрипты мира страницы (volume-main.js, dualsubs-main.js, audioonly-main.js) не встали");
+  return `${PLAYER_MODS.length} модулей + 3 в мире страницы`;
+});
+
+// «Только звук» (audioonly.js): Shift+V — кадр скрыт, обложка с названием, плеер просит самое
+// низкое качество; ещё раз Shift+V — видео и прежнее качество («авто») вернулись
+await step("«Только звук» по Shift+V", async () => {
+  await evalIn(W, `(() => { const p = document.getElementById("movie_player"); window.__e2eQ = [];
+    p.setPlaybackQualityRange = (a, b) => window.__e2eQ.push(a + "-" + b); return 1; })()`);
+  const shiftV = async () => {
+    for (const type of ["keyDown", "keyUp"]) await b.send("Input.dispatchKeyEvent", { type, key: "V", code: "KeyV", modifiers: 8, windowsVirtualKeyCode: 86 }, W);
+  };
+  await shiftV();
+  const st = await until(
+    W,
+    `(() => { const p = document.getElementById("movie_player"); const h = document.getElementById("ytcs-audio-only");
+      if (!p.classList.contains("ytcs-ao") || !h || h.hidden) return null;
+      const r = h.getBoundingClientRect(), pr = p.getBoundingClientRect();
+      return { op: getComputedStyle(p.querySelector("video")).opacity, title: h.shadowRoot.querySelector(".title").textContent,
+        full: Math.abs(r.width - pr.width) < 1 && Math.abs(r.height - pr.height) < 1, q: window.__e2eQ.join() }; })()`,
+    5000
+  );
+  must(st, "обложка не появилась (нет #ytcs-audio-only или класса ytcs-ao у плеера)");
+  must(st.op === "0", "кадр видео не скрыт: opacity " + st.op);
+  must(st.title && st.full, "обложка без названия или не во весь плеер: " + JSON.stringify(st));
+  const low = await until(W, "window.__e2eQ.join()", 3000);
+  must(low === "medium-medium", "низкое качество не запрошено: " + (low || "нет вызовов"));
+  await shiftV();
+  const back = await until(W, `!document.getElementById("movie_player").classList.contains("ytcs-ao") && document.getElementById("ytcs-audio-only").hidden && window.__e2eQ.join()`, 3000);
+  must(back === "medium-medium,auto-auto", "видео или качество не вернулись: " + back);
+  const sticky = await evalIn(W, "sessionStorage.getItem('ytcsAudioOnly')");
+  must(sticky === null, "режим остался записан во вкладке");
+  return `обложка «${st.title.slice(0, 30)}», качество: ${back}`;
 });
 
 await step("комментарии собираются через youtubei", async () => {
