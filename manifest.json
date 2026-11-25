@@ -152,7 +152,10 @@
         "dualsubs.js",
         "intro-core.js",
         "intro.js",
-        "frame-shot.js"
+        "frame-shot.js",
+        "words-core.js",
+        "speech-core.js",
+        "speech.js"
       ],
       "run_at": "document_idle"
     },
@@ -176,7 +179,10 @@
         "volume.js",
         "intro-core.js",
         "intro.js",
-        "frame-shot.js"
+        "frame-shot.js",
+        "words-core.js",
+        "speech-core.js",
+        "speech.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

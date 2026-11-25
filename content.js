@@ -695,6 +695,8 @@
     if (mainErr) throw mainErr;
     return main; // пусто — субтитров у видео нет
   }
+  // «Поиск по речи» в плеере (speech.js) берёт субтитры тем же путём, с запасными
+  globalThis.__ytcsGetTranscript = getTranscript;
 
   function decodeBase64Url(s) {
     try {
@@ -1248,6 +1250,8 @@
     note: SVG('<path d="M5 4h14v10.5L13.5 20H5z"/><path d="M13.5 20v-5.5H19"/><path d="M8.5 8.5h7M8.5 12h4"/>'),
     // фотоаппарат — «Снимок кадра» (frame-shot.js)
     camera: SVG('<path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.5-2h4.4l1.5 2h1.8A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/>'),
+    // лупа со звуком внутри — «Поиск по речи» (speech.js)
+    speech: SVG('<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L20 20"/><path d="M8.3 9.3v2.4M10.5 8v5M12.7 9.3v2.4"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1278,6 +1282,7 @@
         <div class="ytcs-item ytcs-rate ytcs-vol" role="group" aria-label="Громкость">${UI_ICONS.volume}<span class="ytcs-label">Громкость</span><button type="button" class="ytcs-step" data-vol="-1" title="Тише" aria-label="Тише">${UI_ICONS.minus}</button><span class="ytcs-rv">100&nbsp;%</span><button type="button" class="ytcs-step" data-vol="1" title="Громче — до 300 %" aria-label="Громче">${UI_ICONS.plus}</button></div>
         <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
         <button class="ytcs-item" role="menuitem" data-act="note" title="Заметка к этому моменту — клавиша N">${UI_ICONS.note}<span class="ytcs-label">Заметка</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="speech" title="Где в видео говорят слово — Ctrl+Shift+F">${UI_ICONS.speech}<span class="ytcs-label">Поиск по речи</span></button>
         <button class="ytcs-item" role="menuitem" data-act="sleep" aria-expanded="false" hidden>${UI_ICONS.moon}<span class="ytcs-label ytcs-ellipsis">Таймер сна</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
         <div class="ytcs-sleep-opts" role="group" aria-label="Остановить видео через" hidden>
           ${[15, 30, 45, 60, 90].map((m) => `<button type="button" class="ytcs-chip" data-sleep="${m}" aria-pressed="false" aria-label="Через ${m} минут">${m}<small>мин</small></button>`).join("")}
@@ -1680,6 +1685,13 @@
       if (!globalThis.__ytcsFrameShot) return setNote("Обновите страницу видео (F5).");
       openMenu(false);
       globalThis.__ytcsFrameShot.shoot();
+      return;
+    }
+    // поиск по речи — поле поверх плеера рисует speech.js
+    if (act === "speech") {
+      if (!globalThis.__ytcsSpeech) return setNote("Обновите страницу видео (F5).");
+      openMenu(false);
+      globalThis.__ytcsSpeech.open();
       return;
     }
     // отложить — в очередь с местом, где остановились, и закрыть вкладку
