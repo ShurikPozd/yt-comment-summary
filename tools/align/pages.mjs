@@ -77,6 +77,10 @@ export const PAGES = [
   { key: "yt-note", url: "/watch?v=dQw4w9WgXcQ&notes=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
   // поле заметки при «Двойных субтитрах» — над строкой перевода, а не поверх неё
   { key: "yt-note-dual", url: "/watch?v=dQw4w9WgXcQ&notes=1&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks') && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
+  // «Поиск по речи» (speech.js): поле и места с таймкодами, плашка «не загрузились · Ещё раз», узкий плеер
+  { key: "yt-speech", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.speech('дом')", settle: 900, roots: shadow("ytcs-speech"), extra: ".tc" },
+  { key: "yt-speech-error", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.speech('', 'error')", settle: 1200, roots: shadow("ytcs-speech") },
+  { key: "yt-speech-narrow", url: "/watch?v=dQw4w9WgXcQ", w: 560, h: 900, wait: ytReady, act: "(document.getElementById('movie_player').style.width = '520px', document.getElementById('movie_player').style.height = '293px', __stand.speech('дом'))", settle: 900, roots: shadow("ytcs-speech"), extra: ".tc" },
   // «Моя библиотека» → «Заметки» и заметки под встроенным плеером (notes-view.js)
   { key: "lib-notes", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 2000, wait: "document.querySelector('.nt-card') && performance.now() > 1500", roots: "[document.getElementById('notes')]" },
   // правка заметки (поле и кнопки в строке) и плашка «Заметка удалена · Вернуть»

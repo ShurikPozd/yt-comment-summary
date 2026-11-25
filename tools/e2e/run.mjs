@@ -231,7 +231,7 @@ await step("меню кнопки открывается", async () => {
 // Все модули плеера встали на странице видео (модуль без своего ядра или без записи
 // в content_scripts тихо не работает — снаружи этого не видно).
 const PLAYER_MODS = ["SpeedCore", "Speed", "SilenceCore", "Silence", "SleepCore", "Sleep", "Stats", "ResumeCore", "Resume",
-  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual"];
+  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual", "Words", "SpeechCore", "Speech"];
 await step("модули плеера загружены", async () => {
   const ctx = extCtx.get(W);
   must(ctx, "мир контент-скриптов расширения на странице не найден");
@@ -247,6 +247,34 @@ await step("модули плеера загружены", async () => {
   const main = await evalIn(W, "[window.__ytcsVolumeMain, window.__ytcsDualMain].every(Boolean)");
   must(main, "скрипты мира страницы (volume-main.js, dualsubs-main.js) не встали");
   return `${PLAYER_MODS.length} модулей + 2 в мире страницы`;
+});
+
+// «Поиск по речи»: Ctrl+Shift+F → поле поверх плеера → «собака» находит «Собаки» и «собаку» → Enter перематывает
+await step("поиск по речи (speech.js)", async () => {
+  const key = (type, k, code, vk, modifiers = 0) => b.send("Input.dispatchKeyEvent", { type, key: k, code, windowsVirtualKeyCode: vk, modifiers }, W);
+  const press = async (k, code, vk, modifiers = 0) => {
+    await key("rawKeyDown", k, code, vk, modifiers);
+    await key("keyUp", k, code, vk, modifiers);
+  };
+  await until(W, "(() => { const v = document.querySelector('#movie_player video'); return v && v.readyState >= 1; })()", 10000);
+  await evalIn(W, "document.querySelector('#movie_player video').pause()");
+  await click(W, "document.querySelector('#movie_player video')");
+  await evalIn(W, "document.querySelector('#movie_player video').pause()");
+  await press("F", "KeyF", 70, 2 | 8); // Ctrl+Shift
+  const root = "document.getElementById('ytcs-speech')?.shadowRoot";
+  const opened = await until(W, `${root}?.querySelector('.box.show') && ${root}.activeElement?.tagName === 'INPUT'`, 5000);
+  must(opened, "Ctrl+Shift+F не открыл поле (или фокус не в поле)");
+  await b.send("Input.insertText", { text: "собака" }, W);
+  const rows = await until(W, `(() => { const r = [...${root}.querySelectorAll('.it')]; return r.length && r.map((x) => x.querySelector('.tc').textContent + ' ' + [...x.querySelectorAll('mark')].map((m) => m.textContent).join('+')); })()`, 8000);
+  must(rows && rows.length === 2, "места не нашлись: " + JSON.stringify(rows) + " / " + (await evalIn(W, `${root}?.querySelector('.state')?.textContent`)));
+  must(rows[0] === "0:37 Собаки" && rows[1] === "3:32 собаку", "не те места или подсветка: " + JSON.stringify(rows));
+  await press("ArrowDown", "ArrowDown", 40);
+  await press("Enter", "Enter", 13);
+  const t = await until(W, "(() => { const v = document.querySelector('#movie_player video'); return Math.abs(v.currentTime - 212) < 1.5 && v.currentTime; })()", 5000);
+  must(t, "Enter не перемотал на 3:32: " + (await evalIn(W, "document.querySelector('#movie_player video').currentTime")));
+  must(await evalIn(W, `!${root}.querySelector('.box.show')`), "после перехода поле не закрылось");
+  await evalIn(W, "document.querySelector('#movie_player video').pause()");
+  return `2 места, Enter → ${t.toFixed(1)} с`;
 });
 
 await step("комментарии собираются через youtubei", async () => {

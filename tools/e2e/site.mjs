@@ -10,6 +10,8 @@ const FX = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url)
 const PLAYER_JS = readFileSync(new URL("./player.js", import.meta.url));
 
 export const VIDEO = { id: "e2eVideo001", title: "Тестовое видео: как утеплить дом", channel: "Тестовый канал", duration: 300 };
+// субтитры видео: [секунда, фраза]
+export const TRANSCRIPT = [[4, "Привет! Сегодня утепляем дом"], [37, "Собаки тоже любят тёплый пол"], [95, "[музыка]"], [148, "Минвата для стен и крыши"], [212, "А теперь кормим собаку и заканчиваем"]];
 // версия клиента со снятой страницы — content.js берёт её из ytcfg
 const CLIENT_VERSION = "2.20261123.08.00";
 
@@ -138,6 +140,13 @@ export function route({ url, method, headers = {}, postData = "" }, log) {
       if (req.continuation === "E2E_COMMENTS" || req.continuation === "E2E_TOP" || req.continuation === "E2E_NEW") return text(FX("next-comments.json"), "application/json");
       if (req.videoId) return text(FX("next-video.json"), "application/json");
       return json({ responseContext: {} });
+    }
+    // расшифровка видео («О видео», «Поиск по речи»): панель get_panel в нынешнем виде
+    if (p === "/youtubei/v1/get_panel" && method === "POST") {
+      log.innertube.push("get_panel");
+      return json({ items: TRANSCRIPT.map(([t, text]) => ({ macroMarkersPanelItemViewModel: {
+        item: { timelineItemViewModel: { contentItems: [{ transcriptSegmentViewModel: { simpleText: text, timestamp: `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}` } }] } },
+        onTap: { innertubeCommand: { watchEndpoint: { startTimeSeconds: t } } } } })) });
     }
     if (p.startsWith("/youtubei/")) return json({ responseContext: {} });
     if (p === "/oembed") return json({ title: VIDEO.title, author_name: VIDEO.channel, thumbnail_url: "" });

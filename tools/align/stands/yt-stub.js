@@ -2,7 +2,8 @@
 // ответы «главного мира» (clip-main.js, playlists-main.js) и помощники для замера:
 //   __stand.preview() — окно превью, __stand.clip() — окно клипа,
 //   __stand.playlists() — «Сохранить в плейлисты», __stand.menu() — меню кнопки в плеере,
-//   __stand.toast() — плашка плеера, __stand.plToast() — плашка плейлистов на странице.
+//   __stand.toast() — плашка плеера, __stand.plToast() — плашка плейлистов на странице,
+//   __stand.speech(запрос, вид) — «Поиск по речи» с вымышленными субтитрами.
 // Адрес с &resume=1 — ролик открыт заново с нуля, а место сохранено: плашка
 // «Вы остановились на 2:30 · Продолжить» (resume.js). С &sleep=fade — видео «играет» за 8 с
 // до конца: таймер сна «в конце видео» сразу даёт плашку затухания с кнопкой (sleep.js).
@@ -141,6 +142,22 @@
     // поле заметки поверх плеера и подсказка у точки на полосе (notes.js)
     note: () => globalThis.__ytcsNotes?.open(),
     noteTip: () => document.getElementById("ytcs-note-marks")?.shadowRoot.querySelectorAll(".d")[1]?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true })),
+    // «Поиск по речи» (speech.js): окно с найденным; kind — "none" (нет субтитров) или "error"
+    speech: async (q = "дом", kind = "") => {
+      const lines = [[4, "Привет! Сегодня строим уютный дом в Майнкрафте"], [37, "Сначала фундамент: дом без него долго не простоит"],
+        [95, "Окна ставим так, чтобы в доме было светло весь день, а свет падал на стол"], [148, "Крыша — самое долгое, но и самое красивое"],
+        [212, "Вот и готов наш дом. Подписывайтесь, дальше будет сад!"]];
+      globalThis.__ytcsGetTranscript = async () => {
+        if (kind === "error") throw new Error("transcript:network стенд");
+        return { segments: kind === "none" ? [] : lines.map(([t, text]) => ({ t, text })), chapters: [] };
+      };
+      globalThis.__ytcsSpeech?.open();
+      const inp = document.getElementById("ytcs-speech")?.shadowRoot.querySelector("input");
+      if (inp && !kind) {
+        inp.value = q;
+        inp.dispatchEvent(new Event("input"));
+      }
+    },
     toast: () => stub.storage.local.set({ settings: { ...store.settings, focusMode: true } }),
     // плашка плейлистов на странице: «быстрое сохранение» в последний плейлист
     plToast: () => globalThis.__ytcsPlaylists?.quickSave(),

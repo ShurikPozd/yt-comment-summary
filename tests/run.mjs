@@ -1986,5 +1986,61 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(N.addNote(full, A, { t: 1, text: "лишняя" }).why === "full", "больше 300 заметок у видео — нельзя");
 }
 
+// ---------- поиск по речи в видео (speech-core.js на words-core.js) ----------
+{
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL("../words-core.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext(readFileSync(new URL("../speech-core.js", import.meta.url), "utf8"), ctx);
+  const S = ctx.__ytcsSpeechCore;
+  const J = JSON.stringify;
+  ok(S && ctx.__ytcsWords?.stem("котики") === stem("котики"), "ядро речи загрузилось; основы слов — те же, что в поиске библиотеки");
+  const ix = S.buildIndex([
+    { t: 12, text: "Сегодня строим дом в Майнкрафте" },
+    { t: 3, text: "Привет, друзья!" },
+    { t: 20.5, text: "Сначала  ставим ёлку и забор" },
+    { t: 31, text: "Собаки любят этот дом" },
+    { t: 40, text: "а потом мы кормим собаку" },
+    { t: 47, text: "и строим второй" },
+    { t: 55, text: "дом для собаки — будку" },
+    { t: 62, text: "" },
+    { t: "x", text: "без времени" },
+  ]);
+  ok(ix.segs.length === 7 && ix.segs[0].t === 3 && ix.segs[2].text === "Сначала ставим ёлку и забор", "строки: по времени, пустые и без времени — мимо, пробелы схлопнуты");
+  const ts = (q) => (S.find(ix, q)?.results || []).map((r) => r.t);
+  ok(S.find(ix, "") === null && S.find(ix, " д ") === null && S.find(ix, "дом") !== null, "пустой запрос и одна буква — не ищем");
+  ok(J(ts("дом")) === J([12, 31, 55]), "слово — все места по времени");
+  ok(J(ts("ДОМ")) === J(ts("дом")) && J(ts("елку")) === J([20.5]) && J(ts("ЁЛКУ")) === J([20.5]), "регистр и ё/е не важны");
+  ok(J(ts("майнкр")) === J([12]) && J(ts("айнкр")) === J([]), "по началу слова, не с середины");
+  ok(J(ts("собака")) === J([31, 40, 55]) && J(ts("собаки")) === J([31, 40, 55]), "русские окончания: собака → собаки, собаку");
+  ok(J(ts("строить")) === J([12, 47]), "глагол: строить → строим");
+  const ph = S.find(ix, "строим дом");
+  ok(J(ph.results.map((r) => r.t)) === J([12]) && !ph.partial, "фраза — слова подряд");
+  const cross = S.find(ix, "второй дом");
+  ok(J(cross.results.map((r) => [r.t, r.last])) === J([[47, 6]]) && !cross.partial, "фраза через границу строк — с первой строки, до следующей");
+  const loose = S.find(ix, "дом любят");
+  ok(loose.partial && J(loose.results.map((r) => r.t)) === J([31]), "подряд нет — места, где все слова рядом");
+  ok(J(ts("дом гараж")) === J([]), "одного слова нет — ничего");
+  // подсветка и обрезка
+  const one = S.find(ix, "ёлку").results[0];
+  const parts = S.snippet(ix, one);
+  ok(J(parts) === J([{ t: "Сначала ставим ", hit: false }, { t: "ёлку", hit: true }, { t: " и забор", hit: false }]), "подсветка исходного слова (с «ё»)");
+  const cp = S.snippet(ix, cross.results[0]);
+  ok(cp.map((p) => p.t).join("") === "и строим второй дом для собаки — будку" && cp.filter((p) => p.hit).map((p) => p.t).join("|") === "второй|дом", "фраза через строки — текст обеих строк, подсвечены оба слова");
+  const long = S.buildIndex([{ t: 0, text: "раз ".repeat(80) + "нужное слово " + "два ".repeat(80) }]);
+  const lp = S.snippet(long, S.find(long, "нужное").results[0]);
+  const lt = lp.map((p) => p.t).join("");
+  ok(lp[0].t === "…" && lp[lp.length - 1].t === "…" && lt.length <= S.MAX_SNIPPET + 2 && lp.some((p) => p.hit && p.t === "нужное") && !/ …$|^… /.test(lt) && !/\bра…|…ва\b/.test(lt), "длинная строка — кусок вокруг найденного, по границе слов, с «…»");
+  // выбор сразу и подписи
+  const all = S.find(ix, "дом").results;
+  ok(S.nearest(all, 0) === 0 && S.nearest(all, 32) === 1 && S.nearest(all, 100) === 0 && S.nearest([], 5) === -1, "сразу выбрано ближайшее место после текущего времени");
+  ok(S.fmtTime(75) === "1:15" && S.fmtTime(3725) === "1:02:05" && S.fmtTime(20.5) === "0:20", "время 1:15 и 1:02:05");
+  ok(S.placesWord(1) === "1 место" && S.placesWord(3) === "3 места" && S.placesWord(11) === "11 мест" && S.placesWord(22) === "22 места" && S.placesWord(25) === "25 мест", "склонение «место»");
+  // скорость: 2,5 часа автосубтитров
+  const big = S.buildIndex(Array.from({ length: 4000 }, (_, i) => ({ t: i * 2.2, text: `строка номер ${i} про разные вещи и немного про дом` })));
+  const t0 = performance.now();
+  for (const q of ["д", "до", "дом", "про дом", "немного про"]) S.find(big, q);
+  ok(performance.now() - t0 < 600 && S.find(big, "немного про дом").results.length === 4000, "2,5 ч субтитров — поиск на каждую букву без задержки");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);
