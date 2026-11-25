@@ -10,6 +10,10 @@
 // канала «…» · Сбросить» (volume.js); __stand.playerPane() — экран меню «Плеер ›».
 // С &dual=1 — «Двойные субтитры» (dualsubs.js) с одной строкой (перевод не пришёл),
 // с &dual=2 — оригинал и перевод; ответы плеера и timedtext — вымышленные.
+// С &intro=1 у канала отмечено вступление до 0:42 — ролик с начала, плашка «Вступление
+// пропущено · Вернуть» (intro.js); с &intro=offer вы уже дважды перематывали вступление
+// канала в других видео — __stand.introSeek() перематывает и здесь: «Пропускать вступление
+// канала — до 0:41? · Пропускать · Не надо».
 (() => {
   const listeners = [];
   const msgListeners = [];
@@ -19,6 +23,8 @@
   if (q.get("volume")) store.channelVolumes = { [CH]: { v: 150, n: "Уютный Майнкрафт", t: Date.now() } };
   // &notes=1 — заметки с таймкодами к этому видео (точки на полосе, notes.js)
   if (q.get("notes")) store.tcNotes = { dQw4w9WgXcQ: { title: "Стенд", channel: "Канал", len: 213, at: 3, items: [{ t: 18, text: "Вступление: о чём ролик", at: 1 }, { t: 95, text: "Главная мысль — без неё дальше не понять", at: 2 }, { t: 176, text: "Итог и ссылки в описании", at: 3 }] } };
+  if (q.get("intro") === "1") store.channelIntros = { [CH]: { e: 42, n: "Уютный Майнкрафт", t: Date.now() } };
+  if (q.get("intro") === "offer") store.introHints = { [CH]: { s: [{ v: "aaaaaaaaaaa", to: 41, at: 1 }, { v: "bbbbbbbbbbb", to: 44, at: 2 }], no: 0 } };
   if (q.get("resume")) store.resumeLong = { dQw4w9WgXcQ: { t: 150, d: 213, at: Date.now() - 3600000 } };
   const stub = {
     runtime: {
@@ -51,10 +57,10 @@
   // у макетного <video> нет файла — длительность и время задаём сами
   const mv = document.querySelector("#movie_player video");
   Object.defineProperty(mv, "duration", { configurable: true, get: () => 213 });
-  let ct = q.get("resume") ? 0 : q.get("sleep") ? 205 : 61.4;
+  let ct = q.get("resume") || q.get("intro") ? 0 : q.get("sleep") ? 205 : 61.4;
   Object.defineProperty(mv, "currentTime", { configurable: true, get: () => ct, set: (v) => (ct = v) });
   Object.defineProperty(mv, "readyState", { configurable: true, get: () => 4 });
-  if (q.get("sleep") || q.get("volume")) mv.classList.add("html5-main-video");
+  if (q.get("sleep") || q.get("volume") || q.get("intro")) mv.classList.add("html5-main-video");
   if (q.get("sleep")) {
     Object.defineProperty(mv, "paused", { configurable: true, get: () => false });
   }
@@ -137,6 +143,12 @@
       document.querySelector(".ytcs-btn")?.click();
       await new Promise((r) => setTimeout(r, 300));
       document.querySelector('.ytcs-menu [data-pane-open="player"]')?.click();
+    },
+    // вы сами перематываете вступление (щелчок по полосе): 0:00 → 0:43 (intro.js)
+    introSeek: () => {
+      document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      mv.currentTime = 43;
+      mv.dispatchEvent(new Event("seeking"));
     },
     // поле заметки поверх плеера и подсказка у точки на полосе (notes.js)
     note: () => globalThis.__ytcsNotes?.open(),

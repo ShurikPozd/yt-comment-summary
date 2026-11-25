@@ -857,6 +857,290 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(!(A in store.channelVolumes) && sets.at(-1) === 80 && gain() === 1, "«Сбросить»: канал забыт, снова 80 %");
 }
 
+// ---------- пропуск вступлений по каналам (intro-core.js) ----------
+{
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(new URL("../intro-core.js", import.meta.url), "utf8"), ctx);
+  const I = ctx.__ytcsIntroCore;
+  const A = "UC" + "a".repeat(22);
+  const B = "UC" + "b".repeat(22);
+  const v = (c) => c.repeat(11);
+  ok(I.cleanEnd(42.46) === 42.5 && I.cleanEnd(2) === null && I.cleanEnd(301) === null && I.cleanEnd("x") === null && I.cleanEnd(300) === 300, "конец вступления: 3…300 с, до десятых");
+  ok(I.clock(42.9) === "0:42" && I.clock(75) === "1:15" && I.clock(-3) === "0:00", "время «0:42»");
+  let m = I.remember({}, A, 42.46, "  Канал  ", 10);
+  ok(m[A].e === 42.5 && m[A].n === "Канал" && m[A].t === 10, "запомнить вступление канала");
+  ok(Object.keys(I.remember(m, "@handle", 40, "x")).length === 1 && Object.keys(I.remember(m, B, 1, "x")).length === 1, "без id канала и с неверным временем — не запоминаем");
+  ok(I.remember(m, A, 30, "", 20)[A].n === "Канал" && !(A in I.forget(m, A)) && A in m, "пустое название не затирает прежнее; забыть — исходный объект цел");
+  let big = {};
+  for (let i = 0; i < 5; i++) big = I.remember(big, "UC" + String(i).repeat(22), 20, "c" + i, i, 3);
+  ok(Object.keys(big).length === 3 && !("UC" + "0".repeat(22) in big), "больше предела — вытесняются самые старые");
+  ok(I.touch(big, "UC" + "2".repeat(22), "", 100)["UC" + "2".repeat(22)].t === 100 && I.touch(big, A, "", 1) === big, "открытый канал — свежий; неизвестный — без изменений");
+  ok(I.entryOf({ [A]: { e: "abc" } }, A) === null && I.entryOf({ [A]: { e: 20 } }, A).e === 20, "битая запись не читается");
+  ok(JSON.stringify(I.list({ [A]: { e: 20, n: "a", t: 1 }, [B]: { e: 30, n: "b", t: 5 } }).map((e) => e.id)) === JSON.stringify([B, A]), "список: сначала недавние");
+  // когда пропускать
+  const base = { enabled: true, end: 42, current: 0.3, duration: 600, live: false, urlT: false, resume: false, ad: false };
+  const P = (o) => JSON.stringify(I.plan({ ...base, ...o }));
+  ok(P({}) === JSON.stringify({ to: 42 }) && P({ current: 4.9 }) === JSON.stringify({ to: 42 }), "видео с начала — к концу вступления");
+  ok(P({ enabled: false }) === "null" && P({ end: null }) === "null", "выключено или вступление не отмечено — не трогаем");
+  ok(P({ live: true }) === "null" && P({ ad: true }) === "null", "эфир и реклама — не трогаем");
+  ok(P({ urlT: true }) === "null" && P({ resume: true }) === "null", "ссылка с &t= и «С того же места» — не трогаем");
+  ok(P({ current: 6 }) === "null" && P({ current: 41.5, end: 42 }) === "null", "видео начато не с начала (история YouTube) — не трогаем");
+  ok(P({ duration: 60 }) === "null" && P({ duration: NaN }) === "null" && P({ duration: 72 }) === JSON.stringify({ to: 42 }), "ролик ненамного длиннее вступления — не трогаем");
+  ok(I.plan(null) === null, "без данных — null");
+  // сами перематываете вступление
+  ok(I.isIntroSeek(2, 40) && I.isIntroSeek(55, 70) && !I.isIntroSeek(61, 80) && !I.isIntroSeek(10, 12) && !I.isIntroSeek(30, 10) && !I.isIntroSeek(0, 400), "перемотка вперёд в первые 60 с");
+  let h = I.observe({}, A, v("a"), 40.2, 1);
+  ok(I.suggest(h, A) === null, "одно видео — ещё не предлагаем");
+  h = I.observe(h, A, v("a"), 41, 2);
+  ok(h[A].s.length === 1 && I.suggest(h, A) === null, "одно видео дважды — одно место (последнее)");
+  h = I.observe(h, A, v("b"), 44, 3);
+  ok(I.suggest(h, A) === 41, "2 видео, место ±5 с — предлагаем самое раннее");
+  let h2 = I.observe(I.observe({}, A, v("a"), 40, 1), A, v("b"), 90, 2);
+  ok(I.suggest(h2, A) === null, "разные места — не предлагаем");
+  h2 = I.observe(h2, A, v("c"), 88, 3);
+  ok(I.suggest(h2, A) === 88, "совпали два других видео — их место");
+  let h3 = {};
+  for (const [i, c] of ["a", "b", "c", "d", "e", "f"].entries()) h3 = I.observe(h3, A, v(c), 20 + i * 30, i);
+  ok(h3[A].s.length === 4 && h3[A].s[0].v === v("c"), "не больше 4 мест на канал — старые уходят");
+  ok(I.suggest(I.decline(h, A, 9), A) === null && I.decline(h, A, 9)[A].no === 9, "«Не надо» — больше не предлагаем");
+  ok(I.observe(I.decline(h, A, 9), A, v("z"), 41, 10)[A].no === 9, "отказ переживает новые места");
+  ok(!(A in I.clearHints(h, A)) && A in h, "запомнили — наблюдения канала убраны");
+  ok(I.observe(h, "x", v("a"), 40) === h && I.observe(h, A, "bad", 40) === h && I.observe(h, A, v("a"), 1) === h, "без канала, видео или с неверным местом — не наблюдаем");
+  let many = {};
+  for (let i = 0; i < 5; i++) many = I.observe(many, "UC" + String(i).repeat(22), v("a"), 30, i, 3);
+  ok(Object.keys(many).length === 3 && !("UC" + "0".repeat(22) in many), "наблюдения: больше предела каналов — уходят старые");
+}
+
+// ---------- пропуск вступлений на странице (intro.js с заглушкой плеера) ----------
+{
+  const A = "UC" + "a".repeat(22);
+  const B = "UC" + "b".repeat(22);
+  const C3 = "UC" + "c".repeat(22);
+  const docL = {};
+  const winL = {};
+  const intervals = [];
+  let timeouts = [];
+  let now = 5_000_000;
+  const store = { settings: {}, channelIntros: { [A]: { e: 42, n: "Майнкрафт", t: 1 } } };
+  // элемент-заглушка: querySelector(sel) — всегда один и тот же потомок, слушатели — по типам
+  const fakeEl = () => {
+    const cls = new Set();
+    const kids = {};
+    const on = {};
+    const el = {
+      style: {},
+      title: "",
+      hidden: false,
+      textContent: "",
+      innerHTML: "",
+      parentElement: null,
+      scrollWidth: 0,
+      clientWidth: 0,
+      offsetHeight: 0,
+      on,
+      classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), toggle: (c, v) => (v ? cls.add(c) : cls.delete(c)), contains: (c) => cls.has(c) },
+      addEventListener: (t, f) => (on[t] ||= []).push(f),
+      appendChild(ch) {
+        ch.parentElement = el;
+      },
+      attachShadow: () => el,
+      querySelector: (sel) => (kids[sel] ||= fakeEl()),
+      getBoundingClientRect: () => ({ top: 0, bottom: 0, height: 0 }),
+      click: () => (on.click || []).forEach((f) => f({})),
+    };
+    return el;
+  };
+  class HTMLVideoElement {}
+  const video = Object.assign(new HTMLVideoElement(), { currentTime: 0, duration: 600, readyState: 4, seeking: false });
+  const player = Object.assign(fakeEl(), { ad: false, querySelector: (sel) => (sel.includes("video") ? video : null) });
+  player.classList = { contains: (c) => c === "ad-showing" && player.ad };
+  const yt = { info: { videoId: "aaaaaaaaaaa", channelId: A, name: "Майнкрафт", live: false } };
+  let busy = false;
+  let lastHost = null;
+  const ctx = {
+    console,
+    JSON,
+    Math,
+    Number,
+    Object,
+    String,
+    Set,
+    Map,
+    Array,
+    Promise,
+    URLSearchParams,
+    HTMLVideoElement,
+    location: { pathname: "/watch", search: "?v=aaaaaaaaaaa", hash: "" },
+    setInterval: (fn, ms) => (intervals.push({ fn, ms }), intervals.length),
+    clearInterval() {},
+    setTimeout: (fn, ms) => (timeouts.push({ fn, at: now + (ms || 0) }), timeouts.length + 1000),
+    clearTimeout: (id) => id > 1000 && timeouts[id - 1001] && (timeouts[id - 1001].fn = () => {}),
+    Date: { now: () => now },
+    CustomEvent: class {
+      constructor(type, o) {
+        this.type = type;
+        this.detail = o?.detail;
+      }
+    },
+    document: {
+      getElementById: (id) => (id === "movie_player" ? player : null),
+      querySelector: () => null,
+      createElement: () => (lastHost = fakeEl()), // плашка — последний созданный элемент
+      addEventListener: (ev, fn) => (docL[ev] ||= []).push(fn),
+      removeEventListener: (ev, fn) => (docL[ev] = (docL[ev] || []).filter((f) => f !== fn)),
+      dispatchEvent: (e) => (docL[e.type] || []).slice().forEach((f) => f(e)),
+    },
+    window: { addEventListener: (ev, fn) => (winL[ev] ||= []).push(fn) },
+    chrome: {
+      runtime: { id: "ext" },
+      storage: {
+        local: {
+          get: async (k) => Object.fromEntries([].concat(k).filter((x) => x in store).map((x) => [x, structuredClone(store[x])])),
+          set: async (o) => Object.assign(store, structuredClone(o)),
+        },
+        onChanged: { addListener() {} },
+      },
+    },
+  };
+  ctx.window.top = ctx.window;
+  ctx.globalThis = ctx;
+  ctx.__ytcsResume = { busy: () => busy };
+  vm.createContext(ctx);
+  const fire = (type, detail, target) => ctx.document.dispatchEvent(Object.assign(new ctx.CustomEvent(type, { detail }), target ? { target } : {}));
+  ctx.document.addEventListener("ytcs-speed:ask", () => fire("ytcs-speed:info", JSON.stringify(yt.info)));
+  vm.runInContext(readFileSync(new URL("../intro-core.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext(readFileSync(new URL("../intro.js", import.meta.url), "utf8"), ctx);
+  await new Promise((r) => setTimeout(r, 0)); // хранилище прочитано
+  // таймеры по очереди: обработчик может завести новый
+  const wait = (ms) => {
+    const end = now + ms;
+    for (;;) {
+      const next = timeouts.filter((t) => t.at <= end && !t.done).sort((a, b) => a.at - b.at)[0];
+      if (!next) break;
+      now = Math.max(now, next.at);
+      next.done = true;
+      next.fn();
+    }
+    now = end;
+  };
+  const tick = () => intervals.find((t) => t.ms === 500).fn();
+  const X = ctx.__ytcsIntro;
+  const kind = () => X.debug().kind;
+  // кнопки плашки: .a — «Вернуть» / «Отменить» / «Пропускать», .b — «Не надо»
+  const btn = (sel) => lastHost.querySelector(sel).click();
+  const open = (id, info, search = "") => {
+    ctx.location.search = "?v=" + id + search;
+    yt.info = { videoId: id, ...info };
+    video.currentTime = 0;
+    now += 1000;
+    tick();
+    fire("loadedmetadata", null, video);
+  };
+  const userSeek = (to) => {
+    fire("pointerdown", null, { closest: () => null });
+    video.currentTime = to;
+    fire("seeking", null, video);
+  };
+  tick();
+  ok(video.currentTime === 42 && kind() === "skipped", "отмеченное вступление канала — пропущено, плашка «Вступление пропущено»");
+  btn(".a");
+  ok(video.currentTime === 0 && kind() === "", "«Вернуть» — к началу, плашка убрана");
+  tick();
+  ok(video.currentTime === 0, "…и в этом видео больше не пропускаем");
+  open("bbbbbbbbbbb", { channelId: A, name: "Майнкрафт", live: false }, "&t=30s");
+  ok(video.currentTime === 0, "ссылка с &t= — вступление не пропускаем");
+  busy = true;
+  open("ccccccccccc", { channelId: A, name: "Майнкрафт", live: false });
+  ok(video.currentTime === 0, "«С того же места» возвращает место — не пропускаем");
+  busy = null;
+  open("ddddddddddd", { channelId: A, name: "Майнкрафт", live: false });
+  ok(video.currentTime === 0, "«С того же места» ещё не разобрал ролик — ждём");
+  now += 7000;
+  tick();
+  ok(video.currentTime === 42, "…а не ответил за 6 с — пропускаем");
+  busy = false;
+  open("eeeeeeeeeee", { channelId: A, name: "Майнкрафт", live: true });
+  ok(video.currentTime === 0, "эфир — не трогаем");
+  player.ad = true;
+  open("fffffffffff", { channelId: A, name: "Майнкрафт", live: false });
+  ok(video.currentTime === 0, "реклама — ждём");
+  player.ad = false;
+  tick();
+  ok(video.currentTime === 42, "после рекламы — пропускаем");
+  video.currentTime = 300;
+  open("ggggggggggg", { channelId: A, name: "Майнкрафт", live: false });
+  video.currentTime = 300; // YouTube начал с места по своей истории
+  tick();
+  ok(video.currentTime === 300, "YouTube начал ролик не с начала — не трогаем");
+  // сами перематываете вступление канала B в двух видео
+  open("hhhhhhhhhhh", { channelId: B, name: "Лекции", live: false });
+  userSeek(10);
+  userSeek(20);
+  userSeek(40);
+  wait(1600);
+  wait(400);
+  ok(store.introHints?.[B]?.s?.length === 1 && store.introHints[B].s[0].to === 40, "серия перемоток в начале — одно место (0:40)");
+  ok(kind() !== "offer", "одно видео — ещё не предлагаем");
+  open("iiiiiiiiiii", { channelId: B, name: "Лекции", live: false });
+  userSeek(43);
+  wait(1600);
+  ok(kind() === "offer", "второе видео, то же место — «Пропускать вступление канала — до 0:40?»");
+  btn(".a");
+  wait(400);
+  ok(store.channelIntros?.[B]?.e === 40 && kind() === "saved" && !(B in store.introHints), "«Пропускать» — запомнено до 0:40, наблюдения убраны");
+  open("lllllllllll", { channelId: B, name: "Лекции", live: false });
+  ok(video.currentTime === 40, "следующее видео канала — с 0:40");
+  // «Не надо»
+  const D = "UC" + "d".repeat(22);
+  store.introHints = {};
+  for (const id of ["mmmmmmmmmmm", "nnnnnnnnnnn"]) {
+    open(id, { channelId: D, name: "Новости", live: false });
+    userSeek(25);
+    wait(1600);
+  }
+  ok(kind() === "offer", "канал D — предложение");
+  btn(".b");
+  wait(400);
+  ok(store.introHints?.[D]?.no > 0 && !(D in store.channelIntros) && kind() === "", "«Не надо» — не запомнено и больше не спрашиваем");
+  open("ooooooooooo", { channelId: D, name: "Новости", live: false });
+  userSeek(26);
+  wait(1600);
+  ok(kind() !== "offer", "после «Не надо» — не предлагаем");
+  // перемотка не с начала (с 1:30) — не вступление
+  const E = "UC" + "e".repeat(22);
+  for (const id of ["ppppppppppp", "qqqqqqqqqqq"]) {
+    open(id, { channelId: E, name: "Кино", live: false });
+    video.currentTime = 90;
+    fire("timeupdate", null, video);
+    userSeek(120);
+    wait(1600);
+  }
+  ok(kind() !== "offer" && !store.introHints?.[E], "перемотка дальше первой минуты — не вступление");
+  const keydown = (code, shift = true) => (winL.keydown || []).forEach((f) => f({ code, shiftKey: shift, ctrlKey: false, altKey: false, metaKey: false, repeat: false, isComposing: false, composedPath: () => [{ tagName: "DIV" }], preventDefault() {}, stopImmediatePropagation() {} }));
+  open("jjjjjjjjjjj", { channelId: C3, name: "Подкаст", live: false });
+  video.currentTime = 30.4;
+  keydown("KeyI");
+  wait(400);
+  ok(store.channelIntros?.[C3]?.e === 30.4 && kind() === "marked", "Shift+I — «вступление до сюда» (0:30)");
+  ok(X.current()?.label === "0:30" && X.here().label === "0:30", "для меню: вступление канала и место видео");
+  keydown("KeyI", false);
+  ok(store.channelIntros?.[C3]?.e === 30.4, "просто I — не наша клавиша");
+  video.currentTime = 1;
+  ok(!X.mark() && kind() === "range", "в самом начале отметить нельзя — подсказка");
+  open("kkkkkkkkkkk", { channelId: C3, name: "Подкаст", live: false });
+  ok(video.currentTime === 30.4, "следующее видео канала — вступление пропущено");
+  ok(X.reset() && kind() === "reset", "«Сбросить вступление канала»");
+  wait(400);
+  ok(!(C3 in store.channelIntros), "канал забыт");
+  // «Отменить» на плашке «Вступление канала — до …»
+  video.currentTime = 50;
+  keydown("KeyI");
+  btn(".a");
+  wait(400);
+  ok(!(C3 in store.channelIntros) && kind() === "undone", "«Отменить» — отметка снята");
+}
+
 // ---------- с того же места после обновления (resume-core.js) ----------
 {
   const ctx = vm.createContext({});
