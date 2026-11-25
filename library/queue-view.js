@@ -112,6 +112,7 @@ export function updateQueue({ keep = false } = {}) {
   const y = window.scrollY;
   state.list = list;
   state.meta = meta;
+  state.qFound = computed.list; // всё подходящее, вместе с «Продолжить смотреть», — для строки над видео
   state.shown = 0;
   $("#grid").textContent = "";
   renderQueueSide();
@@ -160,11 +161,14 @@ export function qCardHtml({ d, hits }) {
 }
 
 export function renderQueueSummary() {
-  const el = $("#summary");
+  // в очереди итог — в строке над видео (#q-bar, рядом с «Порядком»), а не между блоками
+  $("#summary").innerHTML = "";
+  const el = $("#q-count");
   const empty = $("#empty");
-  const n = state.list.length;
+  const found = state.qFound || state.list;
+  const n = found.length;
   if (!n) {
-    el.innerHTML = "";
+    el.innerHTML = state.queue.length ? `<b>Нет подходящих видео</b>` : "";
     empty.hidden = false;
     const q = state.q.trim();
     empty.innerHTML = state.queue.length
@@ -183,10 +187,12 @@ export function renderQueueSummary() {
     return;
   }
   empty.hidden = true;
-  const leftAll = state.queue.reduce((a, r) => a + qLeft(r), 0);
-  let text = state.q.trim() ? `Найдено <b>${videosWord(n)}</b> в очереди` : `<b>${videosWord(n)}</b> в очереди${leftAll ? ` · осталось смотреть ${fmtHours(leftAll)}` : ""}`;
-  if (state.meta?.swapped) text += ` · <span class="swap">запрос понят как «${esc(state.meta.swapped)}»</span>`;
-  if (state.meta?.partial) text += ` · <span class="swap">точных совпадений нет — показаны похожие</span>`;
+  // осталось смотреть — у показанных (с фильтром длины — только у них)
+  const left = found.reduce((a, { d }) => a + qLeft(state.queue[d]), 0);
+  let text = `<span class="q-n">${state.q.trim() ? "Найдено " : ""}<b>${videosWord(n)}</b></span>`;
+  if (left) text += `<span class="q-left"> · <span class="q-left-w">осталось </span>${fmtHours(left)}</span>`;
+  if (state.meta?.swapped) text += `<span class="swap">запрос понят как «${esc(state.meta.swapped)}»</span>`;
+  if (state.meta?.partial) text += `<span class="swap">точных совпадений нет — показаны похожие</span>`;
   el.innerHTML = text;
 }
 

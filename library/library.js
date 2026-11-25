@@ -20,6 +20,7 @@ import { yt } from "./youtube.js";
 import "./cover-actions.js"; // «Превью» и «О чём видео» на обложках
 import "./digest.js"; // «Подписки» — дайджест новых видео из подписок
 import "./multi.js"; // выбор нескольких видео: кружок на обложке, Ctrl/Shift, полоса действий внизу
+import "./ctxmenu.js"; // своё меню по правому щелчку на карточке видео
 
 // ---------- адрес страницы: #q=…&pl=… (можно добавить в закладки) ----------
 export function readHash() {
@@ -56,6 +57,9 @@ export function setView(v, { silent = false } = {}) {
     $("#sort").innerHTML = SORTS[v].map(([val, label]) => `<option value="${val}">${label}</option>`).join("");
     state.sort = "auto";
     $("#sort").value = "auto";
+    // у очереди свой список порядка — в строке над видео (#q-bar)
+    if (!$("#q-sort").options.length) $("#q-sort").innerHTML = SORTS.queue.map(([val, label]) => `<option value="${val}">${label}</option>`).join("");
+    $("#q-sort").value = "auto";
   }
   document.title = TITLES[v] || TITLES.lib;
   if (v === "queue") void refreshTabsCount();
@@ -157,17 +161,23 @@ $("#grid").addEventListener("click", (e) => {
       .join("");
   }
 });
-$("#dur").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-dur]");
-  if (!b) return;
-  state.dur = b.dataset.dur;
-  for (const x of $("#dur").children) x.setAttribute("aria-checked", String(x === b));
-  update();
-});
-$("#sort").addEventListener("change", (e) => {
-  state.sort = e.target.value;
-  update();
-});
+// длина видео: фильтры над списком плейлистов (#dur) и в строке очереди (#q-dur) — общие
+export function setDur(v) {
+  state.dur = v;
+  for (const x of document.querySelectorAll(".durs [data-dur]")) x.setAttribute("aria-checked", String(x.dataset.dur === v));
+}
+for (const g of [$("#dur"), $("#q-dur")])
+  g.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-dur]");
+    if (!b) return;
+    setDur(b.dataset.dur);
+    update();
+  });
+for (const s of [$("#sort"), $("#q-sort")])
+  s.addEventListener("change", (e) => {
+    state.sort = e.target.value;
+    update();
+  });
 // «Обновить» — только изменившиеся плейлисты; с Shift — перечитать все
 $("#sync").addEventListener("click", (e) => sync({ full: e.shiftKey }));
 document.addEventListener("click", (e) => {
@@ -177,8 +187,7 @@ document.addEventListener("click", (e) => {
   else if (a.dataset.act === "open-yt") chrome.tabs.create({ url: "https://www.youtube.com/" });
   else if (a.dataset.act === "reset") {
     state.pl = "";
-    state.dur = "";
-    for (const x of $("#dur").children) x.setAttribute("aria-checked", String(!x.dataset.dur));
+    setDur("");
     update();
   }
 });

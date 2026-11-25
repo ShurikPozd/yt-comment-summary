@@ -934,21 +934,6 @@ mark {
     flex: 1;
     width: 100%;
   }
-  body[data-view="queue"] .filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: "play sort" "seg seg";
-  }
-  body[data-view="queue"] #q-play {
-    grid-area: play;
-    width: 100%;
-    white-space: nowrap;
-  }
-  body[data-view="queue"] .filters .sort {
-    grid-area: sort;
-  }
-  body[data-view="queue"] .filters .seg {
-    grid-area: seg;
-  }
   /* очередь в узком окне: статистика — строкой над видео, подсказка клавиш не нужна */
   .q-side .q-stats {
     display: none;
@@ -1102,9 +1087,116 @@ body:not([data-view="queue"]) .queue-only {
 }
 
 #q-play {
+  flex: none;
   width: 100%;
   justify-content: center;
   height: 2.6rem;
+  margin-bottom: 12px;
+}
+
+/* в очереди строка фильтров не нужна: «Смотреть очередь» — над колонкой слева,
+   порядок и длина — в строке над самими видео (#q-bar) */
+body[data-view="queue"] .filters,
+body[data-view="queue"] #summary,
+body[data-view="queue"].q-none #q-play,
+body[data-view="queue"].q-none #q-bar {
+  display: none;
+}
+
+/* ---------- очередь: строка над видео — «27 видео · осталось ≈ 13 ч», порядок, длина ---------- */
+.q-bar {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* 23, а не 24: блоки ниже (резервная копия, уборка) сдвигаются на чётное число px и
+     остаются на той же доле пикселя экрана 150%, что и без строки, — подписи не «плывут» */
+  margin: 0 0 23px;
+}
+
+.q-bar-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  /* высоты строки — целыми px: иначе всё, что ниже (резервная копия, уборка, карточки),
+     встаёт на полпикселя и подписи в кнопках «плывут» (замер центровки) */
+  min-height: round(2.6rem, 1px);
+}
+
+.q-bar .q-sort select,
+.q-bar .seg button {
+  height: round(2.3rem, 1px);
+}
+
+.q-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0;
+  row-gap: 2px;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.q-count .q-n {
+  color: var(--fg);
+  font-size: 1.2rem;
+}
+
+.q-count b {
+  font-weight: 700;
+}
+
+.q-count .q-left {
+  white-space: pre;
+}
+
+.q-count .swap {
+  flex-basis: 100%;
+  color: var(--fg-2);
+  font-size: 0.92rem;
+}
+
+.q-bar .q-sort {
+  margin-left: auto;
+}
+
+.q-bar .q-sort select {
+  flex: none;
+  width: auto;
+}
+
+.q-bar .q-seg .durs {
+  flex-wrap: wrap;
+}
+
+/* узко (боковая панель, телефон): «осталось» — без слова, «Порядок» — без подписи,
+   длина — лентой с прокруткой до краёв, как раньше в строке фильтров */
+@container (max-width: 520px) {
+  .q-count .q-left-w,
+  .q-bar .q-sort > span {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .q-bar .q-seg {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    margin: 0 calc(var(--pad) * -1);
+    padding: 0 var(--pad);
+  }
+  .q-bar .q-seg .durs {
+    flex: none;
+    flex-wrap: nowrap;
+  }
 }
 
 /* ---------- колонка очереди ---------- */
@@ -1437,8 +1529,14 @@ button.ghost.danger {
   #sync-text {
     display: none;
   }
+  /* «Смотреть очередь» — первой строкой, по ширине колонки очереди */
   #q-play {
-    width: auto;
+    width: 100%;
+    max-width: 760px;
+    /* +0,5 px: раньше над видео стояла строка длины высотой 2.3rem (34,5 px) — с ней всё ниже
+       было на половинной доле пикселя; так «Уборка очереди» и карточки остаются на прежней доле
+       (на 150% иначе подписи в кнопках съезжают на пиксель экрана — замер центровки) */
+    margin: 0 auto 12.5px;
   }
 }
 
@@ -5002,5 +5100,122 @@ button.primary .key {
   }
   .st-lim-range button {
     padding: 0 8px;
+  }
+}
+
+/* ---------- своё меню по правому щелчку на карточке видео (ctxmenu.js) ---------- */
+.ctx-menu {
+  position: fixed;
+  z-index: 2100; /* выше кнопок на обложке (video-actions.js, 2019) */
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 15rem;
+  max-width: min(22rem, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+  scrollbar-width: thin;
+  outline: none;
+  animation: ctx-in 0.12s var(--ease);
+}
+
+.ctx-menu[hidden] {
+  display: none;
+}
+
+@keyframes ctx-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-menu {
+    animation: none;
+  }
+}
+
+/* название видео (или «Выбрано: N видео») — о чём меню */
+.ctx-head {
+  padding: 6px 12px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctx-menu.multi .ctx-head {
+  color: var(--fg);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: round(2.5rem, 1px);
+  padding: 0 14px 0 12px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctx-item > svg {
+  flex: none;
+  color: var(--fg-2);
+}
+
+.ctx-item .lbl {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctx-item:hover,
+.ctx-item:focus {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+.ctx-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.ctx-item.danger,
+.ctx-item.danger > svg {
+  color: var(--accent-ink);
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--border);
+  flex: none;
+}
+
+/* в боковой панели и на телефоне — крупнее под палец, во всю доступную ширину */
+@media (max-width: 640px) {
+  .ctx-item {
+    height: round(2.75rem, 1px);
+    padding-bottom: 1px; /* крупный кегль: заглавные ниже середины — строку на 1 px выше (замер) */
+    font-size: 1rem;
   }
 }

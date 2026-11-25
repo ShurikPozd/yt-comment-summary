@@ -12,6 +12,10 @@ const click = (sel) => `document.querySelector(${JSON.stringify(sel)})?.click()`
 // Ctrl+щелчок по двум карточкам — включается выбор и полоса «Выбрано: N»
 const pickTwo = `(() => { const cs = [...document.querySelectorAll('#grid .card, #cont .card, #digest .card')].slice(0, 2);
   for (const c of cs) c.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true, button: 0 })); return cs.length; })()`;
+// своё меню по правому щелчку (ctxmenu.js) на n-й карточке — у её левого верхнего угла
+const ctxMenu = (sel, n) => `(() => { const c = document.querySelectorAll(${JSON.stringify(sel)})[${n}]; const r = c.querySelector('.thumb').getBoundingClientRect();
+  c.querySelector('.thumb').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 24, clientY: r.top + 24, button: 2 }));
+  return document.querySelectorAll('#ctx-menu .ctx-item').length; })()`;
 // открыть «Уборку очереди» и дождаться конца проверки (модуль грузится по нажатию)
 const qtidyDone = `(async () => { ${click("[data-qt=open]")};
   for (let i = 0; i < 150; i++) { const b = document.getElementById("qtidy"); if (b?.querySelector(".qt-foot, .qt-clean") && !b.querySelector("[data-qt=stop]")) return i; await new Promise((r) => setTimeout(r, 100)); } return -1; })()`;
@@ -34,6 +38,12 @@ export const PAGES = [
   { key: "lib-queue", url: LIB + "#v=queue", w: 1200, h: 2000, wait: libReady },
   { key: "lib-digest", url: LIB + "#v=digest", w: 1200, h: 2000, wait: libReady },
   { key: "lib-stats", url: LIB + "#v=stats", w: 1200, h: 2000, wait: libReady + " && performance.now() > 2500" },
+  // очередь в боковой панели: строка над видео — «27 видео · ≈ 13 ч», порядок, длина (#q-bar)
+  { key: "lib-queue-bar", url: LIB + "&panel=1#v=queue", w: 400, h: 1400, wait: libReady, roots: "[document.getElementById('q-bar'), document.getElementById('q-play')]" },
+  // своё меню по правому щелчку на карточке (ctxmenu.js): очередь, «Подписки» (светлая тема), выбрано несколько
+  { key: "lib-ctxmenu", url: LIB + "#v=queue", w: 1200, h: 1400, wait: libReady, act: ctxMenu("#grid .card", 3), roots: "[document.getElementById('ctx-menu')]" },
+  { key: "lib-ctxmenu-digest", url: LIB + "&digest=1&theme=light#v=digest", w: 1200, h: 1400, wait: "document.querySelector('#digest .card') && performance.now() > 1500", act: ctxMenu("#digest .card", 1), roots: "[document.getElementById('ctx-menu')]" },
+  { key: "lib-ctxmenu-multi", url: LIB + "&panel=1#v=queue", w: 400, h: 1400, wait: libReady + " && document.querySelectorAll('#cont .card').length > 1", act: `(async () => { ${pickTwo}; await new Promise((r) => setTimeout(r, 200)); return ${ctxMenu("#cont .card", 0)}; })()`, roots: "[document.getElementById('ctx-menu')]" },
   // полоса выбора (multi.js) — в очереди и в плейлистах
   { key: "lib-sel-queue", url: LIB + "#v=queue", w: 1200, h: 1400, wait: libReady + " && document.querySelectorAll('#cont .card').length > 1", act: pickTwo, roots: "[document.getElementById('sel-bar')]" },
   // окна разбора очереди и резервной копии

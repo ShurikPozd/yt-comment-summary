@@ -52,7 +52,6 @@
     </header>
 
     <div class="filters" role="toolbar" aria-label="Фильтры">
-      <button id="q-play" type="button" class="primary queue-only" title="Открыть первое видео в отдельной вкладке очереди"><span data-icon="play" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span>Смотреть очередь</button>
       <label class="side-search lib-only">
         <span data-icon="search" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
         <input id="pl-q" type="search" autocomplete="off" placeholder="Найти плейлист" aria-label="Найти плейлист" />
@@ -97,6 +96,8 @@
 
     <div class="body">
       <aside class="side" aria-label="Плейлисты">
+        <!-- «Смотреть очередь» — над колонкой очереди (в узком окне и в панели — первой строкой) -->
+        <button id="q-play" type="button" class="primary queue-only" title="Открыть первое видео в отдельной вкладке очереди"><span data-icon="play" data-size="16"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span>Смотреть очередь</button>
         <nav id="pl-list" class="pl-list lib-only"></nav>
         <div id="q-side" class="q-side queue-only"></div>
         <div id="d-side" class="d-side digest-only"></div>
@@ -104,6 +105,25 @@
 
       <main class="main">
         <div id="qtidy" class="queue-only" hidden></div>
+        <!-- очередь: заголовок списка — сколько видео, порядок и длина прямо над видео -->
+        <div id="q-bar" class="q-bar queue-only">
+          <div class="q-bar-row">
+            <div id="q-count" class="q-count" role="status"></div>
+            <label class="sort q-sort">
+              <span>Порядок</span>
+              <select id="q-sort" aria-label="Порядок видео в очереди"></select>
+            </label>
+          </div>
+          <div class="seg q-seg">
+            <span class="durs" role="radiogroup" aria-label="Длительность" id="q-dur">
+              <button type="button" role="radio" data-dur="" aria-checked="true">Любая длина</button>
+              <button type="button" role="radio" data-dur="0-61">Shorts и до 1 мин</button>
+              <button type="button" role="radio" data-dur="61-600">1–10 мин</button>
+              <button type="button" role="radio" data-dur="600-1800">10–30 мин</button>
+              <button type="button" role="radio" data-dur="1800-">Больше 30 мин</button>
+            </span>
+          </div>
+        </div>
         <section id="cont" class="cont queue-only" hidden aria-label="Продолжить смотреть"></section>
         <div id="sem-info" class="lib-only" hidden></div>
         <div id="subs-info" class="lib-only" hidden></div>

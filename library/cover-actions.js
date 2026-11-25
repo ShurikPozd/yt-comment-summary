@@ -8,7 +8,7 @@ import { state } from "./state.js";
 
 const VA = () => globalThis.__ytcsVideoActions;
 
-function infoFor(card) {
+export function infoFor(card) {
   const did = card.dataset.did; // «Подписки»
   if (did) {
     const r = state.digestById?.get(did);
