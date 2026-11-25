@@ -1,0 +1,140 @@
+/* «Мягкий лимит времени» в настройках панели (limit-settings.js): сколько в день —
+   шесть кнопок-таблеток, под ними полоска «Сегодня … из …». */
+/* выключенный блок — 183 px; с обычным отступом 12 px всё, что ниже, сдвигалось на нечётное
+   число и на экране 150% вставало на полпикселя (подписи кнопок «Очистить историю», «Проверить…»
+   уезжали на 0,8 px, замер tools/align) — отступ на 1 px больше */
+.lim-block {
+  margin-bottom: 13px;
+}
+
+.lim-opts {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.lim-opts[hidden] {
+  display: none;
+}
+
+.lim-l {
+  color: var(--fg-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.lim-chips {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+}
+
+/* снизу на 2px больше: заглавные Segoe UI сидят ниже середины строки (замер tools/align) */
+.lim-chip {
+  height: 32px;
+  padding: 0 4px 2px;
+  border-radius: 999px;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.lim-chip:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.lim-chip[aria-checked="true"] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.lim-now {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.lim-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  flex-wrap: wrap;
+}
+
+.lim-txt {
+  color: var(--fg-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.lim-txt b {
+  color: var(--fg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lim-left {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lim-now.over .lim-left {
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+.lim-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.lim-meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+/* статистика выключена — лимиту не на чем считать */
+.lim-warn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--r-s);
+  background: var(--accent-soft);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* узкая панель: кнопки в две строки по три */
+@container (max-width: 330px) {
+  .lim-chips {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-radius: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lim-chip {
+    transition: none;
+  }
+}

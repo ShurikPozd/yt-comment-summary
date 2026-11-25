@@ -4,6 +4,7 @@ import "./tldr-bg.js"; // окно «О чём видео» на ленте: п�
 import { setupOmnibox } from "./omnibox.js"; // «yt» + пробел в адресной строке — поиск по библиотеке
 import { saveVideo } from "./archive-bg.js"; // «В архив Telegram»: видео в бот-архив
 import { statsAdd } from "./stats-bg.js"; // статистика просмотра: прибавки от вкладок, счётчики очереди
+import "./limit-bg.js"; // мягкий лимит времени: время за день и когда напомнить (плашка — limit.js)
 import { moveIds, restoreAt } from "./library/multi-core.js"; // выбор нескольких в библиотеке: «Наверх», «В конец», «Вернуть»
 import { moveSteps } from "./queue-core.js"; // перетаскивание в колонке очереди на странице видео
 import { setupAutoBackup } from "./backup-bg.js"; // автокопия в Telegram раз в неделю

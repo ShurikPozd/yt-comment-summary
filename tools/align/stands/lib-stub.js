@@ -122,6 +122,20 @@ window.__errs = []; addEventListener("error", (e) => __errs.push(String(e.messag
     }
     listeners.forEach((f) => f(ch, "local"));
   };
+  // &limit=1 — «Статистика» с карточкой «Мягкий лимит»: включён, 2 ч, сегодня 1 ч 40 мин
+  // (&limit=over — 2 ч 15 мин, &limit=off — выключен); заодно немного статистики за 30 дней
+  if (qp.get("limit")) {
+    const pad = (n) => String(n).padStart(2, "0");
+    const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const now = new Date();
+    const lday = key(now.getHours() < 4 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12) : now);
+    const days = {};
+    for (let i = 0; i < 30; i++) days[key(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 12))] = { w: 1800 + ((i * 2654) % 6000), s: i % 3 ? 300 : 0, sp: 400, n: 4, fin: 2 };
+    local.watchStats = { v: 1, since: Date.now() - 31 * 864e5, days, ch: { UCaaaaaaaaaaaaaaaaaaaaaa: { n: "Уютный дом", t: Date.now(), a: 40000, d: { [key(now)]: 3000 } } } };
+    local.watchLimit = { on: qp.get("limit") !== "off", min: 120 };
+    local.watchLimitDay = { day: lday, sec: qp.get("limit") === "over" ? 8100 : 6000, lim: 0, next: null, done: false };
+    if (qp.get("nostats")) local.settings = { ...(local.settings || {}), watchStats: false };
+  }
   if (qp.get("queue")) {
     const pick = vids.filter((_, i) => i % 3 === 1).slice(0, Number(qp.get("queue")) || 24);
     local.queue = pick.map((v, i) => ({ id: v.id, title: v.title, channel: v.channel, len: v.len, short: v.short, addedAt: Date.now() - i * 3600e3 * 7 }));

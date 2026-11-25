@@ -14,6 +14,7 @@ import { STATS_KEY, cleanStats, dayStart, fmtDur, hasData, shiftDay, summarize, 
 import { saveHash } from "./library.js";
 import { $, esc, nf, plural, state } from "./state.js";
 import { closeWatch } from "./watch.js";
+import { loadLimit, mountLimit } from "./limit-view.js"; // карточка «Мягкий лимит»
 
 // значок раздела — столбики (в общем наборе иконок такого нет); в шапке он же стоит
 // прямо в library.html — модуль грузится по первому нажатию, значок не должен мигать
@@ -82,6 +83,7 @@ async function load() {
   sv.stats = cleanStats(r[STATS_KEY]);
   sv.enabled = r.settings?.watchStats !== false;
   sv.silence = r.silenceSaved || null;
+  await loadLimit();
 }
 
 // Пропуск тишины пишет и свой итог — chrome.storage.local.silenceSaved
@@ -145,8 +147,8 @@ function render() {
   const box = $("#stats");
   const st = sv.stats;
   if (!hasData(st)) {
-    box.innerHTML = `<div class="st-wrap st-empty-wrap">${emptyHtml()}</div>`;
-    return;
+    box.innerHTML = `<div class="st-wrap st-empty-wrap">${emptyHtml()}<div id="st-limit" class="st-limit-slot"></div></div>`;
+    return mountLimit();
   }
   const now = Date.now();
   const t = totals(st, now);
@@ -166,6 +168,7 @@ function render() {
       ${tileHtml("За 7 дней", t.week, `в среднем ${fmtDur(week.avg)} в день`)}
       ${tileHtml("За 30 дней", t.month, `в среднем ${fmtDur(month.avg)} в день`)}
     </section>
+    <div id="st-limit" class="st-limit-slot"></div>
     <div class="st-bar">
       <h2>За последние ${esc(RANGES.find(([n]) => n === sv.range)[1])}</h2>
       <div class="st-range" role="radiogroup" aria-label="Период">${RANGES.map(([n, l]) => `<button type="button" role="radio" data-range="${n}" aria-checked="${n === sv.range}">${l}</button>`).join("")}</div>
@@ -190,6 +193,7 @@ function render() {
     </div>
     ${settingsHtml()}
   </div>`;
+  mountLimit();
   drawChart(sum);
 }
 
