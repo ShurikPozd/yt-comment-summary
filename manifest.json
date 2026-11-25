@@ -108,6 +108,7 @@
       "js": [
         "speed-main.js",
         "volume-main.js",
+        "audioonly-main.js",
         "dualsubs-main.js"
       ],
       "run_at": "document_idle",
@@ -119,7 +120,8 @@
       ],
       "js": [
         "speed-main.js",
-        "volume-main.js"
+        "volume-main.js",
+        "audioonly-main.js"
       ],
       "run_at": "document_idle",
       "world": "MAIN",
@@ -148,6 +150,8 @@
         "volume-core.js",
         "audio-graph.js",
         "volume.js",
+        "audioonly-core.js",
+        "audioonly.js",
         "dualsubs-core.js",
         "dualsubs.js"
       ],
@@ -170,7 +174,9 @@
         "limit.js",
         "volume-core.js",
         "audio-graph.js",
-        "volume.js"
+        "volume.js",
+        "audioonly-core.js",
+        "audioonly.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

@@ -82,4 +82,9 @@ export const PAGES = [
   // правка заметки (поле и кнопки в строке) и плашка «Заметка удалена · Вернуть»
   { key: "lib-notes-edit", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 1600, wait: "document.querySelector('.nt-card') && performance.now() > 1500", act: `(async () => { document.querySelectorAll(".nt-row [data-nt=del]")[1].click(); await new Promise((r) => setTimeout(r, 300)); document.querySelector(".nt-row [data-nt=edit]").click(); })()`, settle: 900, roots: "[document.querySelector('.nt-card'), document.getElementById('nt-toast')]" },
   { key: "lib-notes-watch", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 1600, wait: "document.querySelector('.nt-card') && performance.now() > 1500", act: click(".nt-row a.nt-tc"), settle: 1200, roots: "[document.getElementById('w-notes')]" },
+  // «Только звук» (audioonly.js): обложка вместо видео и плашка «Только звук для канала · Показать видео»;
+  // с субтитрами — крупная текущая фраза; в узком плеере плашка без подписи, обложки нет
+  { key: "yt-audio", url: "/watch?v=dQw4w9WgXcQ&audio=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-audio-only')?.hidden === false", settle: 700, roots: shadow("ytcs-audio-only") },
+  { key: "yt-audio-say", url: "/watch?v=dQw4w9WgXcQ&audio=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-audio-only')?.hidden === false", settle: 700, roots: shadow("ytcs-audio-only") },
+  { key: "yt-audio-narrow", url: "/watch?v=dQw4w9WgXcQ&audio=2", w: 460, h: 900, wait: ytReady + " && document.getElementById('ytcs-audio-only')?.hidden === false", act: "document.getElementById('movie_player').style.cssText = 'width: 400px; height: 225px'", settle: 900, roots: shadow("ytcs-audio-only") },
 ];

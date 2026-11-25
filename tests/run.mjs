@@ -1986,5 +1986,50 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(N.addNote(full, A, { t: 1, text: "лишняя" }).why === "full", "больше 300 заметок у видео — нельзя");
 }
 
+// ---------- «Только звук» (audioonly-core.js) ----------
+{
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(readFileSync(new URL("../audioonly-core.js", import.meta.url), "utf8"), ctx);
+  const C = ctx.__ytcsAudioOnlyCore;
+  const J = JSON.stringify;
+  const A = "UC" + "a".repeat(22);
+  const B = "UC" + "b".repeat(22);
+  // какой режим на новом видео
+  ok(J(C.plan({ sticky: false, memory: true, stored: true })) === J({ on: true, why: "channel" }), "канал запомнен — сразу только звук");
+  ok(J(C.plan({ sticky: true, memory: true, stored: false })) === J({ on: true, why: "tab" }), "включили во вкладке — держится на следующих видео");
+  ok(J(C.plan({ sticky: false, memory: false, stored: true })) === J({ on: false, why: "" }), "«по каналам» выключено — запомненный канал не включает");
+  ok(J(C.plan({})) === J({ on: false, why: "" }) && C.plan({ sticky: true, memory: false, stored: true }).why === "tab", "по умолчанию — видео; вкладка без памяти каналов — «tab»");
+  // переключение вами
+  let t = C.toggle({ map: {}, on: true, ch: A, name: "  Подкаст  ", now: 10 });
+  ok(t.sticky && t.remembered && !t.forgotten && t.map[A].n === "Подкаст" && t.map[A].t === 10, "включили на видео канала — канал запомнен");
+  ok(C.toggle({ map: t.map, on: true, ch: A, name: "", now: 20 }).remembered === false && C.toggle({ map: t.map, on: true, ch: A, name: "", now: 20 }).map[A].n === "Подкаст", "уже запомнен — не «новый»; пустое название не затирает");
+  ok(J(C.toggle({ map: {}, on: true, ch: A, memory: false }).map) === "{}" && C.toggle({ map: {}, on: true, ch: "@x" }).remembered === false, "без «по каналам» и без id канала — не запоминаем");
+  const off = C.toggle({ map: t.map, on: false, ch: A });
+  ok(!off.sticky && off.forgotten && !(A in off.map) && A in t.map, "выключили — канал забыт, исходный объект цел");
+  ok(C.toggle({ map: t.map, on: false, ch: A, memory: false }).forgotten && !C.toggle({ map: t.map, on: false, ch: B }).forgotten, "забываем и при выключенной памяти; чужой канал не трогаем");
+  // хранилище
+  let big = {};
+  for (let i = 0; i < 5; i++) big = C.remember(big, "UC" + String(i).repeat(22), "c" + i, i, 3);
+  ok(Object.keys(big).length === 3 && !("UC" + "0".repeat(22) in big), "больше предела — вытесняются самые старые");
+  big = C.touch(big, "UC" + "2".repeat(22), "", 100);
+  big = C.remember(big, B, "b", 101, 3);
+  ok("UC" + "2".repeat(22) in big && !("UC" + "3".repeat(22) in big), "открытый недавно канал не вытесняется");
+  ok(!C.has({ [A]: { n: "x" } }, A) && !C.has({ [A]: "мусор" }, A) && C.has({ [A]: { n: "x", t: 5 } }, A) && !C.has(null, A), "битая запись не читается");
+  ok(C.touch({}, A, "x", 1) && J(C.touch({}, A, "x", 1)) === "{}", "touch незапомненного канала — ничего");
+  // качество
+  ok(C.lowest(["hd2160", "hd1080", "hd720", "large", "medium", "small", "tiny", "auto"]) === "tiny" && C.lowest(["hd720", "auto", "large"]) === "large", "самое низкое качество");
+  ok(C.lowest([]) === "" && C.lowest(null) === "" && C.lowest(["auto"]) === "", "качеств нет — ничего не просим");
+  ok(C.restoreQuality("auto") === "auto" && C.restoreQuality("hd1080") === "hd1080" && C.restoreQuality("") === "auto" && C.restoreQuality("x") === "auto", "вернуть ваше качество (мусор — «авто»)");
+  // клавиша
+  const k = (o) => C.isToggleKey({ code: "KeyV", shiftKey: true, ...o });
+  ok(k({}) && k({ key: "М" }) && !k({ shiftKey: false }) && !k({ ctrlKey: true }) && !k({ altKey: true }) && !k({ metaKey: true }) && !k({ repeat: true }) && !k({ code: "KeyC" }) && !C.isToggleKey(null), "Shift+V на любой раскладке, без модификаторов и автоповтора");
+  // фраза и обложки
+  ok(C.phrase(["  Привет,\n", "это   лекция "]) === "Привет, это лекция" && C.phrase("") === "" && C.phrase([null, " "]) === "" && C.phrase("x".repeat(900)).length === 400, "строки субтитров → одна фраза");
+  ok(J(C.covers("dQw4w9WgXcQ")) === J(["maxresdefault", "sddefault", "hqdefault"].map((q) => `https://i.ytimg.com/vi/dQw4w9WgXcQ/${q}.jpg`)) && C.covers("bad").length === 0, "обложки от крупной к мелкой; без id — нет");
+  ok(C.isStubImage(120, 90) && !C.isStubImage(1280, 720) && C.isStubImage(0, 0), "серая заглушка YouTube 120×90 — «нет картинки»");
+  ok(C.pillText(true) === "Только звук для канала" && C.pillText(false) === "Только звук", "подпись плашки");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

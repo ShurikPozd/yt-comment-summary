@@ -10,6 +10,8 @@
 // канала «…» · Сбросить» (volume.js); __stand.playerPane() — экран меню «Плеер ›».
 // С &dual=1 — «Двойные субтитры» (dualsubs.js) с одной строкой (перевод не пришёл),
 // с &dual=2 — оригинал и перевод; ответы плеера и timedtext — вымышленные.
+// С &audio=1 — «Только звук» (audioonly.js): обложка вместо видео, плашка «Только звук для
+// канала · Показать видео»; с &audio=2 — ещё и включённые субтитры с текущей фразой.
 (() => {
   const listeners = [];
   const msgListeners = [];
@@ -88,6 +90,23 @@
   document.addEventListener("ytcs-speed:ask", () => answer("ytcs-speed:info", { videoId: "dQw4w9WgXcQ", channelId: CH, name: "Уютный Майнкрафт", live: false }));
   document.addEventListener("ytcs-vol:ask", () => answer("ytcs-vol:info", { volume: ytVolume, muted: false }));
   document.addEventListener("ytcs-vol:set", (e) => (ytVolume = Number(e.detail)));
+  // audioonly-main.js: название, канал и качества видео; «Только звук» у канала запомнен
+  if (q.get("audio")) {
+    store.audioOnlyChannels = { [CH]: { n: "Уютный Майнкрафт", t: Date.now() } };
+    document.addEventListener("ytcs-ao:ask", () =>
+      answer("ytcs-ao:info", { videoId: "dQw4w9WgXcQ", title: TITLE, author: "Уютный Майнкрафт", channelId: CH, live: false, quality: "hd720", levels: ["hd1080", "hd720", "large", "medium", "small", "tiny", "auto"] })
+    );
+    document.addEventListener("ytcs-ao:low", () => answer("ytcs-ao:done", { ok: true, q: "tiny" }));
+    if (q.get("audio") === "2") {
+      // субтитры YouTube включены — в слое субтитров текущая фраза
+      const mp = document.getElementById("movie_player");
+      const cap = document.createElement("div");
+      cap.className = "ytp-caption-window-container";
+      cap.innerHTML = '<div class="caption-window"><span class="caption-visual-line"><span class="ytp-caption-segment">Сегодня поговорим о том, как утеплить</span></span><span class="caption-visual-line"><span class="ytp-caption-segment">деревянный дом до первых морозов</span></span></div>';
+      mp.appendChild(cap);
+      document.querySelector(".ytp-subtitles-button")?.setAttribute("aria-pressed", "true");
+    }
+  }
   // playlists-main.js: вымышленные плейлисты
   const names = ["Музыка в дорогу", "Смотреть позже", "Танцы", "Кулинария: быстро", "Котики", "Подкасты", "Ремонт своими руками", "Английский", "Лучшие клипы 2026", "Смешное", "Обзоры техники", "Путешествия", "Спорт: тренировки", "Мультфильмы", "Лекции", "Игры", "Стендап", "Фильмы: трейлеры", "Музыка для работы", "Шортсы: танцы"];
   const pls = names.map((t, i) => ({ id: "PL" + i, title: t, privacy: i % 5 === 0 ? "PUBLIC" : i % 7 === 0 ? "UNLISTED" : "PRIVATE", contains: i === 2 || i === 19 }));

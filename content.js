@@ -950,7 +950,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, channelVolume: true, volumeLeveler: false, dualSubs: false };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, channelVolume: true, volumeLeveler: false, dualSubs: false, audioOnlyChannels: true };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -966,6 +966,7 @@
     playerPrefs.channelVolume = settings?.channelVolume !== false; // громкость по каналам — volume.js, по умолчанию вкл.
     playerPrefs.volumeLeveler = Boolean(settings?.volumeLeveler); // «Выравнивать громкость» — volume.js
     playerPrefs.dualSubs = Boolean(settings?.dualSubs); // «Двойные субтитры» — dualsubs.js
+    playerPrefs.audioOnlyChannels = settings?.audioOnlyChannels !== false; // «Только звук по каналам» — audioonly.js, по умолчанию вкл.
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -990,6 +991,8 @@
         showPageToast(playerPrefs.volumeLeveler ? "Громкость выравнивается: тихое громче, громкое тише" : "Громкость — как в видео", UI_ICONS.leveler);
       } else if (before.dualSubs !== playerPrefs.dualSubs) {
         showPageToast(playerPrefs.dualSubs ? "Двойные субтитры включены" : "Двойные субтитры выключены", UI_ICONS.subs);
+      } else if (before.audioOnlyChannels !== playerPrefs.audioOnlyChannels) {
+        showPageToast(playerPrefs.audioOnlyChannels ? "«Только звук» будет запоминаться для каждого канала" : "«Только звук» больше не запоминается по каналам", UI_ICONS.headphones);
       }
     }
   }
@@ -1194,6 +1197,8 @@
     subs: SVG('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 10.5h10M7 14.5h6.5"/>'),
     // листок с загнутым углом и строками — «Заметка» к моменту видео (notes.js)
     note: SVG('<path d="M5 4h14v10.5L13.5 20H5z"/><path d="M13.5 20v-5.5H19"/><path d="M8.5 8.5h7M8.5 12h4"/>'),
+    // наушники — «Только звук» (видео скрыто, audioonly.js)
+    headphones: SVG('<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="13" width="4.5" height="7" rx="2"/><rect x="16" y="13" width="4.5" height="7" rx="2"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1222,6 +1227,7 @@
         <div class="ytcs-group">
         <div class="ytcs-item ytcs-rate" role="group" aria-label="Скорость воспроизведения">${UI_ICONS.speed}<span class="ytcs-label">Скорость</span><button type="button" class="ytcs-step" data-rate="-1" title="Медленнее — Shift+&lt;" aria-label="Медленнее">${UI_ICONS.minus}</button><span class="ytcs-rv">1×</span><button type="button" class="ytcs-step" data-rate="1" title="Быстрее — Shift+&gt;, до 4×" aria-label="Быстрее">${UI_ICONS.plus}</button></div>
         <div class="ytcs-item ytcs-rate ytcs-vol" role="group" aria-label="Громкость">${UI_ICONS.volume}<span class="ytcs-label">Громкость</span><button type="button" class="ytcs-step" data-vol="-1" title="Тише" aria-label="Тише">${UI_ICONS.minus}</button><span class="ytcs-rv">100&nbsp;%</span><button type="button" class="ytcs-step" data-vol="1" title="Громче — до 300 %" aria-label="Громче">${UI_ICONS.plus}</button></div>
+        <button class="ytcs-item" role="menuitemcheckbox" data-act="audioonly" aria-checked="false" title="Видео скрыто, играет звук и видна обложка — Shift+V" hidden>${UI_ICONS.headphones}<span class="ytcs-label">Только звук</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
         <button class="ytcs-item" role="menuitem" data-act="note" title="Заметка к этому моменту — клавиша N">${UI_ICONS.note}<span class="ytcs-label">Заметка</span></button>
         <button class="ytcs-item" role="menuitem" data-act="sleep" aria-expanded="false" hidden>${UI_ICONS.moon}<span class="ytcs-label ytcs-ellipsis">Таймер сна</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
@@ -1272,6 +1278,9 @@
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="volumeLeveler" title="Тихие места громче, громкие тише — удобно для подкастов и фильмов">${UI_ICONS.leveler}<span class="ytcs-label">Выравнивать громкость</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitem" data-act="volreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить громкость канала</span><span class="ytcs-aside">100&nbsp;%</span></button>
         </div>
+        <div class="ytcs-group">
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="audioOnlyChannels" title="Включили «Только звук» на видео канала — его следующие видео сразу без картинки">${UI_ICONS.headphones}<span class="ytcs-label">Только звук по каналам</span><span class="ytcs-switch"></span></button>
+        </div>
       </div>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
@@ -1297,6 +1306,19 @@
     syncVolumeItem();
     syncSleepItem();
     syncSilenceItem();
+    syncAudioOnlyItem();
+  }
+
+  // «Только звук» (audioonly.js): переключатель — режим этой вкладки, не настройка
+  function syncAudioOnlyItem() {
+    const item = uiMenu?.querySelector('[data-act="audioonly"]');
+    const api = globalThis.__ytcsAudioOnly;
+    if (!item) return;
+    const st = api?.state?.();
+    item.hidden = !st?.available;
+    if (!st) return;
+    item.setAttribute("aria-checked", String(Boolean(st.on)));
+    item.title = st.forChannel && st.channel ? `Только звук для канала «${st.channel}» — Shift+V` : "Видео скрыто, играет звук и видна обложка — Shift+V";
   }
 
   // ---- «Таймер сна» (sleep.js): «осталось 23 мин» в пункте, выбранный вариант подсвечен ----
@@ -1557,6 +1579,13 @@
       return;
     }
     const act = item.dataset.act;
+    // «Только звук» — меню не закрываем: видно, как обложка встала на место видео
+    if (act === "audioonly") {
+      if (!globalThis.__ytcsAudioOnly) return setNote("Обновите страницу видео (F5).");
+      globalThis.__ytcsAudioOnly.toggle();
+      syncAudioOnlyItem();
+      return;
+    }
     // заметка к этому моменту — поле поверх плеера рисует notes.js
     if (act === "note") {
       if (!globalThis.__ytcsNotes) return setNote("Обновите страницу видео (F5).");
