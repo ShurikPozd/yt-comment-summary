@@ -950,7 +950,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, channelVolume: true, volumeLeveler: false, dualSubs: false };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, channelVolume: true, volumeLeveler: false, dualSubs: false, introSkip: true };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -966,6 +966,7 @@
     playerPrefs.channelVolume = settings?.channelVolume !== false; // громкость по каналам — volume.js, по умолчанию вкл.
     playerPrefs.volumeLeveler = Boolean(settings?.volumeLeveler); // «Выравнивать громкость» — volume.js
     playerPrefs.dualSubs = Boolean(settings?.dualSubs); // «Двойные субтитры» — dualsubs.js
+    playerPrefs.introSkip = settings?.introSkip !== false; // пропуск вступлений по каналам — intro.js, по умолчанию вкл.
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -990,6 +991,8 @@
         showPageToast(playerPrefs.volumeLeveler ? "Громкость выравнивается: тихое громче, громкое тише" : "Громкость — как в видео", UI_ICONS.leveler);
       } else if (before.dualSubs !== playerPrefs.dualSubs) {
         showPageToast(playerPrefs.dualSubs ? "Двойные субтитры включены" : "Двойные субтитры выключены", UI_ICONS.subs);
+      } else if (before.introSkip !== playerPrefs.introSkip) {
+        showPageToast(playerPrefs.introSkip ? "Вступления будут пропускаться по каналам" : "Вступления больше не пропускаются", UI_ICONS.intro);
       }
     }
   }
@@ -1188,6 +1191,10 @@
     silence: SVG('<path d="M3 10.5v3M6.5 7v10M10 9.5v5"/><path d="M13.2 7.5l4.3 4.5-4.3 4.5M17.4 7.5l4.3 4.5-4.3 4.5"/>'),
     // динамик с волнами — «Громкость» и «Громкость по каналам» (volume.js)
     volume: SVG('<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/>'),
+    // два треугольника «вперёд» до черты — «Пропускать вступления по каналам» (intro.js)
+    intro: SVG('<path d="M4.5 6.5v11l6.5-5.5z"/><path d="M11.5 6.5v11l6.5-5.5z"/><path d="M20 6v12"/>'),
+    // флажок на полосе — «Вступление до сюда»
+    intromark: SVG('<path d="M3.5 19.5h17"/><path d="M8 19.5V5"/><path d="M8 5.5h9.5l-2.2 3.5 2.2 3.5H8"/>'),
     // столбики между двумя линиями — «Выравнивать громкость»
     leveler: SVG('<path d="M3.5 5h17M3.5 19h17" opacity=".55"/><path d="M6.5 10v4M10.2 8.5v7M13.8 8.5v7M17.5 10v4"/>'),
     // две строки в рамке — «Двойные субтитры» (оригинал и перевод, dualsubs.js)
@@ -1272,6 +1279,11 @@
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="volumeLeveler" title="Тихие места громче, громкие тише — удобно для подкастов и фильмов">${UI_ICONS.leveler}<span class="ytcs-label">Выравнивать громкость</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitem" data-act="volreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label ytcs-ellipsis">Сбросить громкость канала</span><span class="ytcs-aside">100&nbsp;%</span></button>
         </div>
+        <div class="ytcs-group">
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="introSkip" title="Отметьте, где кончается вступление, — в следующих видео канала оно пропустится само">${UI_ICONS.intro}<span class="ytcs-label">Пропускать вступления по каналам</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitem" data-act="intromark" title="Вступление канала кончается здесь — Shift+I" hidden>${UI_ICONS.intromark}<span class="ytcs-label ytcs-ellipsis">Вступление до сюда</span><span class="ytcs-aside">0:00</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="introreset" hidden>${UI_ICONS.speedreset}<span class="ytcs-label">Сбросить вступление канала</span></button>
+        </div>
       </div>
       <div class="ytcs-note" aria-live="polite"></div>`;
     // клики внутри меню не должны ставить видео на паузу/воспроизведение
@@ -1295,6 +1307,7 @@
     });
     syncSpeedItem();
     syncVolumeItem();
+    syncIntroItems();
     syncSleepItem();
     syncSilenceItem();
   }
@@ -1390,7 +1403,12 @@
     if (open) showPane("main");
     expandSleep(false);
     clearInterval(sleepTick);
-    if (open) sleepTick = setInterval(syncSleepItem, 1000); // «осталось …» идёт, пока меню открыто
+    // «осталось …» таймера сна и место видео у «Вступление до сюда» идут, пока меню открыто
+    if (open)
+      sleepTick = setInterval(() => {
+        syncSleepItem();
+        syncIntroItems();
+      }, 1000);
     if (open) fitMenu();
     if (open) syncQuickSave();
     if (open) syncArchiveItem();
@@ -1510,6 +1528,24 @@
   }
   document.addEventListener("volumechange", () => uiMenu?.classList.contains("open") && syncVolumeItem(), true);
 
+  // «Вступление до сюда · 0:42» (место видео) и «Сбросить вступление канала · 0:42» (intro.js)
+  function syncIntroItems() {
+    const api = playerPrefs.introSkip ? globalThis.__ytcsIntro : null;
+    const mk = uiMenu?.querySelector('[data-act="intromark"]');
+    if (mk) {
+      const h = api?.here?.();
+      mk.hidden = !h?.ok;
+      if (h?.ok) mk.querySelector(".ytcs-aside").textContent = h.label;
+    }
+    const item = uiMenu?.querySelector('[data-act="introreset"]');
+    if (!item) return;
+    const ci = api?.current?.();
+    item.hidden = !ci;
+    if (!ci) return;
+    // время — в подсказке: с ним подпись не помещается в строку
+    item.title = `Сейчас пропускается до ${ci.label}${ci.name ? ` в видео канала «${ci.name}»` : ""}`;
+  }
+
   async function onMenuClick(e) {
     const nav = e.target.closest("[data-pane-open]");
     if (nav) return showPane(nav.dataset.paneOpen, true);
@@ -1609,6 +1645,14 @@
     if (act === "volreset") {
       openMenu(false);
       void globalThis.__ytcsVolume?.reset?.();
+      return;
+    }
+    // вступление канала — до этого места или сбросить (intro.js покажет плашку)
+    if (act === "intromark" || act === "introreset") {
+      openMenu(false);
+      if (!globalThis.__ytcsIntro) return setNote("Обновите страницу видео (F5).");
+      if (act === "intromark") globalThis.__ytcsIntro.mark();
+      else globalThis.__ytcsIntro.reset();
       return;
     }
     // клип — окно рисует clip.js здесь же, на странице

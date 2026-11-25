@@ -67,6 +67,12 @@ export const PAGES = [
   // громкость по каналам: плашка «Громкость 150 % для канала «…» · Сбросить» и экран меню «Плеер ›»
   { key: "yt-volume", url: "/watch?v=dQw4w9WgXcQ&volume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-volume-notice')", settle: 700, roots: shadow("ytcs-volume-notice") },
   { key: "yt-menu-player", url: "/watch?v=dQw4w9WgXcQ&volume=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-volume-notice')", act: "__stand.playerPane()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
+  // пропуск вступлений: «Вступление пропущено · Вернуть», предложение запомнить и экран «Плеер ›»
+  { key: "yt-intro", url: "/watch?v=dQw4w9WgXcQ&intro=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-intro-notice')", act: "__ytcsIntro.show('skipped')", settle: 700, roots: shadow("ytcs-intro-notice") },
+  { key: "yt-intro-marked", url: "/watch?v=dQw4w9WgXcQ&intro=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-intro-notice')", act: "__ytcsIntro.mark()", settle: 700, roots: shadow("ytcs-intro-notice") },
+  { key: "yt-intro-offer", url: "/watch?v=dQw4w9WgXcQ&intro=offer", w: 1280, h: 900, wait: ytReady, act: "__stand.introSeek()", settle: 2400, roots: shadow("ytcs-intro-notice") },
+  { key: "yt-intro-offer-narrow", url: "/watch?v=dQw4w9WgXcQ&intro=offer", w: 560, h: 900, wait: ytReady, act: "(document.getElementById('movie_player').style.width = '520px', __stand.introSeek())", settle: 2400, roots: shadow("ytcs-intro-notice") },
+  { key: "yt-menu-intro", url: "/watch?v=dQw4w9WgXcQ&intro=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-intro-notice')", act: "__stand.playerPane().then(() => { const m = document.querySelector('.ytcs-menu'); m.scrollTop = m.scrollHeight; })", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
   // списки каналов со скоростью и громкостью в настройках панели
   { key: "panel-lists", url: "/sidepanel/stand.html?lists=1", w: 420, h: 7000, wait: "window.ok === 1", roots: "[document.getElementById('cs-list'), document.getElementById('cv-list')]" },
   { key: "yt-sleep", url: "/watch?v=dQw4w9WgXcQ&sleep=fade", w: 1280, h: 900, wait: ytReady, act: "__ytcsSleep.set('end')", settle: 900, roots: shadow("ytcs-sleep-notice") },

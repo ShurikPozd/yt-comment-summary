@@ -15,7 +15,11 @@
   if (window.top !== window || location.pathname.startsWith("/embed/")) return;
   const core = globalThis.__ytcsResumeCore;
   if (!core || globalThis.__ytcsResume) return;
-  globalThis.__ytcsResume = true;
+  // Пропуск вступлений (intro.js) спрашивает: не возвращаем ли мы место в этом ролике?
+  // true — возвращаем (или ещё выясняем), false — нет, null — ролик ещё не разобран.
+  globalThis.__ytcsResume = {
+    busy: (id) => (visit && visit.id === id ? Boolean(visit.pending || visit.target !== null) : null),
+  };
   const KEY = core.KEY;
   const LONG_KEY = core.LONG_KEY;
 
