@@ -149,7 +149,9 @@
         "audio-graph.js",
         "volume.js",
         "dualsubs-core.js",
-        "dualsubs.js"
+        "dualsubs.js",
+        "abloop-core.js",
+        "abloop.js"
       ],
       "run_at": "document_idle"
     },
@@ -170,7 +172,9 @@
         "limit.js",
         "volume-core.js",
         "audio-graph.js",
-        "volume.js"
+        "volume.js",
+        "abloop-core.js",
+        "abloop.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

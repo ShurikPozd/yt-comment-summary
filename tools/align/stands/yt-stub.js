@@ -10,6 +10,7 @@
 // канала «…» · Сбросить» (volume.js); __stand.playerPane() — экран меню «Плеер ›».
 // С &dual=1 — «Двойные субтитры» (dualsubs.js) с одной строкой (перевод не пришёл),
 // с &dual=2 — оригинал и перевод; ответы плеера и timedtext — вымышленные.
+// __stand.ab(83, 101) — повтор отрезка 1:23–1:41 (abloop.js), __stand.abMenu() — меню с «Повтор отрезка».
 (() => {
   const listeners = [];
   const msgListeners = [];
@@ -140,6 +141,14 @@
     },
     // поле заметки поверх плеера и подсказка у точки на полосе (notes.js)
     note: () => globalThis.__ytcsNotes?.open(),
+    // повтор отрезка (abloop.js): отрезок 1:23–1:41 или только начало; меню с раскрытым «Повтор отрезка»
+    ab: (a, b) => globalThis.__ytcsAb?.set(a, b),
+    abMenu: async () => {
+      globalThis.__ytcsAb?.set(83, null);
+      document.querySelector(".ytcs-btn")?.click();
+      await new Promise((r) => setTimeout(r, 300));
+      document.querySelector('.ytcs-menu [data-act="ab"]')?.click();
+    },
     noteTip: () => document.getElementById("ytcs-note-marks")?.shadowRoot.querySelectorAll(".d")[1]?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true })),
     toast: () => stub.storage.local.set({ settings: { ...store.settings, focusMode: true } }),
     // плашка плейлистов на странице: «быстрое сохранение» в последний плейлист

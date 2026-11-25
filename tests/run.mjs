@@ -1986,5 +1986,53 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(N.addNote(full, A, { t: 1, text: "лишняя" }).why === "full", "больше 300 заметок у видео — нельзя");
 }
 
+// ---------- повтор отрезка A–B (abloop-core.js) ----------
+{
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL("../abloop-core.js", import.meta.url), "utf8"), ctx);
+  const L = ctx.__ytcsAbCore;
+  const J = (o) => JSON.stringify(o);
+  const D = 213;
+  let r = L.setA(L.empty(), 83.4, D);
+  ok(r.did === "a" && r.st.a === 83.4 && r.st.b === null && !L.active(r.st), "A: отмечено начало, повтора ещё нет");
+  r = L.setB(r.st, 101.7, D);
+  ok(r.did === "loop" && L.active(r.st) && r.st.a === 83.4 && r.st.b === 101.7, "B после A: отрезок готов");
+  ok(L.needSeek(r.st, 101.7, D) && !L.needSeek(r.st, 90, D), "сразу после B — к началу; внутри отрезка — нет");
+  const loop = r.st;
+  ok(L.setA(loop, 95, D).did === "off" && !L.any(L.setA(loop, 95, D).st), "A при идущем повторе — снять");
+  r = L.setB(loop, 120, D);
+  ok(r.did === "moved" && r.st.a === 83.4 && r.st.b === 120, "B при идущем повторе — передвинуть конец");
+  r = L.setB(loop, 60, D);
+  ok(r.st.a === 60 && r.st.b === 83.4, "конец раньше начала — меняются местами");
+  r = L.setB(L.empty(), 50, D);
+  ok(r.did === "b" && r.st.b === 50 && r.st.a === null, "B первым: отмечен конец");
+  r = L.setA(r.st, 70, D);
+  ok(r.did === "loop" && r.st.a === 50 && r.st.b === 70, "A позже отмеченного конца — меняются местами");
+  ok(L.setA(L.setB(L.empty(), 50, D).st, 50.4, D).did === "short" && L.setB(L.setA(L.empty(), 10, D).st, 10.5, D).did === "short", "короче секунды — без изменений");
+  ok(L.setA(L.empty(), 500, D).st.a === D - L.END_GAP && L.setB(L.empty(), -4, D).st.b === 0, "время — в пределах видео");
+  ok(J(L.clean({ a: 10, b: 10.5 })) === J(L.empty()) && J(L.clean({ a: "x", b: 5 })) === J({ a: null, b: 5, free: false }), "чистка: короткий отрезок и мусор");
+  // ход повтора
+  ok(!L.step(loop, { t: 90, dur: D }).wrap, "внутри отрезка — играем дальше");
+  ok(L.step(loop, { t: 101.75, dur: D }).wrap, "дошли до конца — к началу");
+  ok(L.step(loop, { t: 104, dur: D }).wrap, "вставку пропустило расширение за конец — всё равно к началу");
+  let s = L.step(loop, { t: 140, dur: D, userJump: true });
+  ok(!s.wrap && s.st.free, "перемотали сами дальше конца — повтор ждёт");
+  ok(!L.step(s.st, { t: 141, dur: D }).wrap, "…и не возвращает, пока смотрите дальше");
+  s = L.step(s.st, { t: 85, dur: D, userJump: true });
+  ok(!s.wrap && !s.st.free && L.step(s.st, { t: 101.8, dur: D }).wrap, "вернулись в отрезок — повтор снова крутится");
+  ok(!L.step(loop, { t: 30, dur: D }).wrap, "до начала отрезка — просто играем к нему");
+  const tail = L.setB(L.setA(L.empty(), 200, D).st, D, D).st;
+  ok(L.endOf(tail, D) === D - L.END_GAP && L.step(tail, { t: D - 0.29, dur: D }).wrap, "конец отрезка = конец видео — возвращаемся чуть раньше конца");
+  ok(!L.step(L.empty(), { t: 5, dur: D }).wrap && !L.step({ a: 5, b: null }, { t: 50, dur: D }).wrap, "без отрезка — ничего");
+  ok(L.delay(loop, { t: 60, dur: D }) === 250 && L.delay(loop, { t: 101.6, dur: D }) === 85 && L.delay(loop, { t: 101.6, dur: D, rate: 4 }) === 16, "проверка чаще у конца и на быстрой скорости");
+  // подписи
+  ok(L.fmtTime(83.9) === "1:23" && L.fmtTime(3725) === "1:02:05" && L.fmtTime(-1) === "0:00", "время 1:23 и 1:02:05");
+  ok(J(L.pill(loop)) === J({ kind: "loop", lead: "Повтор", time: "1:23–1:41", key: "" }), "плашка: «Повтор 1:23–1:41»");
+  ok(L.pill({ a: 83 }).kind === "a" && L.pill({ a: 83 }).key === "B" && L.pill({ b: 99 }).key === "A" && L.pill(L.empty()).kind === "off", "плашка: начало ждёт B, конец ждёт A");
+  ok(L.aside(loop) === "1:23–1:41" && L.aside({ a: 83 }) === "A 1:23" && L.aside({ b: 61 }) === "B 1:01" && L.aside(L.empty()) === "", "подпись в меню");
+  const m = L.marks(loop, D);
+  ok(Math.abs(m.a - 39.155) < 0.01 && Math.abs(m.band.to - 47.746) < 0.01 && L.marks({ a: 10 }, D).band === null && L.marks(loop, NaN) === null && L.marks(L.empty(), D) === null, "отметки на полосе в процентах");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

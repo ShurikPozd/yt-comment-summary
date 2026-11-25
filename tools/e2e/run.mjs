@@ -231,7 +231,7 @@ await step("меню кнопки открывается", async () => {
 // Все модули плеера встали на странице видео (модуль без своего ядра или без записи
 // в content_scripts тихо не работает — снаружи этого не видно).
 const PLAYER_MODS = ["SpeedCore", "Speed", "SilenceCore", "Silence", "SleepCore", "Sleep", "Stats", "ResumeCore", "Resume",
-  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual"];
+  "NotesCore", "Notes", "Limit", "VolumeCore", "Audio", "Volume", "DualCore", "Dual", "AbCore", "Ab"];
 await step("модули плеера загружены", async () => {
   const ctx = extCtx.get(W);
   must(ctx, "мир контент-скриптов расширения на странице не найден");
@@ -310,6 +310,43 @@ await step("с того же места после обновления (resume.
   const t = await evalIn(W, "document.querySelector('#movie_player video').currentTime");
   must(Math.abs(t - T) < 1.5, `видео откатилось на ${t.toFixed(1)} с`);
   return `было ${T} с, после F5 — ${t.toFixed(1)} с`;
+});
+
+await step("повтор отрезка A–B (abloop.js)", async () => {
+  const V = "document.querySelector('#movie_player video')";
+  const press = async (key, code, vk) => {
+    await b.send("Input.dispatchKeyEvent", { type: "keyDown", key, code, windowsVirtualKeyCode: vk, text: key.length === 1 ? key : undefined }, W);
+    await b.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk }, W);
+  };
+  const at = async (t) => {
+    await evalIn(W, `(() => { const v = ${V}; v.pause(); v.currentTime = ${t}; })()`);
+    must(await until(W, `Math.abs(${V}.currentTime - ${t}) < 0.3 && !${V}.seeking`, 4000), `видео не встало на ${t} с (стоит на ${await evalIn(W, V + ".currentTime")})`);
+  };
+  // resume.js после F5 ещё 4 с возвращает видео на место из истории — ждём, пока отпустит
+  await sleep(3000);
+  // A на 20 с, B на 23 с — видео сразу возвращается к 20 с
+  await at(20);
+  await press("a", "KeyA", 65);
+  await at(23);
+  await press("b", "KeyB", 66);
+  must(await until(W, `Math.abs(${V}.currentTime - 20) < 0.5`, 3000), `после B видео не вернулось к началу отрезка: ${await evalIn(W, V + ".currentTime")}`);
+  const pill = await until(W, "document.getElementById('ytcs-abloop-notice')?.shadowRoot.querySelector('.n.show .txt')?.textContent", 3000);
+  must(pill === "Повтор 0:20–0:23", `плашка: «${pill}»`);
+  const band = await until(W, "document.getElementById('ytcs-abloop-marks')?.shadowRoot.querySelector('.band:not([hidden])')?.style.left", 3000);
+  must(band, "на полосе прогресса нет отрезка");
+  // играет: крутится внутри 20–23 с и хотя бы раз возвращается к началу
+  await evalIn(W, `${V}.play().then(() => true, () => false)`);
+  const seen = await evalIn(W, `new Promise((res) => { const v = ${V}; const ts = []; const id = setInterval(() => ts.push(v.currentTime), 100);
+    setTimeout(() => { clearInterval(id); v.pause(); res(ts); }, 5000); })`);
+  const out = seen.filter((t) => t < 19.8 || t > 23.25);
+  const wraps = seen.filter((t, i) => i && t < seen[i - 1] - 1).length;
+  must(!out.length, `вышло за отрезок: ${out.map((t) => t.toFixed(2)).join(", ")}`);
+  must(wraps >= 1, `за 5 с ни разу не вернулось к началу (время: ${seen[0]?.toFixed(1)}…${seen.at(-1)?.toFixed(1)})`);
+  // Esc — снять: ни плашки, ни отметок
+  await press("Escape", "Escape", 27);
+  const off = await until(W, "!document.getElementById('ytcs-abloop-marks')?.isConnected && !document.getElementById('ytcs-abloop-notice')?.shadowRoot.querySelector('.n.show')", 3000);
+  must(off, "Esc не снял повтор");
+  return `кругов за 5 с: ${wraps}, плашка «${pill}»`;
 });
 
 // ---------- главная ----------

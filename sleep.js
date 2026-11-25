@@ -331,6 +331,8 @@
     },
     set,
     cycle,
+    // остановить сейчас, как «в конце видео» (повтор отрезка A–B, abloop.js: конец отрезка — конец)
+    stopNow: () => stop(mainVideo()),
   };
   globalThis.__ytcsSleep = api;
 
