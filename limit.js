@@ -148,7 +148,9 @@
     const where = r && r.width >= 320 && r.height >= 150 ? p : document.body;
     if (!where || !v) return false;
     if (!ui.host) build();
-    if (ui.host.parentElement !== where) where.appendChild(ui.host);
+    // в новом встроенном плеере — слой над его панелью управления (content.js), иначе кнопки не нажать
+    const into = (where !== document.body && globalThis.__ytcsPlayerLayer?.(where)) || where;
+    if (ui.host.parentElement !== into) into.appendChild(ui.host);
     ui.host.classList.toggle("page", where === document.body);
     ui.root.querySelector(".txt").innerHTML = `Сегодня уже <b>${String(spent || "").replace(/[<>&]/g, "")}</b> на YouTube`;
     // таймера сна здесь нет (не загрузился) — кнопку «Досмотреть» не показываем

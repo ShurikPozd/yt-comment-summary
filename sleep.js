@@ -259,7 +259,9 @@
       notice.host = host;
       notice.root = root;
     }
-    if (notice.host.parentElement !== where) where.appendChild(notice.host);
+    // в новом встроенном плеере — слой над его панелью управления (content.js), иначе кнопки не нажать
+    const into = (where !== document.body && globalThis.__ytcsPlayerLayer?.(where)) || where;
+    if (notice.host.parentElement !== into) into.appendChild(notice.host);
     notice.host.classList.toggle("page", where === document.body);
     return notice.host;
   }
@@ -316,7 +318,8 @@
   // Отметка на плеере: точка на кнопке расширения, пока таймер идёт (стиль — content.js)
   function syncMark() {
     const on = st.mode !== "off";
-    for (const b of document.querySelectorAll(".html5-video-player .ytcs-btn")) {
+    // кнопка в плеере YouTube или в панели нового встроенного плеера библиотеки (#player-controls)
+    for (const b of document.querySelectorAll(".html5-video-player .ytcs-btn, #player-controls .ytcs-btn")) {
       if (b.classList.contains("ytcs-sleep-on") !== on) b.classList.toggle("ytcs-sleep-on", on);
     }
   }

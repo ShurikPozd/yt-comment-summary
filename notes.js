@@ -168,7 +168,9 @@
       ed.host = host;
       ed.root = root;
     }
-    if (ed.host.parentElement !== p) p.appendChild(ed.host);
+    // в новом встроенном плеере — слой над его панелью управления (content.js), иначе нажатия не доходят
+    const into = globalThis.__ytcsPlayerLayer?.(p) || p;
+    if (ed.host.parentElement !== into) into.appendChild(ed.host);
     return ed.host;
   }
 

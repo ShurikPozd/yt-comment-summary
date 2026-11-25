@@ -31,11 +31,16 @@
   // ---------- Полоса прогресса ----------
   // Классы проверены на живом YouTube: полоса — .ytp-progress-bar-container,
   // «/ 1:58:54» — .ytp-time-separator + .ytp-time-duration. Текущее время остаётся.
+  // Новый встроенный плеер (библиотека, ноябрь 2026): полоса — yt-progress-bar в слое
+  // #player-controls, «/ 0:19» — .ytwPlayerTimeDisplayTimeDelimiter + …TimeDuration.
   const HIDE_PROGRESS_CSS = `
     .ytp-progress-bar-container,
     .ytp-time-separator,
     .ytp-time-duration,
-    .ytp-bound-time-right { display: none !important; }`;
+    .ytp-bound-time-right,
+    #player-controls yt-progress-bar,
+    .ytwPlayerTimeDisplayTimeDelimiter,
+    .ytwPlayerTimeDisplayTimeDuration { display: none !important; }`;
 
   function applyHideProgress() {
     let el = document.getElementById("ytcs-hide-progress");

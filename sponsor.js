@@ -254,7 +254,9 @@
       notice.host = host;
       notice.root = root;
     }
-    if (notice.host.parentElement !== p) p.appendChild(notice.host);
+    // в новом встроенном плеере — слой над его панелью управления (content.js), иначе «Вернуть»/«Сбросить» не нажать
+    const into = globalThis.__ytcsPlayerLayer?.(p) || p;
+    if (notice.host.parentElement !== into) into.appendChild(notice.host);
     return notice.host;
   }
 
@@ -263,9 +265,10 @@
   function liftFor(p) {
     const pr = p.getBoundingClientRect();
     let top = Infinity;
-    for (const sel of [".ytp-progress-bar-container", ".ytp-chrome-bottom"]) {
-      const r = p.querySelector(sel)?.getBoundingClientRect();
-      if (r && r.height > 0) top = Math.min(top, r.top);
+    // у нового встроенного плеера полоса — в слое #player-controls поверх плеера, вне #movie_player
+    for (const el of [p.querySelector(".ytp-progress-bar-container"), p.querySelector(".ytp-chrome-bottom"), OUR_EMBED && document.querySelector("#player-controls .ytPlayerProgressBarHost")]) {
+      const r = el?.getBoundingClientRect?.();
+      if (r && r.height > 0 && r.top > pr.top) top = Math.min(top, r.top);
     }
     return Number.isFinite(top) ? Math.max(16, Math.round(pr.bottom - top + 12)) : 76;
   }
@@ -333,13 +336,18 @@
       pointer-events: none; transform: scaleY(.667);
       transition: transform .2s cubic-bezier(.05, 0, 0, 1); }
     :host-context(.ytp-progress-bar-hover) { transform: none; }
+    /* visibility: inherit — новая панель встроенного плеера прячется через visibility: hidden */
+    :host-context(.ytPlayerProgressBarProgressBar) { transform: none; visibility: inherit; }
     .s { position: absolute; top: 0; height: 100%; min-width: 2px; opacity: .9; }
     .s.rev { opacity: .45; }
     @media (prefers-reduced-motion: reduce) { :host { transition: none; } }`;
   let marks = null;
 
   function renderMarks() {
-    const bar = document.querySelector("#movie_player .ytp-progress-bar");
+    // полоса: привычная или новая у встроенного плеера библиотеки (как у заметок, notes.js)
+    const bar =
+      document.querySelector("#movie_player .ytp-progress-bar") ||
+      (OUR_EMBED ? document.querySelector("#player-controls .ytPlayerProgressBarProgressBar") : null);
     const v = mainVideo();
     const d = v && !adShowing() ? v.duration : NaN;
     const show = prefs.on && !prefs.hideProgress && bar && segs.length && Number.isFinite(d) && d > 0;
