@@ -18,6 +18,7 @@ import { buildData, describe, escapeXml, fingerprint, parseInput, suggest, video
 import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
 import { linkRecord, revokeResult, savedLink, shareBody, shareResult } from "../share-core.js";
 import * as ST from "../stats-core.js";
+import * as LM from "../limit-core.js";
 import { queueLeft, weeklyReport } from "../report-core.js";
 import { MAX, WEEK, channelsOf, dayKey, dayLabel, enough, groupItems, markAllRead, mergeFeed, newCount, queueable, visible } from "../library/digest-core.js";
 import { MODULES, createLoader } from "../lazy-bg.js";
@@ -1571,6 +1572,87 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   await bg.setupYqSync();
   ok(alarms.get("ytcs-yqpoll")?.periodInMinutes === 5 && alarms.has("ytcs-yqsync"), "будильники: раз в 5 минут отметки, при запуске — сверка");
   globalThis.fetch = realFetch;
+  delete globalThis.chrome;
+}
+
+// ---------- мягкий лимит времени (limit-core.js, limit-bg.js) ----------
+{
+  const at = (d, h, m = 0) => new Date(2026, 10, d, h, m).getTime(); // ноябрь 2026, местное время
+  ok(LM.limitDay(at(25, 10)) === "2026-11-25" && LM.limitDay(at(26, 2, 30)) === "2026-11-25" && LM.limitDay(at(26, 4)) === "2026-11-26", "лимит: новый день — в 4 утра");
+  ok(LM.limitDay(new Date(2026, 0, 1, 1).getTime()) === "2025-12-31" && LM.limitDay(new Date(2026, 2, 1, 3, 59).getTime()) === "2026-02-28", "лимит: ночь после смены месяца и года — ещё прошлый день");
+  ok(LM.cleanCfg(null).on === false && LM.cleanCfg(null).min === 120 && LM.cleanCfg({ on: true, min: 45 }).min === 120 && LM.cleanCfg({ on: true, min: 90 }).min === 90, "лимит: настройка — выключено сразу, 2 ч, чужие значения отбрасываются");
+  ok(LM.PRESETS.map(LM.fmtLimit).join("|") === "30 мин|1 ч|1,5 ч|2 ч|3 ч|4 ч", "лимит: подписи вариантов");
+  ok(LM.fmtSpent(7199) === "1 ч 59 мин" && LM.fmtSpent(7230) === "2 ч" && LM.fmtSpent(6000) === "1 ч 40 мин" && LM.fmtSpent(59) === "0 мин" && LM.fmtSpent(8100) === "2 ч 15 мин", "лимит: просмотренное — вниз до минуты");
+  ok(LM.fmtLeft(30) === "1 мин" && LM.fmtLeft(1200) === "20 мин" && LM.fmtLeft(3900) === "1 ч 05 мин", "лимит: остаток — вверх до минуты");
+  const on = { on: true, min: 60 };
+  const t = at(25, 20);
+  let rec = LM.addWatch(null, 0, t);
+  ok(rec.day === "2026-11-25" && rec.sec === 0 && !rec.done, "лимит: новая запись дня");
+  rec = LM.addWatch(rec, 3590, t);
+  ok(!LM.shouldShow(rec, on, t), "лимит: до порога — не показываем");
+  ok(!LM.shouldShow(LM.addWatch(rec, 20, t), { on: false, min: 60 }, t), "лимит: выключен — не показываем");
+  rec = LM.addWatch(rec, 15, t);
+  ok(LM.shouldShow(rec, on, t), "лимит: пересекли — показываем");
+  rec = LM.markShown(rec, on, t);
+  ok(!LM.shouldShow(LM.addWatch(rec, 3000, t), on, t), "лимит: показали — больше не показываем (не на каждом видео)");
+  rec = LM.applyAction(rec, "snooze", t);
+  ok(rec.next === rec.sec + 900 && !LM.shouldShow(LM.addWatch(rec, 890, t), on, t), "лимит: «Ещё 15 мин» — 15 минут тихо");
+  rec = LM.addWatch(rec, 910, t);
+  ok(LM.shouldShow(rec, on, t), "лимит: через 15 минут просмотра — снова");
+  rec = LM.applyAction(LM.markShown(rec, on, t), "close", t);
+  ok(!LM.shouldShow(LM.addWatch(rec, 5000, t), on, t), "лимит: «Закрыть» — на сегодня всё");
+  ok(LM.shouldShow(LM.addWatch(rec, 5000, t), { on: true, min: 120 }, t), "лимит: поменяли лимит — напомним под новое значение");
+  const next = at(26, 4, 1);
+  ok(LM.cleanDay(rec, next).sec === 0 && !LM.shouldShow(rec, on, next), "лимит: в 4 утра — новый день с нуля");
+  ok(LM.addWatch(null, 10, t, 1800).sec === 1810 && LM.addWatch({ day: "2026-11-24", sec: 9 }, 10, t, 1800).sec === 10, "лимит: первый запуск — с тем, что уже насмотрено сегодня; вчерашняя запись — с нуля");
+  ok(LM.cleanDay({ day: "2026-11-25", sec: "x", next: -5, lim: 7 }, t).sec === 0 && LM.cleanDay({ day: "2026-11-25", sec: 1e9 }, t).sec === 86400, "лимит: битая запись — к правильному виду");
+  const pr = LM.progress({ day: "2026-11-25", sec: 6000 }, { on: true, min: 120 }, t);
+  ok(Math.abs(pr.frac - 6000 / 7200) < 1e-9 && !pr.over && pr.left === 1200, "лимит: полоска «1 ч 40 мин из 2 ч»");
+
+  // фон: прибавки из вкладок, плашка — только в ту вкладку и только раз
+  const store = { settings: {}, watchLimit: { on: true, min: 30 } };
+  let listener = null;
+  const shown = [];
+  let tabOk = true;
+  globalThis.chrome = {
+    runtime: { id: "ext", onMessage: { addListener: (f) => (listener = f) } },
+    tabs: { sendMessage: async (tabId, msg, opt) => (shown.push({ tabId, msg, frameId: opt?.frameId }), { ok: tabOk }) },
+    storage: { local: { get: async (k) => Object.fromEntries([].concat(k).filter((x) => x in store).map((x) => [x, structuredClone(store[x])])), set: async (o) => Object.assign(store, structuredClone(o)) } },
+  };
+  const bg = await import("../limit-bg.js?t=" + Date.now());
+  const send = (sec, tab = 7, frameId = 0) => listener({ type: "stats:add", delta: { w: sec } }, { id: "ext", tab: { id: tab }, frameId }, () => {});
+  for (let i = 0; i < 10; i++) send(170, 7);
+  await bg.limitAdd(0);
+  ok(store.watchLimitDay?.sec === 1700 && shown.length === 0, "фон лимита: прибавки складываются, до порога тихо");
+  send(60, 7);
+  send(60, 9, 3); // пересекли лимит в рамке плеера библиотеки (вкладка 9, рамка 3)
+  send(60, 7);
+  await bg.limitAdd(0);
+  ok(shown.length === 1 && shown[0].tabId === 9 && shown[0].frameId === 3 && shown[0].msg.spent === "30 мин", "фон лимита: плашка — один раз, той вкладке и рамке, что играла");
+  ok(store.watchLimitDay.done === true && store.watchLimitDay.lim === 30, "фон лимита: показали — отмечено");
+  let reply = null;
+  listener({ type: "limit:act", act: "snooze" }, { id: "ext" }, (r) => (reply = r));
+  await bg.limitAdd(0);
+  ok(reply?.ok && store.watchLimitDay.next === store.watchLimitDay.sec + 900, "фон лимита: «Ещё 15 мин» с плашки");
+  tabOk = false;
+  for (let i = 0; i < 6; i++) send(170, 7);
+  await bg.limitAdd(0);
+  ok(shown.length >= 2 && store.watchLimitDay.done === false, "фон лимита: плашка не показалась — напоминание не тратится");
+  tabOk = true;
+  send(15, 7);
+  await bg.limitAdd(0);
+  ok(store.watchLimitDay.done === true && shown.at(-1).tabId === 7, "фон лимита: со следующей прибавкой — показали");
+  listener({ type: "stats:add", delta: { w: 999 } }, { id: "чужое", tab: { id: 1 } }, () => {});
+  const before = store.watchLimitDay.sec;
+  store.settings = { watchStats: false };
+  send(100, 7);
+  await bg.limitAdd(0);
+  ok(store.watchLimitDay.sec === before, "фон лимита: чужие сообщения и выключенная статистика — не считаем");
+  delete store.watchLimitDay;
+  store.settings = {};
+  store.watchStats = { v: 1, since: 1, days: { [ST.dayKey()]: { w: 600, s: 60 } }, ch: {} };
+  await bg.limitAdd(10);
+  ok(store.watchLimitDay.sec === 670, "фон лимита: первый запуск — подхватывает «сегодня» из статистики");
   delete globalThis.chrome;
 }
 

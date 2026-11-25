@@ -4861,3 +4861,146 @@ button.primary .key {
   position: relative;
   top: -1px;
 }
+
+/* ===== «Мягкий лимит времени» в «Статистике» (library/limit-view.js) =====
+   Карточка сразу под плитками: выключатель, полоска «Сегодня … из …», сколько в день. */
+.st-limit-slot:empty {
+  display: none;
+}
+
+.st-empty-wrap .st-limit-slot {
+  width: min(680px, 100%);
+}
+
+.st-limit {
+  gap: 14px;
+}
+
+.st-limit .switch {
+  padding: 0;
+  font-weight: 650;
+  font-size: 1.08rem;
+}
+
+.st-limit .switch small {
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+.st-lim-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.st-lim-now {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.st-lim-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  flex-wrap: wrap;
+}
+
+.st-lim-txt {
+  color: var(--fg-2);
+  font-size: 1.15rem;
+  font-weight: 550;
+}
+
+.st-lim-txt b {
+  color: var(--fg);
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-lim-left {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-lim-now.over .st-lim-left {
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+.st-lim-meter {
+  height: 10px;
+}
+
+.st-lim-opts {
+  display: flex;
+  align-items: center;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+}
+
+.st-lim-l {
+  color: var(--fg-2);
+  font-weight: 650;
+}
+
+.st-lim-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* статистика выключена — лимиту не на чем считать */
+.st-lim-warn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding: 10px 10px 10px 16px;
+  border-radius: var(--r-m);
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+
+/* значок — на одной линии с первой строкой текста (на узком окне текст в 2–3 строки) */
+.st-lim-warn > span {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.st-lim-warn svg {
+  flex: none;
+  margin-top: calc((1lh - 18px) / 2);
+  color: var(--accent-ink);
+}
+
+/* не так широко: полоска и «В день» — друг под другом */
+@container (max-width: 980px) {
+  .st-lim-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* узко: «В день» над кнопками, кнопки — сеткой 3 × 2 во всю ширину */
+@container (max-width: 620px) {
+  .st-lim-opts {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .st-lim-range {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-radius: 22px;
+  }
+  .st-lim-range button {
+    padding: 0 8px;
+  }
+}

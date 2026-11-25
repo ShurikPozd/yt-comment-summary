@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="sponsor-settings.css" />
     <link rel="stylesheet" href="channel-speed.css" />
     <link rel="stylesheet" href="focus-settings.css" />
+    <link rel="stylesheet" href="limit-settings.css" />
     <link rel="stylesheet" href="welcome-link.css" />
     <script src="theme-boot.js"></script>
   </head>
@@ -240,6 +241,19 @@
             <div id="focus-opts" class="focus-opts"></div>
           </div>
 
+          <!-- «Мягкий лимит времени»: выбор и полоску рисует limit-settings.js -->
+          <div class="settings-block lim-block">
+            <h3>Мягкий лимит времени</h3>
+            <label class="switch-row">
+              <span class="sw-text">
+                <span class="sw-title">Напоминать, когда смотрю долго</span>
+                <span class="hint">Плашка над видео, когда за день на YouTube посмотрено больше заданного. Просмотр ничем не блокируется. Время берётся из статистики просмотра, новый день — в 4 утра.</span>
+              </span>
+              <input type="checkbox" id="set-limit" class="switch" />
+            </label>
+            <div id="lim-opts" class="lim-opts" hidden></div>
+          </div>
+
           <div class="settings-block">
             <h3>Сбор и анализ</h3>
             <label>Максимум комментариев
@@ -340,6 +354,7 @@
     <script src="../speed-core.js"></script>
     <script type="module" src="channel-speed.js"></script>
     <script type="module" src="focus-settings.js"></script>
+    <script type="module" src="limit-settings.js"></script>
     <script type="module" src="../welcome/link.js"></script>
   </body>
 </html>
