@@ -75,6 +75,8 @@ export const PAGES = [
   { key: "yt-dualsubs-2", url: "/watch?v=dQw4w9WgXcQ&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", settle: 600, roots: shadow("ytcs-dualsubs"), extra: ".box" },
   // заметки с таймкодами (notes.js): поле поверх плеера и плашка «Заметка сохранена»
   { key: "yt-note", url: "/watch?v=dQw4w9WgXcQ&notes=1", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
+  // поле заметки при «Двойных субтитрах» — над строкой перевода, а не поверх неё
+  { key: "yt-note-dual", url: "/watch?v=dQw4w9WgXcQ&notes=1&dual=2", w: 1280, h: 900, wait: ytReady + " && document.getElementById('ytcs-note-marks') && document.getElementById('ytcs-dualsubs')?.shadowRoot?.querySelector('.box:not([hidden]) .t:not(:empty)')", act: "__stand.note()", settle: 900, roots: shadow("ytcs-note-editor") },
   // «Моя библиотека» → «Заметки» и заметки под встроенным плеером (notes-view.js)
   { key: "lib-notes", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 2000, wait: "document.querySelector('.nt-card') && performance.now() > 1500", roots: "[document.getElementById('notes')]" },
   // правка заметки (поле и кнопки в строке) и плашка «Заметка удалена · Вернуть»

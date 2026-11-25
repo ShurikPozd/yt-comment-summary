@@ -180,7 +180,17 @@
       const r = el?.getBoundingClientRect?.();
       if (r && r.height > 0 && r.top > pr.top) top = Math.min(top, r.top);
     }
-    return Number.isFinite(top) ? Math.max(16, Math.round(pr.bottom - top + 14)) : 76;
+    let lift = Number.isFinite(top) ? Math.max(16, Math.round(pr.bottom - top + 14)) : 76;
+    // субтитры внизу плеера (YouTube или «Двойные субтитры») — встаём над ними, чтобы
+    // поле и «Заметка сохранена» не закрывали строку, к которой пишете заметку
+    const subs = [...p.querySelectorAll(".ytp-caption-window-container .caption-window")];
+    const ds = document.getElementById("ytcs-dualsubs");
+    if (ds?.parentElement === p) subs.push(ds);
+    for (const el of subs) {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.width > 0 && r.top > pr.top + pr.height / 2 && r.top < pr.bottom - lift + 4) lift = Math.round(pr.bottom - r.top + 10);
+    }
+    return lift;
   }
   function placeHost(host) {
     const p = player();
