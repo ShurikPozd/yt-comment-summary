@@ -246,7 +246,9 @@
     /* невысокий плеер (мини-плеер, узкое окно): без обложки; совсем маленький — без канала */
     @container (max-height: 330px) { .cover { display: none; } .col { gap: 8px; padding-top: 44px; padding-bottom: 44px; } }
     @container (max-height: 200px) { .chan { display: none; } .title { -webkit-line-clamp: 1; } .say { min-height: 1.3em; -webkit-line-clamp: 1; } }
-    @container (max-width: 460px) { .pill .lbl { display: none; } .pill { padding-left: round(.5em, 2px); } }
+    /* узкий плеер: «для канала» убираем, «Только звук» остаётся (не голый значок) */
+    .pill .ch[hidden] { display: none; }
+    @container (max-width: 460px) { .pill .ch { display: none; } .pill { padding-left: round(.7em, 2px); gap: round(.45em, 2px); } }
     @media (prefers-reduced-motion: reduce) { .pill button { transition: none; } }`;
 
   const ui = { host: null, root: null, img: null, src: [], srcAt: 0, vid: null, phraseObs: null, capObs: null };
@@ -276,7 +278,7 @@
       root.innerHTML = `<style>${CSS}</style>
         <div class="bg"></div><div class="shade"></div>
         <div class="col">
-          <div class="pill" role="status">${ICON}<span class="lbl">Только звук</span><button type="button" title="Показать видео — Shift+V">Показать видео</button></div>
+          <div class="pill" role="status">${ICON}<span class="lbl">Только звук<span class="ch" hidden> для канала</span></span><button type="button" title="Показать видео — Shift+V">Показать видео</button></div>
           <img class="cover" alt="" referrerpolicy="no-referrer" decoding="async" hidden>
           <div class="meta"><p class="title"></p><div class="chan"></div></div>
           <p class="say" aria-live="off" hidden></p>
@@ -349,7 +351,8 @@
     if (chan.textContent !== (info.author || "")) chan.textContent = info.author || "";
     title.title = info.title || "";
     const forChannel = memory && core.has(map, info.channelId);
-    r.querySelector(".lbl").textContent = core.pillText(forChannel);
+    r.querySelector(".ch").hidden = !forChannel;
+    r.querySelector(".pill").setAttribute("aria-label", core.pillText(forChannel));
     r.querySelector(".pill").title = forChannel && info.author ? `Только звук для канала «${info.author}»` : "Видео скрыто, играет звук";
     setCover(info.videoId);
   }
