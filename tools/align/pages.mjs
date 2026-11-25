@@ -102,6 +102,12 @@ export const PAGES = [
   { key: "yt-speech", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.speech('дом')", settle: 900, roots: shadow("ytcs-speech"), extra: ".tc" },
   { key: "yt-speech-error", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.speech('', 'error')", settle: 1200, roots: shadow("ytcs-speech") },
   { key: "yt-speech-narrow", url: "/watch?v=dQw4w9WgXcQ", w: 560, h: 900, wait: ytReady, act: "(document.getElementById('movie_player').style.width = '520px', document.getElementById('movie_player').style.height = '293px', __stand.speech('дом'))", settle: 900, roots: shadow("ytcs-speech"), extra: ".tc" },
+  // повтор отрезка A–B (abloop.js): плашка «Повтор 1:23–1:41 · Снять», «Начало 1:23 · конец — B»,
+  // узкий плеер и меню с раскрытым пунктом «Повтор отрезка» (A / B / «Снять»)
+  { key: "yt-abloop", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.ab(83, 101)", settle: 900, roots: shadow("ytcs-abloop-notice") },
+  { key: "yt-abloop-a", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.ab(83, null)", settle: 900, roots: shadow("ytcs-abloop-notice") },
+  { key: "yt-abloop-narrow", url: "/watch?v=dQw4w9WgXcQ", w: 560, h: 900, wait: ytReady, act: "(document.getElementById('movie_player').style.width = '400px', __stand.ab(83, null))", settle: 900, roots: shadow("ytcs-abloop-notice") },
+  { key: "yt-menu-ab", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.abMenu()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
   // «Моя библиотека» → «Заметки» и заметки под встроенным плеером (notes-view.js)
   { key: "lib-notes", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 2000, wait: "document.querySelector('.nt-card') && performance.now() > 1500", roots: "[document.getElementById('notes')]" },
   // правка заметки (поле и кнопки в строке) и плашка «Заметка удалена · Вернуть»

@@ -159,7 +159,9 @@
         "frame-shot.js",
         "words-core.js",
         "speech-core.js",
-        "speech.js"
+        "speech.js",
+        "abloop-core.js",
+        "abloop.js"
       ],
       "run_at": "document_idle"
     },
@@ -188,7 +190,9 @@
         "speech-core.js",
         "speech.js",
         "audioonly-core.js",
-        "audioonly.js"
+        "audioonly.js",
+        "abloop-core.js",
+        "abloop.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

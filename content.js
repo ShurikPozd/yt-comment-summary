@@ -1172,6 +1172,13 @@
     .ytcs-sleep-opts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; box-sizing: border-box; width: 100%;
       padding: 6px 16px 10px; background: rgba(255, 255, 255, .06); }
     .ytcs-sleep-opts[hidden] { display: none; }
+    /* «Повтор отрезка» (abloop.js): A — начало, B — конец (время под буквой), «Снять» — колонки поровну */
+    .ytcs-item[data-act="ab"] .ytcs-aside:empty { display: none; }
+    .ytcs-ab-opts { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; box-sizing: border-box; width: 100%;
+      padding: 6px 16px 10px; background: rgba(255, 255, 255, .06); }
+    .ytcs-ab-opts[hidden] { display: none; }
+    /* высота 46 px: «Снять» ровно посередине на 150 % и 200 % (замер tools/align, yt-menu-ab; при 44 px — −0,67 px) */
+    .ytcs-ab-opts .ytcs-chip { height: 46px; }
     .ytcs-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 0; height: 44px;
       box-sizing: border-box; padding: 0 4px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .1); color: #f1f1f1;
       font: 600 15px/1.1 "YouTube Noto", Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums; cursor: pointer;
@@ -1257,6 +1264,8 @@
     speech: SVG('<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L20 20"/><path d="M8.3 9.3v2.4M10.5 8v5M12.7 9.3v2.4"/>'),
     // наушники — «Только звук» (видео скрыто, audioonly.js)
     headphones: SVG('<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="13" width="4.5" height="7" rx="2"/><rect x="16" y="13" width="4.5" height="7" rx="2"/>'),
+    // две стрелки по кругу — «Повтор отрезка» A–B (abloop.js)
+    loop: SVG('<path d="M17 4.5l2.5 2.5L17 9.5"/><path d="M19.5 7H8.5A4.5 4.5 0 0 0 4 11.5V12"/><path d="M7 19.5L4.5 17 7 14.5"/><path d="M4.5 17h11a4.5 4.5 0 0 0 4.5-4.5V12"/>'),
     focus: SVG('<path d="M4 8.5V6.5A2.5 2.5 0 0 1 6.5 4h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v2M20 15.5v2a2.5 2.5 0 0 1-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 0 1 4 17.5v-2"/><circle cx="12" cy="12" r="3.2"/>'),
   };
 
@@ -1289,6 +1298,12 @@
         <button class="ytcs-item" role="menuitem" data-act="defer">${UI_ICONS.defer}<span class="ytcs-label">Отложить в очередь</span></button>
         <button class="ytcs-item" role="menuitem" data-act="note" title="Заметка к этому моменту — клавиша N">${UI_ICONS.note}<span class="ytcs-label">Заметка</span></button>
         <button class="ytcs-item" role="menuitem" data-act="speech" title="Где в видео говорят слово — Ctrl+Shift+F">${UI_ICONS.speech}<span class="ytcs-label">Поиск по речи</span></button>
+        <button class="ytcs-item" role="menuitem" data-act="ab" aria-expanded="false" title="Повтор отрезка — клавиши A (начало) и B (конец), снять — Esc" hidden>${UI_ICONS.loop}<span class="ytcs-label ytcs-ellipsis">Повтор отрезка</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
+        <div class="ytcs-ab-opts" role="group" aria-label="Повтор отрезка" hidden>
+          <button type="button" class="ytcs-chip" data-ab="a" aria-pressed="false" title="Начало отрезка — это место (клавиша A)">A<small>начало</small></button>
+          <button type="button" class="ytcs-chip" data-ab="b" aria-pressed="false" title="Конец отрезка — это место (клавиша B)">B<small>конец</small></button>
+          <button type="button" class="ytcs-chip" data-ab="off" title="Снять повтор — Esc" hidden>Снять</button>
+        </div>
         <button class="ytcs-item" role="menuitem" data-act="sleep" aria-expanded="false" hidden>${UI_ICONS.moon}<span class="ytcs-label ytcs-ellipsis">Таймер сна</span><span class="ytcs-aside"></span>${UI_ICONS.chev.replace("<svg ", '<svg class="ytcs-chev" ')}</button>
         <div class="ytcs-sleep-opts" role="group" aria-label="Остановить видео через" hidden>
           ${[15, 30, 45, 60, 90].map((m) => `<button type="button" class="ytcs-chip" data-sleep="${m}" aria-pressed="false" aria-label="Через ${m} минут">${m}<small>мин</small></button>`).join("")}
@@ -1383,6 +1398,7 @@
     syncVolumeItem();
     syncIntroItems();
     syncSleepItem();
+    syncAbItem();
     syncSilenceItem();
     syncAudioOnlyItem();
   }
@@ -1429,6 +1445,36 @@
     opts.hidden = !open;
     // высоту строк не пересчитываем (меню не «прыгает»): не помещается — прокручиваем к вариантам
     // (только само меню — scrollIntoView прокрутил бы и страницу)
+    if (open) uiMenu.scrollTop = Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight);
+  }
+
+  // ---- «Повтор отрезка» (abloop.js): «1:23–1:41» в пункте, отмеченные A и B подсвечены ----
+  function syncAbItem() {
+    const item = uiMenu?.querySelector('[data-act="ab"]');
+    const api = globalThis.__ytcsAb;
+    if (!item) return;
+    item.hidden = !api;
+    if (!api) return;
+    const s = api.state();
+    item.querySelector(".ytcs-aside").textContent = s.aside;
+    const fmt = globalThis.__ytcsAbCore?.fmtTime || String;
+    for (const c of uiMenu.querySelectorAll(".ytcs-ab-opts [data-ab]")) {
+      const k = c.dataset.ab;
+      if (k === "off") {
+        c.hidden = s.a == null && s.b == null;
+        continue;
+      }
+      const t = s[k];
+      c.setAttribute("aria-pressed", String(t != null));
+      c.querySelector("small").textContent = t != null ? fmt(t) : k === "a" ? "начало" : "конец";
+    }
+  }
+  function expandAb(open) {
+    const item = uiMenu?.querySelector('[data-act="ab"]');
+    const opts = uiMenu?.querySelector(".ytcs-ab-opts");
+    if (!item || !opts) return;
+    item.setAttribute("aria-expanded", String(open));
+    opts.hidden = !open;
     if (open) uiMenu.scrollTop = Math.max(uiMenu.scrollTop, opts.offsetTop + opts.offsetHeight + 8 - uiMenu.clientHeight);
   }
 
@@ -1489,6 +1535,7 @@
     // исчезновения меню мелькает первый экран
     if (open) showPane("main");
     expandSleep(false);
+    expandAb(false);
     clearInterval(sleepTick);
     // «осталось …» таймера сна и место видео у «Вступление до сюда» идут, пока меню открыто
     if (open)
@@ -1657,6 +1704,22 @@
       if (!globalThis.__ytcsSleep) return setNote("Обновите страницу видео (F5).");
       openMenu(false);
       globalThis.__ytcsSleep.set(chip.dataset.sleep === "end" || chip.dataset.sleep === "off" ? chip.dataset.sleep : Number(chip.dataset.sleep));
+      return;
+    }
+    // «Повтор отрезка»: пункт раскрывает A / B / «Снять», выбор — ставит отметку и закрывает меню
+    const ab = e.target.closest("[data-ab]");
+    if (ab) {
+      const api = globalThis.__ytcsAb;
+      if (!api) return setNote("Обновите страницу видео (F5).");
+      openMenu(false);
+      if (ab.dataset.ab === "a") api.setA();
+      else if (ab.dataset.ab === "b") api.setB();
+      else api.clear();
+      return;
+    }
+    if (e.target.closest('[data-act="ab"]')) {
+      syncAbItem();
+      expandAb(uiMenu.querySelector('[data-act="ab"]').getAttribute("aria-expanded") !== "true");
       return;
     }
     if (e.target.closest('[data-act="sleep"]')) {

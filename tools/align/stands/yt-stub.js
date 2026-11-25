@@ -19,6 +19,7 @@
 // канала — до 0:41? · Пропускать · Не надо».
 // С &audio=1 — «Только звук» (audioonly.js): обложка вместо видео, плашка «Только звук для
 // канала · Показать видео»; с &audio=2 — ещё и включённые субтитры с текущей фразой.
+// __stand.ab(83, 101) — повтор отрезка 1:23–1:41 (abloop.js), __stand.abMenu() — меню с «Повтор отрезка».
 (() => {
   const listeners = [];
   const msgListeners = [];
@@ -191,6 +192,14 @@
     },
     // поле заметки поверх плеера и подсказка у точки на полосе (notes.js)
     note: () => globalThis.__ytcsNotes?.open(),
+    // повтор отрезка (abloop.js): отрезок 1:23–1:41 или только начало; меню с раскрытым «Повтор отрезка»
+    ab: (a, b) => globalThis.__ytcsAb?.set(a, b),
+    abMenu: async () => {
+      globalThis.__ytcsAb?.set(83, null);
+      document.querySelector(".ytcs-btn")?.click();
+      await new Promise((r) => setTimeout(r, 300));
+      document.querySelector('.ytcs-menu [data-act="ab"]')?.click();
+    },
     noteTip: () => document.getElementById("ytcs-note-marks")?.shadowRoot.querySelectorAll(".d")[1]?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true })),
     // «Поиск по речи» (speech.js): окно с найденным; kind — "none" (нет субтитров) или "error"
     speech: async (q = "дом", kind = "") => {

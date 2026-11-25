@@ -298,6 +298,11 @@ document.addEventListener(
     } else if (e.code === "BracketLeft" && !e.shiftKey) {
       e.preventDefault();
       watchGo(-1);
+    } else if ((e.code === "KeyA" || e.code === "KeyB") && !e.shiftKey && !e.repeat && watch.frame) {
+      // повтор отрезка A–B: фокус был на странице, а не в плеере — передаём плееру (abloop.js во фрейме)
+      e.preventDefault();
+      watch.frame.focus();
+      watch.frame.contentWindow?.postMessage({ ytcsAb: e.code === "KeyA" ? "a" : "b" }, "https://www.youtube.com");
     }
   },
   true
