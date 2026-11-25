@@ -1,7 +1,8 @@
 "use strict";
 
 // Снимок кадра в плеере YouTube (и во встроенном плеере «Моей библиотеки»):
-//  - клавиша Shift+S или «Снимок кадра» в меню кнопки расширения (раздел «Видео и превью»);
+//  - клавиша Shift+S или «Снимок кадра» в меню кнопки расширения (раздел «Видео и превью»,
+//    во встроенном плеере — первый экран меню);
 //  - текущий кадр в том разрешении, в котором YouTube его сейчас показывает
 //    (videoWidth × videoHeight у <video>), — в буфер обмена как PNG;
 //  - плашка сверху по центру плеера: «Кадр 12:34 скопирован · Сохранить», «Сохранить» —
@@ -21,12 +22,14 @@
       const ss = String(s % 60).padStart(2, "0");
       return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
     }
-    // как sanitizeFilename (groq.js): без запрещённых в Windows знаков, точек и пробелов в конце
+    // как sanitizeFilename (groq.js): без запрещённых в Windows знаков, «~» и невидимых символов,
+    // без точек, пробелов и «~» в начале, точек и пробелов в конце
     function clean(name, max) {
       let s = String(name || "")
-        .replace(/[<>:"/\\|?*\u0000-\u001F\u007F]/g, "")
+        .replace(/[<>:"/\\|?*~\u0000-\u001F\u007F]|\p{Cf}/gu, "")
         .replace(/\s+/g, " ")
-        .trim();
+        .trim()
+        .replace(/^[.\s~]+/, "");
       s = s.replace(/[. ]+$/g, "").slice(0, max).replace(/[. ]+$/g, "");
       if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(s)) s = "_" + s;
       return s;
@@ -86,7 +89,8 @@
   function videoIdNow() {
     if (location.pathname === "/watch") return new URLSearchParams(location.search).get("v");
     if (OUR_EMBED) return location.pathname.match(/^\/embed\/([A-Za-z0-9_-]{11})/)?.[1] || null;
-    return location.pathname.match(/^\/(?:shorts|live)\/([A-Za-z0-9_-]{11})/)?.[1] || null;
+    // Shorts не снимаем: там другой плеер (#shorts-player), а mainVideo() ищет обычный
+    return location.pathname.match(/^\/live\/([A-Za-z0-9_-]{11})/)?.[1] || null;
   }
   const txt = (sel) => document.querySelector(sel)?.textContent?.replace(/\s+/g, " ").trim() || "";
   // название — со страницы (у встроенного плеера — из его шапки)
@@ -131,7 +135,8 @@
     @media (prefers-reduced-motion: reduce) { :host, .n, button { transition: none; } }`;
 
   const notice = { host: null, root: null, timer: 0, place: 0, hover: false, canSave: false };
-  const shot = { blob: null, stem: "", t: 0, saving: false };
+  // seq — номер снимка: два быстрых Shift+S подряд — картинку принимаем только от последнего
+  const shot = { blob: null, stem: "", fallback: "", t: 0, saving: false, seq: 0 };
 
   function noticeHost() {
     const p = player();
@@ -159,26 +164,26 @@
       notice.host = host;
       notice.root = root;
     }
-    // встроенный плеер библиотеки (2026): обложка «до запуска» и шапка с названием — слои поверх
-    // #movie_player (#player-controls), плашку в плеере под ними не видно. Плеер там во всю рамку —
-    // ставим плашку на уровень страницы рамки, поверх всего
-    const parent = OUR_EMBED ? document.body : p;
-    if (OUR_EMBED) notice.host.style.position = "fixed";
-    if (notice.host.parentElement !== parent) parent.appendChild(notice.host);
+    // встроенный плеер библиотеки (2026): обложка «до запуска» и шапка с названием — слой
+    // #player-controls поверх #movie_player, плашку в плеере под ним не видно и не нажать.
+    // Кладём в слой над ним (content.js), на YouTube — прямо в плеер
+    const into = globalThis.__ytcsPlayerLayer?.(p) || p;
+    if (notice.host.parentElement !== into) into.appendChild(notice.host);
     return notice.host;
   }
 
-  // под другими плашками сверху плеера (скорость и громкость по каналам, «Вы остановились…», таймер сна)
-  const OTHERS = ["ytcs-speed-notice", "ytcs-resume-offer", "ytcs-sleep-notice", "ytcs-volume-notice"];
+  // под другими плашками сверху плеера (скорость и громкость по каналам, «Вы остановились…», таймер сна,
+  // лимит просмотра, вступление канала, повтор отрезка)
+  const OTHERS = ["ytcs-speed-notice", "ytcs-resume-offer", "ytcs-sleep-notice", "ytcs-volume-notice", "ytcs-limit-notice", "ytcs-intro-notice", "ytcs-abloop-notice"];
   function place() {
     const host = notice.host;
-    const p = host?.isConnected ? player() : null;
+    const p = host?.isConnected ? host.parentElement : null; // плеер или слой над ним — той же величины
     if (!p) return;
     const top = p.getBoundingClientRect().top;
     let below = 0;
     for (const id of OTHERS) {
       const h = document.getElementById(id);
-      const box = h?.parentElement === p ? h.shadowRoot?.querySelector(".show") : null; // чужие плашки — внутри плеера
+      const box = h?.parentElement === p ? h.shadowRoot?.querySelector(".show") : null; // чужие плашки — там же, где эта
       if (!box) continue;
       const r = box.getBoundingClientRect();
       if (r.height) below = Math.max(below, r.bottom - top);
@@ -249,6 +254,7 @@
     tainted: "Браузер не дал снять кадр: видео защищено",
     fail: "Не получилось снять кадр — попробуйте ещё раз",
     reload: "Расширение обновилось — обновите страницу (F5)",
+    audio: "Сначала покажите видео — Shift+V",
   };
 
   // ---------- снимок ----------
@@ -272,6 +278,11 @@
   function shoot() {
     const v = mainVideo();
     const id = videoIdNow();
+    // «Только звук» (audioonly.js): картинка закрыта обложкой и качество снижено — снимать нечего
+    if (v && player()?.classList.contains("ytcs-ao")) {
+      show(MSG.audio);
+      return true;
+    }
     const why = core.blocker(
       v && {
         width: v.videoWidth,
@@ -295,9 +306,12 @@
       show(MSG[core.errorKind(e) === "tainted" ? "tainted" : "fail"]);
       return true;
     }
+    const seq = ++shot.seq;
+    const last = () => seq === shot.seq; // пока картинка готовилась, сняли ещё раз — эта уже не нужна
     shot.blob = null;
     shot.t = t;
     shot.stem = core.fileStem(videoTitle(id), t, id);
+    shot.fallback = core.fileStem("", t, id); // «id видео — 12-34»: если Chrome не примет имя из названия
     noticeHost();
     flash();
     // буфер обмена — сразу, пока нажатие «свежее» (иначе браузер не даст): обещание картинки
@@ -309,16 +323,17 @@
     }
     blobP.then(
       (b) => {
+        if (!last()) return void copied.catch(() => {});
         shot.blob = b;
         copied.then(
-          () => show(`Кадр <b>${tc}</b> скопирован`, "Сохранить"),
+          () => last() && show(`Кадр <b>${tc}</b> скопирован`, "Сохранить"),
           // не скопировалось (вкладка не в фокусе, запрет буфера) — кадр всё равно можно сохранить
-          () => show(`Кадр <b>${tc}</b> снят — скопировать не вышло`, "Сохранить", 8000)
+          () => last() && show(`Кадр <b>${tc}</b> снят — скопировать не вышло`, "Сохранить", 8000)
         );
       },
       (e) => {
         copied.catch(() => {});
-        show(MSG[core.errorKind(e) === "tainted" ? "tainted" : "fail"]);
+        if (last()) show(MSG[core.errorKind(e) === "tainted" ? "tainted" : "fail"]);
       }
     );
     return true;
@@ -340,7 +355,7 @@
     if (btn) btn.disabled = true;
     let r = null;
     try {
-      r = await chrome.runtime.sendMessage({ type: "frame:save", dataUrl: await toDataUrl(shot.blob), stem: shot.stem });
+      r = await chrome.runtime.sendMessage({ type: "frame:save", dataUrl: await toDataUrl(shot.blob), stem: shot.stem, fallback: shot.fallback });
     } catch (e) {
       r = null;
     }

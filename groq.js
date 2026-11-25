@@ -48,11 +48,15 @@ export const clean = (value) => {
   return cleaned;
 };
 
+// Имя файла для chrome.downloads: без запрещённых в Windows знаков, «~» и невидимых символов
+// (\p{Cf}: мягкий перенос, пробел нулевой ширины, метки направления письма) — на таких Chrome
+// отказывает в загрузке; без точек, пробелов и «~» в начале, точек и пробелов в конце.
 export function sanitizeFilename(name, maxLen = 90) {
   let s = String(name || "thumbnail")
-    .replace(/[<>:"/\\|?*\u0000-\u001F\u007F]/g, "")
+    .replace(/[<>:"/\\|?*~\u0000-\u001F\u007F]|\p{Cf}/gu, "")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .replace(/^[.\s~]+/, "");
   s = s.replace(/[. ]+$/g, "").slice(0, maxLen).replace(/[. ]+$/g, "");
   const reserved = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
   if (reserved.test(s)) s = "_" + s;

@@ -77,7 +77,8 @@
   /** Слова запроса (нормализованные); пусто — запрос слишком короткий. */
   function queryWords(query) {
     const words = W.tokens(query);
-    return words.join("").length >= MIN_QUERY ? words : [];
+    // «a b» — одни однобуквенные слова нашли бы почти всё: нужно хоть одно слово от двух букв
+    return words.join("").length >= MIN_QUERY && words.some((w) => w.length >= 2) ? words : [];
   }
 
   /**

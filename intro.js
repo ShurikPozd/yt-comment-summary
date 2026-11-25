@@ -408,12 +408,16 @@
       notice.host = host;
       notice.root = root;
     }
-    if (notice.host.parentElement !== p) p.appendChild(notice.host);
+    // в новом встроенном плеере — слой над его панелью управления (content.js), иначе кнопки не нажимаются
+    const into = globalThis.__ytcsPlayerLayer?.(p) || p;
+    if (notice.host.parentElement !== into) into.appendChild(notice.host);
     return notice.host;
   }
 
-  // Под другими плашками сверху плеера (скорость и громкость по каналам, «Вы остановились…», таймер сна)
-  const OTHERS = ["ytcs-speed-notice", "ytcs-volume-notice", "ytcs-resume-offer", "ytcs-sleep-notice"];
+  // Под другими плашками сверху плеера (скорость и громкость по каналам, «Вы остановились…», таймер сна,
+  // лимит просмотра) — во встроенном плеере все они в одном слое с этой. Повтора отрезка здесь нет:
+  // он сам встаёт под эту плашку (abloop.js), а взаимные «под тобой» толкали бы обе вниз без конца
+  const OTHERS = ["ytcs-speed-notice", "ytcs-volume-notice", "ytcs-resume-offer", "ytcs-sleep-notice", "ytcs-limit-notice"];
   function place() {
     const host = notice.host;
     const p = host?.parentElement;
@@ -426,6 +430,11 @@
       if (!box) continue;
       const r = box.getBoundingClientRect();
       if (r.height) below = Math.max(below, r.bottom - top);
+    }
+    // встроенный плеер библиотеки: шапку с названием (#player-controls) не закрываем — встаём ниже
+    if (OUR_EMBED) {
+      const hr = document.querySelector("#player-controls .player-controls-top")?.getBoundingClientRect();
+      if (hr?.height && hr.bottom > top) below = Math.max(below, hr.bottom - top);
     }
     const want = below ? `${Math.round(below + 8)}px` : "";
     if (host.style.top !== want) host.style.top = want;
@@ -498,10 +507,11 @@
       if (e.code !== "KeyI" || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.repeat || e.isComposing) return;
       const t = e.composedPath?.()[0] || e.target;
       if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return; // печатаете — не мешаем
-      if (!vid || !mainVideo() || !alive()) return;
+      // на рекламе (и пока видео нет) отметить нельзя — клавишу не глотаем, пусть достаётся YouTube
+      if (!vid || !mainVideo() || adShowing() || !alive()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      mark();
+      mark(); // прочие отказы (эфир, канал не узнан, не то место) mark() показывает плашкой
     },
     true
   );

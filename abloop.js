@@ -90,7 +90,8 @@
   function tick() {
     clearTimeout(timer);
     timer = 0;
-    if (!C.active(st) || !alive()) return;
+    if (!alive()) return void stop(); // расширение перезагрузили — повтор снимаем, видео не держим
+    if (!C.active(st)) return;
     const v = mainVideo();
     if (!v || adShowing()) return; // реклама — не наше видео, ждём её конца
     const dur = duration();
@@ -131,6 +132,14 @@
     clearTimeout(timer);
     render(false);
     return true;
+  }
+
+  // Расширение перезагрузили (или выключили): этот экземпляр больше не управляет видео —
+  // снимаем отрезок, сообщение и отметки, иначе видео крутилось бы по кругу без плашки «Снять»
+  function stop() {
+    notice.msg = "";
+    clearTimeout(notice.msgTimer);
+    if (!clear()) render(false);
   }
 
   // ---------- клавиши ----------
@@ -231,13 +240,16 @@
       notice.host = host;
       notice.root = root;
     }
-    if (notice.host.parentElement !== p) p.appendChild(notice.host);
+    // в новом встроенном плеере — слой над его панелью управления (content.js), иначе «Снять» не нажимается
+    const into = globalThis.__ytcsPlayerLayer?.(p) || p;
+    if (notice.host.parentElement !== into) into.appendChild(notice.host);
     return notice.host;
   }
 
   // Под другими плашками сверху плеера (скорость и громкость канала, «Вы остановились…»,
-  // таймер сна, мягкий лимит, плашки меню расширения)
-  const OTHERS = ["ytcs-speed-notice", "ytcs-volume-notice", "ytcs-resume-offer", "ytcs-sleep-notice", "ytcs-limit-notice"];
+  // таймер сна, мягкий лимит, вступление канала, плашки меню расширения) — во встроенном
+  // плеере все они в одном слое с этой
+  const OTHERS = ["ytcs-speed-notice", "ytcs-volume-notice", "ytcs-resume-offer", "ytcs-sleep-notice", "ytcs-limit-notice", "ytcs-intro-notice"];
   function place() {
     const host = notice.host;
     const p = host?.parentElement;
@@ -253,6 +265,11 @@
     for (const box of boxes) {
       const r = box?.getBoundingClientRect();
       if (r?.height) below = Math.max(below, r.bottom - top);
+    }
+    // встроенный плеер библиотеки: шапку с названием (#player-controls) не закрываем — встаём ниже
+    if (OUR_EMBED) {
+      const hr = document.querySelector("#player-controls .player-controls-top")?.getBoundingClientRect();
+      if (hr?.height && hr.bottom > top) below = Math.max(below, hr.bottom - top);
     }
     const want = below ? `${Math.round(below + 8)}px` : "";
     if (host.style.top !== want) host.style.top = want;
@@ -278,13 +295,15 @@
   // fresh — только что поменяли отрезок: плашку показать, даже если панель плеера спрятана
   function renderNotice(fresh) {
     const has = C.any(st) || notice.msg;
-    if (!has || !alive() || adShowing()) {
+    // на рекламе прячем состояние повтора, но не сообщение («Повтор отрезка — после рекламы»)
+    if (!has || !alive() || (adShowing() && !notice.msg)) {
       hideNotice();
       return;
     }
     if (fresh) notice.poke = Date.now();
-    // открыто меню расширения — плашка не наезжает на него (там тот же пункт «Повтор отрезка»)
-    const menuOpen = Boolean(player()?.querySelector(".ytcs-menu.open"));
+    // открыто меню расширения — плашка не наезжает на него (там тот же пункт «Повтор отрезка»);
+    // во встроенном плеере меню вне #movie_player (поверх слоя управления), поэтому ищем по всей странице
+    const menuOpen = Boolean(document.querySelector(".ytcs-menu.open"));
     const visible = !menuOpen && (notice.msg || controlsShown() || Date.now() - notice.poke < 2500);
     if (!visible) {
       notice.root?.querySelector(".n")?.classList.remove("show");
@@ -382,7 +401,7 @@
     renderMarks();
     // пока что-то отмечено — следим за панелью плеера и другими плашками
     clearInterval(notice.loop);
-    notice.loop = C.any(st) || notice.msg ? setInterval(() => (alive() ? (onNavigate(), renderNotice(false), renderMarks()) : clearInterval(notice.loop)), 300) : 0;
+    notice.loop = C.any(st) || notice.msg ? setInterval(() => (alive() ? (onNavigate(), renderNotice(false), renderMarks()) : stop()), 300) : 0;
   }
 
   // ---------- переходы и события видео ----------
@@ -416,6 +435,8 @@
     (e) => {
       const v = e.target;
       if (!C.active(st) || st.free || v !== mainVideo() || adShowing()) return;
+      // расширение перезагрузили — конец видео обычный (YouTube включит следующее), не зацикливаем
+      if (!alive()) return void stop();
       if (st.b < duration() - 1.5) return;
       e.stopImmediatePropagation();
       seekTo(v, st.a);

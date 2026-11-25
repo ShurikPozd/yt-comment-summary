@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { buildIndex, search, highlight, stem, swapLayout, tokens } from "../library/search.js";
 import { parseTldr, pickEven, runTldr, splitParts } from "../tldr-core.js";
-import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs } from "../groq.js";
+import { createPacer, isOutputLimitError, isSizeLimitError, retryAfterMs, sanitizeFilename } from "../groq.js";
 import { countOf, dayOf, fullDue, listsOf, readPlaylist, sameList, splice, syncSummary, updDay } from "../library/sync-plan.js";
 import { buildData, describe, escapeXml, fingerprint, parseInput, suggest, videoIdOf, videoUrl } from "../omnibox-core.js";
 import { archiveBody, archiveMessage, archiveResult, fmtLen, tldrPlain } from "../archive-core.js";
@@ -2283,6 +2283,12 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   const long = F.fileStem("Очень ".repeat(40), 61, "x");
   ok(long.endsWith(" — 1-01") && long.length <= 100 + 7, "длинное название обрезается, время остаётся");
   ok(F.fileStem("con", 1, "x") === "_con — 0-01", "зарезервированное имя Windows");
+  ok(F.fileStem("~ .Мой​ ролик­~‮", 5, "x") === "Мой ролик — 0-05", "кадр: без «~» и невидимых символов, без точек и пробелов в начале");
+  // sanitizeFilename (groq.js) — имя для chrome.downloads (превью, кадр): то же правило
+  ok(sanitizeFilename("~/~ .Мой​ ролик­﻿.") === "Мой ролик", "имя файла: без «~», невидимых символов, точек в начале и в конце");
+  ok(sanitizeFilename("..~  ~..") === "thumbnail" && sanitizeFilename("") === "thumbnail", "имя файла: пустое после чистки — запасное");
+  ok(sanitizeFilename('A/B: "что?" - Канал') === "AB что - Канал" && sanitizeFilename("aux") === "_aux", "имя файла: запрещённые знаки и зарезервированные имена");
+  ok(sanitizeFilename("Кадр — 0-05", 140) === "Кадр — 0-05" && sanitizeFilename("x".repeat(200), 140).length === 140, "имя файла: тире и длина");
   const B = (o) => F.blocker(o);
   ok(B(null) === "novideo" && B({ ad: true, width: 1, height: 1, readyState: 4 }) === "ad", "нет видео / реклама");
   ok(B({ protected: true, width: 1920, height: 1080, readyState: 4 }) === "drm", "защищённое видео (DRM)");

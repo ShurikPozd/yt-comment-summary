@@ -486,9 +486,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const url = String(msg.dataUrl || "");
   if (!url.startsWith("data:image/png;base64,") || url.length > FRAME_MAX) return sendResponse({ ok: false, error: "bad" });
   const filename = sanitizeFilename(String(msg.stem || ""), 140) + ".png";
-  chrome.downloads
-    .download({ url, filename, conflictAction: "uniquify", saveAs: false })
-    .then(() => sendResponse({ ok: true, filename }))
+  // Chrome не принял имя из названия (редкие знаки) — ещё раз попроще: «id видео — 12-34.png»
+  // (msg.fallback, его собирает frame-shot.js; без него — «Кадр.png»)
+  const plain = sanitizeFilename(String(msg.fallback || "Кадр"), 60) + ".png";
+  const save = (name) => chrome.downloads.download({ url, filename: name, conflictAction: "uniquify", saveAs: false }).then(() => sendResponse({ ok: true, filename: name }));
+  save(filename)
+    .catch((e) => {
+      if (plain === filename) throw e;
+      return save(plain);
+    })
     .catch((e) => sendResponse({ ok: false, error: String(e?.message || e) }));
   return true;
 });

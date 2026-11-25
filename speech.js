@@ -50,8 +50,9 @@
   const cache = new Map();
   function load(id, again = false) {
     let c = cache.get(id);
-    if (c && !(again && c.state === "error")) return c;
-    c = { state: "loading", index: null, promise: null };
+    // «нет субтитров» тоже не навсегда: YouTube мог временно отдать пусто — через 30 с спросим снова
+    if (c && !(again && c.state === "error") && !(c.state === "none" && Date.now() - c.at > 30000)) return c;
+    c = { state: "loading", index: null, promise: null, at: Date.now() };
     cache.delete(id);
     cache.set(id, c);
     if (cache.size > 6) cache.delete(cache.keys().next().value);
@@ -210,7 +211,9 @@
       ui.host = h;
       ui.root = root;
     }
-    if (ui.host.parentElement !== p) p.appendChild(ui.host);
+    // в новом встроенном плеере библиотеки — в слой над его панелью управления (иначе не нажимается)
+    const into = globalThis.__ytcsPlayerLayer?.(p) || p;
+    if (ui.host.parentElement !== into) into.appendChild(ui.host);
     return ui.host;
   }
 
@@ -415,6 +418,8 @@
             close();
             return;
           }
+          // курсор в поиске YouTube, комментарии, заметке — сочетание не наше, ввод не прерываем
+          if (typing(e)) return;
           if (!videoIdNow() || !mainVideo()) return;
           if (open()) {
             e.preventDefault();

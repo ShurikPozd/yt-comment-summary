@@ -48,6 +48,9 @@
   let lowFor = null; // для какого видео уже попросили низкое качество
   let lowTries = 0;
   let sticky = readSticky(); // вы включили режим в этой вкладке
+  // новое видео, а канал плеер ещё не назвал: «по каналам» не решаем, пока не узнаем (до 3 с)
+  let chWait = { id: null, at: 0 };
+  let dead = false; // расширение перезагружено — режим снят, этот экземпляр больше ничего не делает
 
   function readSticky() {
     try {
@@ -138,7 +141,14 @@
 
   // Вы переключили режим (меню, клавиша, «Показать видео»)
   function userSet(next) {
-    if (!inContext()) return false;
+    if (!inContext() || dead) return false;
+    // видео сменилось, а решение ещё ждало канала — ваш выбор и есть решение
+    if (ready && info?.videoId && info.videoId !== vid) {
+      vid = info.videoId;
+      lowFor = null;
+      lowTries = 0;
+      chWait.id = null;
+    }
     const ch = info?.videoId === vid ? info.channelId : "";
     const name = info?.author || "";
     const r = core.toggle({ map, on: next, ch, name, memory });
@@ -162,7 +172,8 @@
 
   // ---------- Каждые полсекунды: новое видео, реклама, качество ----------
   function tick() {
-    if (!alive()) return;
+    if (dead) return;
+    if (!alive()) return teardown();
     if (!inContext()) {
       render();
       return;
@@ -172,6 +183,16 @@
     const fresh = i.videoId !== vid;
     info = i;
     if (fresh && ready) {
+      // Плеер отдаёт id нового видео раньше остального: channelId пуст. Если есть запомненные
+      // каналы — ждём его (до 3 с), иначе канал с «только звуком» решили бы как незнакомый
+      if (!i.channelId && memory && Object.keys(map).length) {
+        if (chWait.id !== i.videoId) chWait = { id: i.videoId, at: Date.now() };
+        if (Date.now() - chWait.at < 3000) {
+          if (on) fill(); // пока ждём — обложка и название уже нового видео
+          return render();
+        }
+      }
+      chWait.id = null;
       vid = i.videoId;
       lowFor = null;
       lowTries = 0;
@@ -376,6 +397,22 @@
     watchCaptions(true);
   }
 
+  // Расширение перезагрузили (или выключили): этот экземпляр больше не слышит ни клавиш, ни
+  // меню — один раз снимаем режим целиком, иначе видео осталось бы скрытым и в 144p без
+  // кнопки «Показать видео». Качество возвращает audioonly-main.js (мир страницы жив).
+  function teardown() {
+    if (dead) return;
+    dead = true;
+    on = false;
+    why = "";
+    watchCaptions(false);
+    ui.ro?.disconnect();
+    player()?.classList.remove("ytcs-ao", "ytcs-ao-say");
+    ui.host?.remove();
+    document.getElementById("ytcs-ao-style")?.remove();
+    restoreQuality(); // audioonly-main.js сам знает, просили ли низкое качество
+  }
+
   // ---------- Текущая фраза субтитров YouTube ----------
   // Берём текст из слоя субтитров плеера (что YouTube показывает сейчас). При «Двойных
   // субтитрах» у них своя плашка над панелью — поверх обложки; свою фразу тогда не дублируем.
@@ -440,6 +477,33 @@
     },
     true
   );
+
+  // ---------- «Показать видео» в новом встроенном плеере библиотеки ----------
+  // Там слой управления #player-controls лежит поверх всего #movie_player, и нажатие на
+  // кнопку плашки достаётся ему (пауза), а не кнопке. Обложка же должна остаться в плеере —
+  // за ней панель, субтитры и значок загрузки. Поэтому ловим нажатие раньше всех (window,
+  // перехват) и сверяем точку с местом кнопки: попали — «Показать видео», плееру не отдаём.
+  if (OUR_EMBED) {
+    const onButton = (e) => {
+      if (!on || dead || !ui.root || ui.host?.hidden || adShowing() || !(e.target instanceof Element)) return false;
+      // своё меню и плашки в слое над плеером — их нажатия не наши
+      if (e.target.closest(".ytcs-menu, .ytcs-btn, #ytcs-embed-layer") || !e.target.closest("#player-controls, #movie_player")) return false;
+      const r = ui.root.querySelector(".pill button")?.getBoundingClientRect();
+      return Boolean(r?.width) && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    };
+    for (const t of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"]) {
+      window.addEventListener(
+        t,
+        (e) => {
+          if (!onButton(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (t === "click") userSet(false);
+        },
+        true
+      );
+    }
+  }
 
   // ---------- Для меню кнопки расширения в плеере (content.js) ----------
   globalThis.__ytcsAudioOnly = {
