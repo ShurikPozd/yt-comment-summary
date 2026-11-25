@@ -140,6 +140,8 @@
     .tc { flex: none; display: grid; place-items: center; min-width: 54px; height: 24px; padding: 1px 8px 0; box-sizing: border-box; border-radius: 999px;
       background: rgba(255, 59, 92, .18); color: #ff8fa3; font: 700 14px/1 "YouTube Noto", Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums; }
     .it[aria-selected="true"] .tc { background: #ff3b5c; color: #fff; }
+    /* есть места после часа — все таймкоды одной ширины, текст в одну колонку */
+    .list.hours .tc { min-width: 74px; }
     .tx { flex: 1 1 auto; min-width: 0; padding-top: 2px; color: rgba(255, 255, 255, .88); font-weight: 400; overflow-wrap: anywhere;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     mark { background: rgba(255, 59, 92, .34); color: #fff; font-weight: 700; border-radius: 4px; padding: 0 2px; }
@@ -157,6 +159,7 @@
       .foot { display: none; }
       .it { gap: 8px; padding: 8px 6px; }
       .tc { min-width: 48px; }
+      .list.hours .tc { min-width: 68px; }
     }
     @media (prefers-reduced-motion: reduce) { .box, input, button { transition: none; } .spin { animation-duration: 2.4s; } }`;
 
@@ -296,6 +299,7 @@
     });
     if (n > MAX_ROWS) rows.push(`<li class="more" role="presentation">Показаны первые ${MAX_ROWS} — уточните запрос</li>`);
     list.innerHTML = rows.join("");
+    list.classList.toggle("hours", res.results.some((r) => r.t >= 3600));
     foot.hidden = false;
     if (ui.sel >= MAX_ROWS) ui.sel = MAX_ROWS - 1;
     showSel(false);
