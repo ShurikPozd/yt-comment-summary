@@ -307,6 +307,26 @@ await step("кнопки на обложках рекомендаций (/watch)
   return `кнопки: ${va}`;
 });
 
+// «Средний щелчок — в очередь» (queue.js): колёсико гасится только над ссылкой на видео.
+// Раньше пустой адрес «без ссылки» дополнялся адресом /watch — и автопрокрутка колёсиком пропадала на всей странице.
+await step("средний щелчок мимо ссылок не гасит автопрокрутку (/watch)", async () => {
+  const { queueOpts } = await swEval(`chrome.storage.local.get("queueOpts")`);
+  await swEval(`chrome.storage.local.set({ queueOpts: { ...${JSON.stringify(queueOpts || {})}, intercept: true } })`);
+  try {
+    await until(W, "new Promise((r) => setTimeout(() => r(true), 300))", 2000);
+    const md = (expr) => evalIn(W, `(() => { const el = ${expr}; if (!el) return "нет элемента"; const r = el.getBoundingClientRect();
+      const ev = new MouseEvent("mousedown", { bubbles: true, cancelable: true, composed: true, button: 1, buttons: 4, clientX: r.x + 2, clientY: r.y + 2, view: window });
+      el.dispatchEvent(ev); return ev.defaultPrevented; })()`);
+    const off = await md("document.querySelector('#movie_player') || document.body");
+    must(off === false, `средний щелчок по плееру гасится (${off}) — автопрокрутка колёсиком не включится`);
+    const link = await md("document.querySelector('#secondary a[href*=watch]')");
+    must(link === true, `средний щелчок по ссылке на видео не перехвачен (${link})`);
+    return "мимо ссылок — автопрокрутка, по ссылке — в очередь";
+  } finally {
+    await swEval(`chrome.storage.local.set({ queueOpts: ${JSON.stringify(queueOpts || {})} })`);
+  }
+});
+
 await step("добавление в очередь (выбор → «В очередь»)", async () => {
   await swEval(`chrome.storage.local.set({ queue: [] })`);
   await hover(W, lockupThumb(0));

@@ -1103,7 +1103,11 @@
   window.addEventListener(
     "mousedown",
     (e) => {
-      if (opts.intercept && e.button === 1 && idFromHref(linkFrom(e)?.href || "")) e.preventDefault();
+      if (!opts.intercept || e.button !== 1) return;
+      // только над ссылкой на видео: пустой адрес new URL() дополнит текущей страницей,
+      // и на /watch и /shorts автопрокрутка колёсиком гасла бы везде
+      const a = linkFrom(e);
+      if (a && idFromHref(a.href)) e.preventDefault();
     },
     true
   );
