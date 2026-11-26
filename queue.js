@@ -1161,6 +1161,22 @@
     return Boolean(r?.ok);
   }
 
-  globalThis.__ytcsQueue = { defer, toast };
+  // ---------- своё меню правого щелчка (ctxmenu.js): в очередь, наверх, убрать ----------
+  // Те же сообщения фону, что у кнопок выбора и «Режима очереди»; итог — плашкой с «Отменить».
+  const index = (id) => queue.findIndex((x) => x.id === id);
+  async function add(info) {
+    const id = info?.id;
+    if (!ID_RE.test(id || "")) return false;
+    const r = await send({ type: "queue:add", items: [info] });
+    if (!r?.ok) return toast("Не получилось добавить — обновите страницу (F5)"), false;
+    const fresh = r.added?.includes(id);
+    toast(`${fresh ? "В очереди" : "Уже в очереди"}: «${info.title || "видео"}» · всего ${r.total}`, fresh ? [["Отменить", () => send({ type: "queue:remove", ids: [id] })]] : []);
+    return true;
+  }
+  // «Наверх очереди» — перед первым видео; «Убрать» — как крестик в колонке (с «Вернуть»)
+  const toTop = (id) => index(id) > 0 && moveTo([id], queue[0].id, `Наверху очереди: «${queue[index(id)].title || "видео"}»`);
+  const drop = (id) => dropIds([id]);
+
+  globalThis.__ytcsQueue = { defer, toast, index, add, top: toTop, remove: drop };
   void load();
 })();

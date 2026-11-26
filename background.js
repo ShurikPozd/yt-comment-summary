@@ -123,6 +123,7 @@ const TOGGLES = [
   ["focusMode", "Без отвлечений", false], // что именно прячется — focus.js, настройки — в панели
   ["silenceSkip", "Пропускать тишину", false], // паузы в речи быстрее — silence.js
   ["dualSubs", "Двойные субтитры", false], // оригинал + перевод YouTube — dualsubs.js
+  ["ctxMenu", "Меню по правому клику", true], // меню расширения вместо меню браузера — ctxmenu.js (Shift+щелчок — меню браузера)
 ];
 const toggleOn = (s, key) => {
   const t = TOGGLES.find(([k]) => k === key);

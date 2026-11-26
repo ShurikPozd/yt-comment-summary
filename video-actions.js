@@ -26,7 +26,8 @@
 //   attach(thumbEl, { videoId, title, channel, len, getInfo, card, right, top, actions }) → detach()
 //   openTldr(anchorEl, { videoId, title, channel, len }, { card })
 //   openPreview({ videoId, title, channel })
-//   archive({ videoId, title, channel, len }) → итог фона (archive-bg.js)
+//   archive({ videoId, title, channel, len }) → итог фона (archive-bg.js), archiveReady()
+//   cardFor(path, x, y) → { card, thumb, info } — карточка под правым щелчком (ctxmenu.js)
 //   close(), setTheme("dark" | "light" | null), refresh()
 (() => {
   if (globalThis.__ytcsVideoActions) return;
@@ -125,7 +126,7 @@
     const title =
       text(
         card.querySelector(
-          "[class*='LockupMetadataViewModelTitle'], .yt-lockup-metadata-view-model__title, #video-title, [class*='shortsLockupViewModelHostMetadataTitle'], .shortsLockupViewModelHostMetadataTitle, h3"
+          "[class*='LockupMetadataViewModelTitle']:not(yt-lockup-metadata-view-model), .yt-lockup-metadata-view-model__title, #video-title, [class*='shortsLockupViewModelHostMetadataTitle'], .shortsLockupViewModelHostMetadataTitle, h3"
         )
       ) ||
       a?.getAttribute("title") ||
@@ -1086,6 +1087,20 @@
     openPreview,
     /** Видео в бот-архив Telegram с плашками «Отправляю…» → «Сохранено в «…»». */
     archive,
+    /** Бот-архив настроен — кнопка и пункт «В архив Telegram» есть. */
+    archiveReady: () => archiveReady,
+    /**
+     * Карточка видео YouTube под событием — для своего меню правого щелчка (ctxmenu.js).
+     * path — composedPath(), x/y — точка (сквозь играющее превью YouTube).
+     * → { card, thumb, info: { videoId, title, channel, len } } или null (не видео: плейлист, микс…).
+     */
+    cardFor(path, x, y) {
+      // сквозь играющее превью YouTube и сквозь свои кнопки поверх обложки (кружок выбора, «О чём видео»)
+      const through = overPreview(path) || path.some((el) => OWN_HOSTS.has(el.id));
+      const card = cardFromPath(path) || (through ? cardAt(x, y) : null);
+      const info = card && idOf(card) ? infoOf(card) : null;
+      return info ? { card, thumb: thumbOf(card), info } : null;
+    },
     close,
     /** Тема окон: "dark" / "light", null — авто (YouTube: html[dark]; страницы расширения: data-theme / система). */
     setTheme(t) {

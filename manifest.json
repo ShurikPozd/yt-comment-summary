@@ -161,7 +161,9 @@
         "speech-core.js",
         "speech.js",
         "abloop-core.js",
-        "abloop.js"
+        "abloop.js",
+        "ctxmenu-core.js",
+        "ctxmenu.js"
       ],
       "run_at": "document_idle"
     },
@@ -192,7 +194,9 @@
         "audioonly-core.js",
         "audioonly.js",
         "abloop-core.js",
-        "abloop.js"
+        "abloop.js",
+        "ctxmenu-core.js",
+        "ctxmenu.js"
       ],
       "run_at": "document_idle",
       "all_frames": true

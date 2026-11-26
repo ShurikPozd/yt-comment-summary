@@ -952,7 +952,7 @@
   // ---------------- Плеер: без автозапуска и без полосы прогресса ----------------
   // Замена устаревшим AutoplayStopper и ToggleVideoProgressBars. Оба режима
   // включаются в настройках панели и применяются сразу, без перезагрузки.
-  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, channelVolume: true, volumeLeveler: false, dualSubs: false, audioOnlyChannels: true, introSkip: true };
+  const playerPrefs = { noAutoplay: false, hideProgress: false, sponsorSkip: true, channelSpeed: true, focusMode: false, silenceSkip: false, channelVolume: true, volumeLeveler: false, dualSubs: false, audioOnlyChannels: true, introSkip: true, ctxMenu: true };
 
   // Стиль скрытия полосы ставит early.js (document_start) — до отрисовки плеера.
   const applyHideProgress = () => globalThis.__ytcs?.applyHideProgress?.();
@@ -970,6 +970,7 @@
     playerPrefs.dualSubs = Boolean(settings?.dualSubs); // «Двойные субтитры» — dualsubs.js
     playerPrefs.introSkip = settings?.introSkip !== false; // пропуск вступлений по каналам — intro.js, по умолчанию вкл.
     playerPrefs.audioOnlyChannels = settings?.audioOnlyChannels !== false; // «Только звук по каналам» — audioonly.js, по умолчанию вкл.
+    playerPrefs.ctxMenu = settings?.ctxMenu !== false; // своё меню по правому щелчку — ctxmenu.js, по умолчанию вкл.
     applyHideProgress();
     syncMenuToggles(); // меню в плеере следует за настройками из панели
     // Переключили из панели, системного меню или горячей клавишей — короткая
@@ -998,6 +999,8 @@
         showPageToast(playerPrefs.introSkip ? "Вступления будут пропускаться по каналам" : "Вступления больше не пропускаются", UI_ICONS.intro);
       } else if (before.audioOnlyChannels !== playerPrefs.audioOnlyChannels) {
         showPageToast(playerPrefs.audioOnlyChannels ? "«Только звук» будет запоминаться для каждого канала" : "«Только звук» больше не запоминается по каналам", UI_ICONS.headphones);
+      } else if (before.ctxMenu !== playerPrefs.ctxMenu) {
+        showPageToast(playerPrefs.ctxMenu ? "Правый щелчок — меню расширения" : "Правый щелчок — обычное меню браузера", UI_ICONS.ctxmenu);
       }
     }
   }
@@ -1258,6 +1261,8 @@
     subs: SVG('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 10.5h10M7 14.5h6.5"/>'),
     // листок с загнутым углом и строками — «Заметка» к моменту видео (notes.js)
     note: SVG('<path d="M5 4h14v10.5L13.5 20H5z"/><path d="M13.5 20v-5.5H19"/><path d="M8.5 8.5h7M8.5 12h4"/>'),
+    // табличка меню и указатель — «Меню по правому клику» (ctxmenu.js); на .6 ниже — рисунок выше середины (замер tools/align)
+    ctxmenu: SVG('<g transform="translate(0 .6)"><rect x="3.5" y="3.5" width="12.5" height="15" rx="2.5"/><path d="M7 8h5.5M7 11.5h5.5"/><path d="M14.5 13.5l6 2.1-2.6 1.1-1.1 2.6z"/></g>'),
     // фотоаппарат — «Снимок кадра» (frame-shot.js); на полединицы ниже: иначе он выше середины
     // строки (4…19 при середине 12) — на 150 % на пиксель экрана (замер tools/align, yt-embed-menu)
     camera: SVG('<path d="M4 9A2.5 2.5 0 0 1 6.5 6.5h1.8l1.5-2h4.4l1.5 2h1.8A2.5 2.5 0 0 1 20 9v8A2.5 2.5 0 0 1 17.5 19.5h-11A2.5 2.5 0 0 1 4 17z"/><circle cx="12" cy="13" r="3.5"/>'),
@@ -1344,6 +1349,7 @@
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="silenceSkip" title="Паузы между фразами проходят быстрее, речь — с вашей скоростью">${UI_ICONS.silence}<span class="ytcs-label">Пропускать тишину<span class="ytcs-sub" hidden></span></span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="dualSubs" title="Под строкой оригинала — перевод от YouTube (Shift+C)">${UI_ICONS.subs}<span class="ytcs-label">Двойные субтитры</span><span class="ytcs-switch"></span></button>
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="focusMode">${UI_ICONS.focus}<span class="ytcs-label">Без отвлечений</span><span class="ytcs-switch"></span></button>
+        <button class="ytcs-item" role="menuitemcheckbox" data-toggle="ctxMenu" title="Правый щелчок по видео, ссылке на видео и плееру — меню расширения; Shift + правый щелчок — меню браузера">${UI_ICONS.ctxmenu}<span class="ytcs-label">Меню по правому клику</span><span class="ytcs-switch"></span></button>
         </div>
         <div class="ytcs-group">
         <button class="ytcs-item" role="menuitemcheckbox" data-toggle="channelSpeed">${UI_ICONS.speed}<span class="ytcs-label">Скорость по каналам</span><span class="ytcs-switch"></span></button>

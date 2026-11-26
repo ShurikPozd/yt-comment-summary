@@ -2447,5 +2447,60 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(Math.abs(m.a - 39.155) < 0.01 && Math.abs(m.band.to - 47.746) < 0.01 && L.marks({ a: 10 }, D).band === null && L.marks(loop, NaN) === null && L.marks(L.empty(), D) === null, "отметки на полосе в процентах");
 }
 
+// ---------- своё меню по правому щелчку на YouTube (ctxmenu-core.js) ----------
+{
+  const ctx = vm.createContext({ URL });
+  vm.runInContext(readFileSync(new URL("../ctxmenu-core.js", import.meta.url), "utf8"), ctx);
+  const M = ctx.__ytcsCtxCore;
+  const J = (x) => JSON.stringify(x);
+  // время в ссылках
+  ok(M.parseT("754") === 754 && M.parseT("754s") === 754 && M.parseT("12m34s") === 754 && M.parseT("1h2m3s") === 3723 && M.parseT("2m") === 120 && M.parseT("1h") === 3600, "время: 754, 754s, 12m34s, 1h2m3s");
+  ok(M.parseT("12:34") === 754 && M.parseT("1:02:03") === 3723 && M.parseT("") === 0 && M.parseT("abc") === 0 && M.parseT("h") === 0, "время: 12:34 и мусор");
+  ok(M.fmtTime(754) === "12:34" && M.fmtTime(3723) === "1:02:03" && M.fmtTime(5.9) === "0:05" && M.fmtTime(-3) === "0:00", "подпись времени");
+  // ссылки на видео
+  const L = (h) => J(M.parseLink(h));
+  ok(L("/watch?v=dQw4w9WgXcQ&t=754s") === J({ id: "dQw4w9WgXcQ", short: false, t: 754, list: "" }), "таймкод в описании: /watch?v=…&t=754s");
+  ok(L("https://youtu.be/dQw4w9WgXcQ?t=90") === J({ id: "dQw4w9WgXcQ", short: false, t: 90, list: "" }), "youtu.be с t=");
+  ok(M.parseLink("https://www.youtube.com/shorts/abcdefghijk").short === true && M.parseLink("https://m.youtube.com/watch?v=dQw4w9WgXcQ#t=1m5s").t === 65, "Shorts и #t=");
+  ok(M.parseLink("/watch?v=dQw4w9WgXcQ&list=PL123&index=2").list === "PL123" && M.parseLink("https://www.youtube.com/embed/dQw4w9WgXcQ?start=30").t === 30, "плейлист и start=");
+  ok(M.parseLink("/@channel") === null && M.parseLink("/playlist?list=PL1") === null && M.parseLink("https://example.com/watch?v=dQw4w9WgXcQ") === null, "канал, плейлист, чужой сайт — не видео");
+  ok(M.parseLink("/watch?v=short") === null && M.parseLink("javascript:alert(1)") === null && M.parseLink("/redirect?q=https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ") === null, "кривой id и переадресация — не видео");
+  ok(M.videoUrl("dQw4w9WgXcQ") === "https://www.youtube.com/watch?v=dQw4w9WgXcQ" && M.videoUrl("dQw4w9WgXcQ", { t: 61.9 }) === "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=61s", "ссылка и ссылка со временем");
+  ok(M.videoUrl("abcdefghijk", { short: true }) === "https://www.youtube.com/shorts/abcdefghijk" && M.videoUrl("abcdefghijk", { short: true, t: 5 }).includes("watch?v=abcdefghijk&t=5s"), "Shorts — своей ссылкой");
+  // пункты карточки
+  const keys = (list) => list.map((x) => (x === "-" ? "-" : x.key)).join(" ");
+  const all = { playlists: true, preview: true, tldr: true, archive: true, notes: true, notInterested: true };
+  ok(keys(M.videoItems({ queue: { index: -1 }, channel: "Канал", has: all })) === "play tab - queue - save preview tldr archive - copy channel - nope", "карточка: всё по порядку, «В очередь»");
+  ok(keys(M.videoItems({ queue: { index: 3 }, has: {} })) === "play tab - qtop qdel - copy", "в очереди не первым — «Наверх» и «Убрать»");
+  ok(keys(M.videoItems({ queue: { index: 0 }, has: {} })) === "play tab - qdel - copy", "первым в очереди — только «Убрать»");
+  const tc = M.videoItems({ here: true, t: 754, queue: { index: -1 }, has: { notes: true } });
+  ok(keys(tc) === "seek note tab - queue - copy copyT" && tc[0].label === "Перейти к 12:34" && tc[1].label === "Заметка к этому месту", "таймкод этого видео: «Перейти к 12:34», «Заметка к этому месту»");
+  const other = M.videoItems({ t: 90, queue: null, has: {} });
+  ok(other[0].label === "Смотреть с 1:30" && keys(other) === "play tab - copy copyT", "таймкод другого видео: «Смотреть с 1:30»");
+  ok(M.videoItems({ short: true, t: 9, has: {} })[0].label === "Смотреть" && !keys(M.videoItems({ short: true, t: 9, has: {} })).includes("copyT"), "Shorts — без времени");
+  ok(M.videoItems({ channel: "Уютный «дом»", has: {} }).find((x) => x.key === "channel").label === "Канал «Уютный «дом»»", "подпись канала");
+  ok(M.videoItems({ has: { notInterested: true } }).at(-1).danger === true, "«Не интересует» — последним, красным");
+  ok(J(M.tidy(["-", { key: "a" }, "-", "-", { key: "b" }, "-"])) === J([{ key: "a" }, "-", { key: "b" }]), "разделители — только между группами");
+  // пункты плеера
+  const P = (o) => M.playerItems({ t: 83, rate: "1,25×", queue: { index: -1 }, has: { frame: true, notes: true, ab: true, speed: true, speech: true }, native: true, ...o });
+  ok(keys(P({})) === "frame note abA speed speech - copy copyT - queue - native", "плеер: снимок, заметка, A–B, скорость, речь, ссылки, очередь, «Меню YouTube…»");
+  ok(P({}).find((x) => x.key === "note").label === "Заметка к 1:23" && P({}).find((x) => x.key === "copyT").label === "Ссылка с 1:23", "плеер: подписи со временем");
+  ok(P({}).find((x) => x.key === "speed").kind === "rate" && P({}).find((x) => x.key === "speed").value === "1,25×", "скорость — строка с − / +");
+  ok(keys(P({ ab: { a: 83, b: null } })).startsWith("frame note abB abOff") && P({ ab: { a: 83, b: null } }).find((x) => x.key === "abOff").label === "Снять начало 1:23", "отмечено A — «Конец здесь (B)» и «Снять начало»");
+  ok(P({ ab: { a: 83, b: 101, active: true, aside: "1:23–1:41" } }).find((x) => x.key === "abOff").label === "Снять повтор 1:23–1:41", "повтор идёт — «Снять повтор 1:23–1:41»");
+  ok(!keys(P({ t: 0 })).includes("copyT") && keys(P({ native: false })).endsWith("queue") && P({}).at(-1).label === "Меню YouTube…", "в начале видео — без «Ссылки с 0:00»; «Меню YouTube…» последним");
+  ok(keys(M.playerItems({ t: 5, has: {}, queue: null, native: true })) === "copy copyT - native", "модули не встали — только ссылки и меню YouTube");
+  // место меню
+  ok(J(M.place(100, 100, 260, 300, 1280, 800)) === J({ left: 100, top: 100 }), "место: у указателя");
+  ok(J(M.place(1200, 700, 260, 300, 1280, 800)) === J({ left: 940, top: 400 }), "у правого нижнего края — влево и вверх");
+  ok(J(M.place(101, 99.5, 260, 300, 1280, 800)) === J({ left: 102, top: 100 }), "на чётных пикселях");
+  ok(J(M.place(50, 300, 260, 900, 320, 600)) === J({ left: 50, top: 8 }), "выше окна — прижато к верху (меню прокручивается)");
+  ok(J(M.place(10, 10, 400, 100, 360, 600)) === J({ left: 8, top: 10 }), "шире окна — от левого края");
+  // клавиши
+  ok(M.nav("ArrowDown", -1, 5) === 0 && M.nav("ArrowDown", 4, 5) === 0 && M.nav("ArrowUp", 0, 5) === 4 && M.nav("ArrowUp", -1, 5) === 4, "стрелки — по кругу");
+  ok(M.nav("Home", 3, 5) === 0 && M.nav("End", 0, 5) === 4 && M.nav("x", 1, 5) === -1 && M.nav("ArrowDown", 0, 0) === -1, "Home / End");
+  ok(M.nativeWanted({ shift: true }) && !M.nativeWanted({ shift: true, keyboard: true }) && M.nativeWanted({ editable: true }) && M.nativeWanted({ selected: true }) && !M.nativeWanted({}), "меню браузера: Shift (не Shift+F10), поле, выделение");
+}
+
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);
 process.exit(failed ? 1 : 0);

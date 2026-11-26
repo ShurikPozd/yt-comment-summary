@@ -25,6 +25,8 @@ const shadow = (id) => `[document.getElementById(${JSON.stringify(id)})?.shadowR
 // шрифт YouTube (Roboto с Google Fonts) загружен — без сети стенды YouTube не откроются
 const roboto = `[...document.fonts].some((f) => f.family.replace(/["']/g, "") === "Roboto" && f.status === "loaded")`;
 const ytReady = roboto + " && document.querySelector('.ytcs-btn') && performance.now() > 1200";
+// своё меню правого щелчка: подгружены кнопки обложек и скорость (yt-stub.js, &ctx=1)
+const ctxReady = ytReady + " && window.__ytcsVideoActions && window.__ytcsSpeed && document.querySelector('#secondary yt-lockup-view-model')";
 // встроенный плеер: кнопка встала в строку нового плеера (#player-controls)
 const embedReady = roboto + " && document.querySelector('#player-controls .ytcs-btn') && performance.now() > 1200";
 
@@ -126,6 +128,14 @@ export const PAGES = [
   { key: "yt-abloop", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.ab(83, 101)", settle: 900, roots: shadow("ytcs-abloop-notice") },
   { key: "yt-abloop-a", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.ab(83, null)", settle: 900, roots: shadow("ytcs-abloop-notice") },
   { key: "yt-abloop-narrow", url: "/watch?v=dQw4w9WgXcQ", w: 560, h: 900, wait: ytReady, act: "(document.getElementById('movie_player').style.width = '400px', __stand.ab(83, null))", settle: 900, roots: shadow("ytcs-abloop-notice") },
+  // своё меню по правому щелчку (ctxmenu.js): карточка справа (тёмная и светлая тема), таймкод в описании,
+  // плеер (вместо меню YouTube), узкое окно (строки крупнее), встроенный плеер «Моей библиотеки»
+  { key: "yt-ctx-card", url: "/watch?v=dQw4w9WgXcQ&ctx=1", w: 1300, h: 900, wait: ctxReady, act: "__stand.ctx('#secondary yt-lockup-view-model:nth-child(2) yt-thumbnail-view-model')", settle: 500, roots: shadow("ytcs-ctxmenu") },
+  { key: "yt-ctx-card-light", url: "/watch?v=dQw4w9WgXcQ&ctx=1&light=1", w: 1300, h: 900, wait: ctxReady, act: "__stand.ctx('#secondary yt-lockup-view-model yt-thumbnail-view-model')", settle: 500, roots: shadow("ytcs-ctxmenu") },
+  { key: "yt-ctx-link", url: "/watch?v=dQw4w9WgXcQ&ctx=1", w: 1300, h: 900, wait: ctxReady, act: "__stand.ctx('#description a', 12, 10)", settle: 500, roots: shadow("ytcs-ctxmenu") },
+  { key: "yt-ctx-player", url: "/watch?v=dQw4w9WgXcQ&ctx=1", w: 1300, h: 900, wait: ctxReady, act: "__stand.ctx('#movie_player', 420, 90)", settle: 500, roots: shadow("ytcs-ctxmenu") },
+  { key: "yt-ctx-narrow", url: "/watch?v=dQw4w9WgXcQ&ctx=1&light=1", w: 400, h: 1100, wait: ctxReady, act: "(document.getElementById('movie_player').style.width = '368px', document.getElementById('movie_player').style.height = '207px', __stand.ctx('#secondary yt-lockup-view-model:nth-child(3) yt-thumbnail-view-model', 140, 40))", settle: 500, roots: shadow("ytcs-ctxmenu") },
+  { key: "yt-embed-ctx", url: "/embed/dQw4w9WgXcQ", w: 988, h: 556, wait: embedReady, act: "__stand.ctx('#player-controls', 300, 110)", settle: 600, roots: shadow("ytcs-ctxmenu") },
   { key: "yt-menu-ab", url: "/watch?v=dQw4w9WgXcQ", w: 1280, h: 900, wait: ytReady, act: "__stand.abMenu()", settle: 900, roots: "[document.querySelector('.ytcs-menu')]" },
   // «Моя библиотека» → «Заметки» и заметки под встроенным плеером (notes-view.js)
   { key: "lib-notes", url: LIB.replace("?", "?notes=1&tg=1&") + "#notes", w: 1200, h: 2000, wait: "document.querySelector('.nt-card') && performance.now() > 1500", roots: "[document.getElementById('notes')]" },
