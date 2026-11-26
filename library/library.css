@@ -3273,7 +3273,7 @@ button.st-tab[aria-pressed="true"] {
   color: var(--accent-ink);
 }
 
-@media (min-width: 1101px) {
+@media (min-width: 1361px) {
   body:not(.embed) button.st-tab {
     display: inline-flex;
     align-items: center;
@@ -4907,7 +4907,7 @@ button.primary .key {
 }
 
 /* «Статистика» в шапке (с подписью — на широком окне): подпись была на 0,7px ниже */
-@media (min-width: 1101px) {
+@media (min-width: 1361px) {
   body:not(.embed) button.st-tab {
     padding-bottom: 2px;
   }
@@ -5137,6 +5137,7 @@ button.primary .key {
 
 /* название видео (или «Выбрано: N видео») — о чём меню */
 .ctx-head {
+  flex: none; /* в низком окне меню прокручивается, а не сжимает строки */
   padding: 6px 12px 8px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
@@ -5154,6 +5155,7 @@ button.primary .key {
 }
 
 .ctx-item {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -5195,6 +5197,22 @@ button.primary .key {
 .ctx-item.danger,
 .ctx-item.danger > svg {
   color: var(--accent-ink);
+}
+
+/* идёт действие над видео (multi.js, sel.busy) — пункты с ним приглушены, над ними — что идёт */
+.ctx-item:disabled {
+  opacity: 0.45;
+  background: transparent;
+  cursor: default;
+}
+
+.ctx-busy {
+  flex: none;
+  padding: 2px 12px 8px;
+  color: var(--fg-2);
+  font-size: 0.85rem;
+  line-height: 20px;
+  white-space: normal;
 }
 
 .ctx-sep {
@@ -5277,26 +5295,18 @@ body.embed .pl-pick-btn {
   padding-bottom: 0.11em;
 }
 
-/* узкое поле (панель 360–420): без лупы — место плашке; пока печатают — плашка уже */
+/* узкое поле (боковая панель; в широком окне — когда шапка тесная): плашке не хватает
+   места на название — её нет. Где ищем, говорит подсказка в поле («Поиск в «…»» /
+   «В «…»», view-lib.js), без лупы — место подсказке; полное название и выбор другого
+   плейлиста — в кнопке «Плейлист: …» под полем или в колонке плейлистов слева */
 .search:has(.pl-chip:not([hidden])) {
   container-type: inline-size;
 }
 
-@container (max-width: 260px) {
+@container (max-width: 280px) {
+  .search .pl-chip,
   .search .search-icon {
     display: none;
-  }
-  .search .pl-chip {
-    max-width: 70%;
-    margin-left: -12px; /* к краю поля: отступ слева — у самого поля */
-    padding-left: 10px;
-  }
-  .search .pl-chip-x {
-    width: 1.4rem;
-    height: 1.4rem;
-  }
-  .search:focus-within .pl-chip {
-    max-width: 45%;
   }
 }
 
@@ -5564,5 +5574,16 @@ body.embed .pl-pick-btn {
 @media (max-width: 420px) {
   .pp-foot {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* среднее окно (1001–1360 px): в одну строку не помещались вкладки, поиск, статус «Открыто N видео
+   во вкладках» / «Обновлено…», «Собрать вкладки» и «Заметки» / «Статистика» с подписями — поиск
+   сжимался в кружок, статус наезжал на «Подписки». Подписи у «Заметок» и «Статистики» — с 1361 px,
+   статус — тоже с 1361 px; высота шапки прежняя (одна строка) */
+@media (max-width: 1360px) {
+  #tabs-text,
+  #sync-text {
+    display: none;
   }
 }

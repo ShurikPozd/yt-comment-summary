@@ -109,20 +109,26 @@ export function compute() {
 }
 
 // «Порядок»: без запроса «Как в плейлисте» — первым и по умолчанию, «Сначала лучшие
-// совпадения» — только когда что-то ищут (без запроса это одно и то же)
-let sortKey = "";
+// совпадения» — только когда что-то ищут (без запроса это одно и то же).
+// Какие варианты сейчас в списке — в самом списке (data-k): «Очередь» и «Подписки» пишут
+// туда свои (setView), и при возврате в «Плейлисты» список собирается заново.
 function renderLibSort() {
   const q = Boolean(state.q.trim());
   const as = state.pl ? "Как в плейлисте" : "Как в плейлистах";
-  if (!q && state.sort === "order") state.sort = "auto";
-  const key = `${q}|${as}`;
-  if (key !== sortKey) {
-    sortKey = key;
+  const key = `lib|${q}|${as}`;
+  const sel = $("#sort");
+  if (sel.dataset.k !== key) {
+    sel.dataset.k = key;
     const opts = [...(q ? [["auto", "Сначала лучшие совпадения"], ["order", as]] : [["auto", as]]), ["long", "Сначала длинные"], ["short", "Сначала короткие"], ["channel", "По каналу (А–Я)"]];
-    $("#sort").innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+    sel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   }
-  $("#sort").value = state.sort;
+  // без запроса «Как в плейлисте» — это «auto»; сам выбор (state.sort) не трогаем,
+  // чтобы с запросом он снова стал «Как в плейлисте», а не «Сначала лучшие совпадения»
+  sel.value = !q && state.sort === "order" ? "auto" : state.sort;
 }
+
+// «Поиск в «Очень длинное название…»» — укороченные названия для узкого поля
+const cut = (t, n) => (t.length > n + 1 ? `${t.slice(0, n).trimEnd()}…` : t);
 
 // верхнее поле поиска в «Плейлистах»: подсказка — где ищем, выбранный плейлист — плашкой в поле
 function renderLibSearch() {
@@ -132,17 +138,29 @@ function renderLibSearch() {
   if (p) chip.querySelector(".pl-chip-t").textContent = p.title;
   chip.title = p ? `Поиск идёт в «${p.title}»` : "";
   const n = state.cat.videos.length;
-  if (p) setSearchHint($("#q"), `Поиск в «${p.title}»: ${videosWord(p.count || 0)}`, `Поиск: ${videosWord(p.count || 0)}`, "Поиск");
+  // в узком поле плашки нет (library.css) — где ищем, говорит подсказка: самая длинная, что
+  // помещается, — от «Поиск в «…»: N видео» до «В «Смешно…»» (полное название — в кнопке под полем)
+  const t = p?.title || "";
+  if (p)
+    setSearchHint(
+      $("#q"),
+      `Поиск в «${t}»: ${videosWord(p.count || 0)}`,
+      ...[99, 14, 8].map((n) => `Поиск в «${cut(t, n)}»`),
+      ...[99, 14, 10, 8, 6, 4].map((n) => `В «${cut(t, n)}»`),
+      "Поиск"
+    );
   else setSearchHint($("#q"), `Поиск по ${videosWord(n)} в ${inPlWord(state.cat.playlists.length)}`, `Поиск по ${videosWord(n)}`, "Поиск видео", "Поиск");
 }
 
 export function update({ keep = false } = {}) {
   // «Плейлисты» ещё собираются — строка над видео не нужна (ни счёта, ни порядка)
   document.body.classList.toggle("l-none", state.view === "lib" && !state.cat);
-  $("#pl-chip").hidden = state.view !== "lib" || !state.pl;
+  // каталог ещё собирается — плашку не показываем (пустая, с одним ×, ничего не говорит)
+  $("#pl-chip").hidden = state.view !== "lib" || !state.pl || !state.cat;
   if (state.view === "queue") return updateQueue({ keep });
   if (state.view === "digest") return updateDigest({ keep });
   if (!state.cat) {
+    setSearchHint($("#q"), "Поиск по плейлистам", "Поиск");
     state.list = [];
     state.shown = 0;
     $("#grid").textContent = "";

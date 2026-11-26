@@ -56,6 +56,7 @@ export function setView(v, { silent = false } = {}) {
   for (const b of document.querySelectorAll(".views [data-view]")) b.setAttribute("aria-selected", String(b.dataset.view === v));
   if (changed || !$("#sort").options.length) {
     $("#sort").innerHTML = SORTS[v].map(([val, label]) => `<option value="${val}">${label}</option>`).join("");
+    $("#sort").dataset.k = v; // варианты раздела; «Плейлисты» соберут свои (renderLibSort)
     state.sort = "auto";
     $("#sort").value = "auto";
   }
@@ -113,8 +114,10 @@ $("#q").addEventListener("input", (e) => {
   qTimer = setTimeout(update, 70);
 });
 $("#q").addEventListener("keydown", (e) => {
-  // Backspace в пустом поле — убрать плашку плейлиста: поиск снова по всем
-  if (e.key === "Backspace" && !e.target.value && state.view === "lib" && state.pl) {
+  // Backspace в пустом поле — убрать плашку плейлиста: поиск снова по всем. Только отдельным
+  // нажатием (зажатый после стирания запроса — не снимает) и когда плашка видна (в узком
+  // поле её нет — плейлист снимают в списке «Плейлист: …»)
+  if (e.key === "Backspace" && !e.repeat && !e.isComposing && !e.target.value && state.view === "lib" && state.pl && $("#pl-chip").getClientRects().length) {
     e.preventDefault();
     setPl("");
   } else if (e.key === "Escape" && e.target.value) {
@@ -159,13 +162,14 @@ $("#grid").addEventListener("click", (e) => {
   if (chip) return setPl(chip.dataset.pl);
   const more = e.target.closest(".chip[data-more]");
   if (more) {
-    // показать все плейлисты этого видео
+    // показать все плейлисты этого видео (кроме открытого — как и на карточке, cardHtml)
     const v = state.cat.videos[Number(more.dataset.more)];
     const box = more.parentElement;
     box.innerHTML = v.in
       .map(([id]) => state.plById.get(id))
-      .filter(Boolean)
-      .map((p) => `<button type="button" class="chip" data-pl="${esc(p.id)}">${esc(p.title)}</button>`)
+      .filter((p) => p && p.id !== state.pl)
+      .sort((a, b) => a.rank - b.rank)
+      .map((p) => `<button type="button" class="chip" data-pl="${esc(p.id)}" title="Показать плейлист «${esc(p.title)}»">${esc(p.title)}</button>`)
       .join("");
   }
 });

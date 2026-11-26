@@ -92,7 +92,11 @@ function fitSearchHint(input) {
 }
 export function setSearchHint(input, ...variants) {
   if (!input) return;
-  input.__hints = variants.filter(Boolean);
+  const hints = variants.filter(Boolean);
+  // те же варианты (поиск печатают по букве — подсказка та же) — не мерить поле зря;
+  // ширина поля поменялась — подберёт ResizeObserver ниже
+  if (input.__hints && input.__hints.join("|") === hints.join("|")) return;
+  input.__hints = hints;
   if (!input.__hintRo) {
     input.__hintRo = new ResizeObserver(() => fitSearchHint(input));
     input.__hintRo.observe(input);

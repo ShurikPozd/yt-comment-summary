@@ -5,7 +5,8 @@
 // Внутри: поиск по названиям, у каждого число видео (пока идёт поиск — сколько найдено
 // в нём), «Все плейлисты», «Смотреть позже» и «Понравившиеся» сверху; внизу —
 // «Порядок в плейлистах» и «Резервная копия» (их кнопки были в конце ленты).
-// Клавиши: ↑/↓ — по списку, Enter — выбрать, Esc — закрыть.
+// Клавиши: ↑/↓ — по списку, Enter — выбрать, Esc — закрыть, Tab — к кнопкам внизу
+// (список закрывается, когда фокус ушёл из него совсем).
 
 import { icon } from "../sidepanel/icons.js";
 import { setPl } from "./library.js";
@@ -74,7 +75,7 @@ function setAct(i) {
 function pick(i) {
   const r = rows[i];
   if (!r) return;
-  close();
+  close(true); // фокус — обратно на кнопку списка (иначе после Enter он теряется вместе со списком)
   if ((state.pl || "") !== r.id) setPl(r.id);
   window.scrollTo({ top: 0 });
 }
@@ -97,6 +98,7 @@ export function open() {
   pop.querySelector(".pp-q").focus({ preventScroll: true });
   addEventListener("pointerdown", onDown, true);
   addEventListener("keydown", onKey, true);
+  narrow.addEventListener("change", onWide);
 }
 
 export function close(refocus = false) {
@@ -105,11 +107,21 @@ export function close(refocus = false) {
   btn.setAttribute("aria-expanded", "false");
   removeEventListener("pointerdown", onDown, true);
   removeEventListener("keydown", onKey, true);
+  narrow.removeEventListener("change", onWide);
   if (refocus) btn.focus({ preventScroll: true });
 }
 
+const mine = (t) => t instanceof Node && (pop.contains(t) || btn.contains(t));
+
 function onDown(e) {
-  if (!(e.target instanceof Node) || !(pop.contains(e.target) || btn.contains(e.target))) close();
+  if (!mine(e.target)) close();
+}
+
+// окно стало шире 1100 px — вместо кнопки-списка колонка плейлистов (library.css), открытый
+// список скрыт: закрываем, чтобы его клавиши и щелчки не работали невидимкой
+const narrow = matchMedia("(max-width: 1100px)"); // как в library.css: кнопка-список — до 1100 px
+function onWide() {
+  if (!narrow.matches) close();
 }
 
 function onKey(e) {
@@ -123,8 +135,15 @@ function onKey(e) {
   } else if (e.key === "Enter" && pop.contains(e.target) && !e.target.closest(".pp-foot")) {
     e.preventDefault();
     pick(act);
-  } else if (e.key === "Tab") close();
+  }
 }
+
+// фокус ушёл из списка и не на его кнопку (Tab дальше кнопок внизу, Shift+Tab, щелчок по полю)
+function onFocusOut(e) {
+  if (!pop.hidden && e.relatedTarget && !mine(e.relatedTarget)) close();
+}
+pop.addEventListener("focusout", onFocusOut);
+btn.addEventListener("focusout", onFocusOut);
 
 btn.addEventListener("click", () => (pop.hidden ? open() : close()));
 pop.addEventListener("input", (e) => {
