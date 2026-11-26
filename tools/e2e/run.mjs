@@ -7,7 +7,7 @@
 // как на настоящем сайте: адрес страницы тот же — https://www.youtube.com/…
 // Проверяется: кнопка в плеере и её меню; сбор комментариев через youtubei;
 // кнопки на обложках (video-actions.js, select.js) на /watch и на главной;
-// добавление в очередь; «с того же места после обновления» (resume.js);
+// добавление в очередь; своё меню по правому щелчку (ctxmenu.js); «с того же места после обновления» (resume.js);
 // сводка в боковой панели доходит до запроса к ИИ (ответ — заглушка).
 // Переменные окружения:
 //   CHROME     — путь к Chrome (по умолчанию стандартный путь в Windows/Linux/macOS);
@@ -319,6 +319,32 @@ await step("добавление в очередь (выбор → «В очер
   must(q?.length === 1, "очередь пуста после «В очередь»");
   must(q[0].id === "vid00000002", `в очереди не то видео: ${JSON.stringify(q[0])}`);
   return `в очереди: ${q[0].id}, «${q[0].title || "без названия"}»`;
+});
+
+// Своё меню по правому щелчку (ctxmenu.js): правый щелчок по карточке рекомендаций — наше меню
+// (а не меню браузера), «В очередь» кладёт видео в очередь; Shift + правый щелчок — меню браузера
+const ctxMenuOpen = "(() => { const m = document.getElementById('ytcs-ctxmenu')?.shadowRoot?.querySelector('.m'); return m && !m.hidden ? [...m.querySelectorAll('.it')].map((x) => x.dataset.k).join(',') : ''; })()";
+async function rightClick(sid, expr, modifiers = 0) {
+  const c = await hover(sid, expr);
+  for (const type of ["mousePressed", "mouseReleased"]) await b.send("Input.dispatchMouseEvent", { type, x: c.x, y: c.y, button: "right", buttons: type === "mousePressed" ? 2 : 0, clickCount: 1, modifiers, pointerType: "mouse" }, sid);
+}
+await step("своё меню по правому щелчку: карточка → «В очередь»", async () => {
+  await swEval(`chrome.storage.local.set({ queue: [] })`);
+  await sleep(300);
+  await rightClick(W, lockupThumb(1));
+  const keys = await until(W, ctxMenuOpen, 4000);
+  must(keys, "после правого щелчка по карточке нет своего меню (#ytcs-ctxmenu)");
+  for (const k of ["play", "tab", "queue", "save", "preview", "tldr", "copy"]) must(keys.split(",").includes(k), `в меню нет пункта ${k}: ${keys}`);
+  const id = await evalIn(W, `(${lockupThumb(1)}).closest('yt-lockup-view-model').querySelector('a[href*="watch?v="]').href.match(/v=([A-Za-z0-9_-]{11})/)[1]`);
+  await click(W, "document.getElementById('ytcs-ctxmenu').shadowRoot.querySelector('.it[data-k=queue]')");
+  const q = await until(sw, `chrome.storage.local.get("queue").then(({ queue }) => (queue || []).length ? queue : null)`, 5000);
+  must(q?.length === 1 && q[0].id === id, `в очереди не то: ${JSON.stringify(q)} (ждали ${id})`);
+  must(!(await evalIn(W, ctxMenuOpen)), "меню не закрылось после выбора");
+  // Shift + правый щелчок — меню браузера, своё не открывается
+  await rightClick(W, lockupThumb(1), 8);
+  await sleep(400);
+  must(!(await evalIn(W, ctxMenuOpen)), "Shift + правый щелчок открыл своё меню, а не меню браузера");
+  return `пунктов ${keys.split(",").length}, в очереди: ${id}`;
 });
 
 await step("с того же места после обновления (resume.js)", async () => {

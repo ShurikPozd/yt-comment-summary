@@ -220,8 +220,9 @@
     }, 2200);
   }
 
-  /** Открыть поле заметки на текущей секунде (клавиша N, пункт меню). */
-  function open() {
+  /** Открыть поле заметки на текущей секунде (клавиша N, пункт меню) или на секунде at
+   *  (таймкод в описании или комментарии — своё меню правого щелчка, ctxmenu.js). */
+  function open(at) {
     if (!alive()) return false;
     const id = videoIdNow();
     const v = mainVideo();
@@ -235,7 +236,7 @@
     const box = ed.root.querySelector(".ed");
     if (!ed.open) {
       ed.wasPlaying = !v.paused && !v.ended;
-      ed.t = Math.max(0, Math.floor(v.currentTime || 0));
+      ed.t = Math.max(0, Math.floor(Number.isFinite(at) ? at : v.currentTime || 0));
       ed.id = id;
       v.pause();
       ed.root.querySelector("input").value = "";
@@ -778,7 +779,7 @@
     }
   }, 1000);
 
-  globalThis.__ytcsNotes = { open, close: () => close(true), count: () => notesOf(videoIdNow()).length };
+  globalThis.__ytcsNotes = { open: (at) => open(at), close: () => close(true), count: () => notesOf(videoIdNow()).length };
   // встроенный плеер: «Моя библиотека» передаёт N, нажатую на её странице (фокус был не в плеере)
   if (OUR_EMBED) {
     window.addEventListener("message", (e) => {

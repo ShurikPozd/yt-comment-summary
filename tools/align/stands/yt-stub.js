@@ -163,6 +163,42 @@
     },
   });
 
+  // &ctx=1 — своё меню правого щелчка (ctxmenu.js): карточки справа (как рекомендации), описание
+  // с таймкодом этого видео и ссылкой на другое; кнопки обложек (video-actions.js) и скорость
+  // (speed.js) — только здесь, чтобы не менять другие стенды. &light=1 — светлая тема YouTube.
+  if (q.get("light")) document.documentElement.removeAttribute("dark");
+  if (q.get("ctx")) {
+    window.__ytcsVideoActionsStand = true;
+    document.title = TITLE + " - YouTube";
+    document.body.classList.add("ctx");
+    store.queue = [{ id: "vid00000003", title: "Первое в очереди" }, { id: "vid00000002", title: "Второе в очереди" }];
+    const cards = [
+      ["vid00000001", "Деревянный дом за 10 минут: быстрый гайд", "Уютный Майнкрафт", "10:42"],
+      ["vid00000002", "Сад и огород у дома — всё, что нужно знать", "Садовник", "18:05"],
+      ["vid00000003", "Подвал, который никто не найдёт", "Строитель", "7:31"],
+    ];
+    const side = document.createElement("div");
+    side.id = "secondary";
+    side.innerHTML = cards
+      .map(([id, t, ch, len]) => `<yt-lockup-view-model><a href="https://www.youtube.com/watch?v=${id}" class="thumb"><yt-thumbnail-view-model><badge-shape class="yt-badge-shape__text" hidden>${len}</badge-shape></yt-thumbnail-view-model></a>
+        <div><h3><a href="https://www.youtube.com/watch?v=${id}">${t}</a></h3><div class="meta yt-content-metadata-view-model__metadata-row"><a href="/@${id}">${ch}</a></div></div>
+        <button class="more" aria-label="Ещё">⋮</button></yt-lockup-view-model>`)
+      .join("");
+    const desc = document.createElement("div");
+    desc.id = "description";
+    desc.innerHTML = `Строим дом с нуля. <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=754s">12:34</a> — крыша, <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=95s">1:35</a> — окна.
+      Продолжение: <a href="https://www.youtube.com/watch?v=vid00000001">youtube.com/watch?v=vid00000001</a>`;
+    document.getElementById("movie_player").after(side, desc);
+    // вошли в аккаунт (кнопка аватара в шапке) — YouTube предлагает «Не интересует»
+    document.body.insertAdjacentHTML("afterbegin", '<ytd-masthead hidden><button id="avatar-btn" aria-label="Аккаунт"></button></ytd-masthead>');
+    for (const src of ["/video-actions.js", "/speed-core.js", "/speed.js"]) {
+      const sc = document.createElement("script");
+      sc.src = src;
+      sc.async = false;
+      document.body.append(sc);
+    }
+  }
+
   const fire = (msg) => msgListeners.forEach((f) => f(msg, {}, () => {}));
   window.__stand = {
     preview: () =>
@@ -201,6 +237,14 @@
       document.querySelector('.ytcs-menu [data-act="ab"]')?.click();
     },
     noteTip: () => document.getElementById("ytcs-note-marks")?.shadowRoot.querySelectorAll(".d")[1]?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true })),
+    // своё меню правого щелчка (ctxmenu.js) у элемента: el — селектор или элемент, dx/dy — от левого верхнего угла
+    ctx: (el, dx = 24, dy = 24) => {
+      const t = typeof el === "string" ? document.querySelector(el) : el;
+      if (!t) return 0;
+      const r = t.getBoundingClientRect();
+      t.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, composed: true, button: 2, clientX: r.left + dx, clientY: r.top + dy }));
+      return document.getElementById("ytcs-ctxmenu")?.shadowRoot.querySelectorAll(".it").length || 0;
+    },
     // «Поиск по речи» (speech.js): окно с найденным; kind — "none" (нет субтитров) или "error"
     speech: async (q = "дом", kind = "") => {
       const lines = [[4, "Привет! Сегодня строим уютный дом в Майнкрафте"], [37, "Сначала фундамент: дом без него долго не простоит"],

@@ -78,7 +78,7 @@
     const title =
       text(
         card.querySelector(
-          "[class*='LockupMetadataViewModelTitle'], .yt-lockup-metadata-view-model__title, #video-title, [class*='shortsLockupViewModelHostMetadataTitle'], .shortsLockupViewModelHostMetadataTitle, h3"
+          "[class*='LockupMetadataViewModelTitle']:not(yt-lockup-metadata-view-model), .yt-lockup-metadata-view-model__title, #video-title, [class*='shortsLockupViewModelHostMetadataTitle'], .shortsLockupViewModelHostMetadataTitle, h3"
         )
       ) ||
       a?.getAttribute("title") ||
@@ -404,6 +404,8 @@
     "click",
     (e) => {
       if (!(picked.size || qmode) || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey || dialogOpen()) return;
+      // «Смотреть» из своего меню правого щелчка (ctxmenu.js) — переход, а не выбор / «в очередь»
+      if (e.ytcsMenu) return;
       const path = e.composedPath();
       if (host && path.includes(host)) return;
       // клик по играющему превью YouTube — это карточка под ним
