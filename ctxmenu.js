@@ -273,18 +273,21 @@
     const hit = va?.cardFor?.(path, e.clientX, e.clientY);
     if (hit) {
       const { card, info, thumb } = hit;
-      const href = videoLink(card, info.videoId)?.href || "";
-      const p = C.parseLink(href) || { id: info.videoId, short: false, t: 0 };
+      const main = videoLink(card, info.videoId);
+      const p = C.parseLink(main?.href || "") || { id: info.videoId, short: false, t: 0 };
       const ch = channelLink(card);
       const channel = (info.channel || text(ch) || channelText(card)).slice(0, 120);
+      // время в ссылке карточки — «продолжить» от YouTube, меню — с начала, как щелчок;
+      // щёлкнули по ссылке на момент этого видео в карточке (главы в поиске) — с её времени
+      const t = C.cardTime(info.videoId, a?.href || "", main?.href || "");
       return {
         kind: "card",
         card,
         thumb,
-        anchor: videoLink(card, info.videoId),
+        anchor: t ? a : main,
         id: info.videoId,
         short: p.short,
-        t: 0, // время в ссылке карточки — «продолжить» от YouTube; меню — с начала, как щелчок
+        t,
         title: info.title,
         channel,
         channelA: ch,
@@ -292,20 +295,9 @@
         len: info.len || 0,
       };
     }
-    if (link) {
-      return {
-        kind: "link",
-        anchor: a,
-        id: link.id,
-        short: link.short,
-        t: link.t,
-        here: link.id === curVid() && Boolean(mainVideo()),
-        title: link.id === curVid() ? pageTitle() : text(a).replace(/^https?:\/\/\S+$/, "") || "",
-        channel: "",
-        len: 0,
-      };
-    }
-    return null;
+    // ссылка в тексте; внутри карточки-подборки (микс, плейлист — cardFor их не берёт) — меню браузера
+    const lt = C.linkTarget(link, { cur: curVid(), hasVideo: Boolean(mainVideo()), inCard: Boolean(va?.inCard?.(path)), pageTitle: link?.id === curVid() ? pageTitle() : "" });
+    return lt ? { kind: "link", anchor: a, ...lt, channel: "", len: 0 } : null;
   }
 
   // ---------- пункты ----------
@@ -329,8 +321,9 @@
           speed: Boolean(globalThis.__ytcsSpeed?.step),
           speech: Boolean(globalThis.__ytcsSpeech),
         },
-        // у нового встроенного плеера (слой #player-controls, «Моя библиотека») своего меню нет
-        native: !document.getElementById("player-controls"),
+        // у нового встроенного плеера (слой #player-controls, «Моя библиотека») своего меню нет;
+        // на самом YouTube элемент с таким id — не этот слой (как content.js: только при OUR_EMBED)
+        native: !(OUR_EMBED && document.getElementById("player-controls")),
       });
     }
     const va = globalThis.__ytcsVideoActions;
@@ -625,7 +618,9 @@
   // клавиши, которые меню не закрывают: модификаторы, клавиша меню и Shift+F10 (откроют заново)
   const KEEP = new Set(["Shift", "Control", "Alt", "Meta", "AltGraph", "CapsLock", "NumLock", "ContextMenu"]);
   function onKey(e) {
-    // в перехвате на окне — раньше плеера (пробел, стрелки, Esc), select.js и окон
+    // в перехвате на окне — раньше плеера (пробел, стрелки, Esc) и страницы, но ПОСЛЕ перехватов
+    // на окне, поставленных раньше (select.js, abloop.js, notes.js, speech.js, video-actions.js):
+    // те сами пропускают клавиши, пока меню открыто, — __ytcsCtxMenu.isOpen()
     const items = [...menu.querySelectorAll(".it:not([aria-disabled='true'])")];
     const a = shadowActive();
     if (!menu.contains(a) && a !== menu) return void close(false); // фокус ушёл (поиск по «/» и т. п.)
@@ -683,7 +678,17 @@
       if (isOpen() && inside(e)) return void e.preventDefault();
       if (!enabled || !alive()) return void close(false);
       const keyboard = e.pointerType === "" || performance.now() - kbAt < 800;
-      if (C.nativeWanted({ shift: e.shiftKey, keyboard, ...editableOrSelected(e) })) return void close(false);
+      const es = editableOrSelected(e);
+      // во весь экран развёрнут сам <video> (не плеер YouTube) — меню в него не встанет: обычное
+      const videoFs = document.fullscreenElement instanceof HTMLVideoElement;
+      if (C.nativeWanted({ shift: e.shiftKey, keyboard, videoFs, ...es })) {
+        close(false);
+        // Shift + правый щелчок по плееру — меню браузера: плеер YouTube на contextmenu рисует
+        // своё меню и отменяет событие (см. openNative), поэтому до него событие не пускаем;
+        // отмены нет — браузер покажет своё меню
+        if (e.shiftKey && !keyboard && !videoFs && !es.editable && !es.selected && (OUR_EMBED || e.composedPath().some((el) => el.id === "movie_player"))) e.stopImmediatePropagation();
+        return;
+      }
       const ctx = contextOf(e);
       if (!ctx) return void close(false);
       e.preventDefault();

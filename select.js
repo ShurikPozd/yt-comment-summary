@@ -436,6 +436,8 @@
   window.addEventListener(
     "keydown",
     (e) => {
+      // открыто своё меню по правому щелчку (ctxmenu.js) — Esc закрывает его, выбор остаётся
+      if (globalThis.__ytcsCtxMenu?.isOpen?.()) return;
       if (e.key !== "Escape" || !(picked.size || qmode) || dialogOpen()) return;
       const t = e.composedPath()[0];
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;

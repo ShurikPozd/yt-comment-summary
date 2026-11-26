@@ -28,6 +28,7 @@
 //   openPreview({ videoId, title, channel })
 //   archive({ videoId, title, channel, len }) → итог фона (archive-bg.js), archiveReady()
 //   cardFor(path, x, y) → { card, thumb, info } — карточка под правым щелчком (ctxmenu.js)
+//   inCard(path) → внутри любой карточки (и микса, плейлиста) — ctxmenu.js
 //   close(), setTheme("dark" | "light" | null), refresh()
 (() => {
   if (globalThis.__ytcsVideoActions) return;
@@ -1034,7 +1035,8 @@
   window.addEventListener(
     "keydown",
     (e) => {
-      if (e.key !== "Escape" || !$ || $(".pop").hidden) return;
+      // открыто меню по правому щелчку (ctxmenu.js) — Esc сначала его
+      if (e.key !== "Escape" || !$ || $(".pop").hidden || globalThis.__ytcsCtxMenu?.isOpen?.()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       close();
@@ -1101,6 +1103,8 @@
       const info = card && idOf(card) ? infoOf(card) : null;
       return info ? { card, thumb: thumbOf(card), info } : null;
     },
+    /** Событие внутри карточки YouTube — любой, и не видео (микс, плейлист): ctxmenu.js не даёт по ссылке в ней меню видео. */
+    inCard: (path) => Boolean(cardFromPath(path)),
     close,
     /** Тема окон: "dark" / "light", null — авто (YouTube: html[dark]; страницы расширения: data-theme / система). */
     setTheme(t) {

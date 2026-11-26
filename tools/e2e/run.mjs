@@ -347,6 +347,27 @@ await step("своё меню по правому щелчку: карточка
   return `пунктов ${keys.split(",").length}, в очереди: ${id}`;
 });
 
+// Esc при открытом своём меню закрывает только меню: выбор карточек (select.js) остаётся
+await step("своё меню: Esc закрывает меню, выбор карточек остаётся", async () => {
+  const esc = async () => {
+    for (const type of ["rawKeyDown", "keyUp"]) await b.send("Input.dispatchKeyEvent", { type, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 }, W);
+  };
+  const barShown = "(() => { const b = document.getElementById('ytcs-select')?.shadowRoot?.querySelector('.bar'); return Boolean(b && !b.hidden); })()";
+  await hover(W, lockupThumb(0));
+  await until(W, `Boolean(${selHov})`, 3000);
+  await click(W, selHov);
+  must(await until(W, barShown, 3000), "карточка не выбралась (нет полосы «Выбрано»)");
+  await rightClick(W, lockupThumb(1));
+  must(await until(W, ctxMenuOpen, 4000), "при выбранной карточке своё меню не открылось");
+  await esc();
+  await sleep(300);
+  must(!(await evalIn(W, ctxMenuOpen)), "Esc не закрыл своё меню");
+  must(await evalIn(W, barShown), "Esc при открытом меню снял выбор карточек");
+  await esc();
+  must(await until(W, `!${barShown}`, 2000), "второй Esc не снял выбор");
+  return "меню закрылось, выбор остался; второй Esc снял выбор";
+});
+
 await step("с того же места после обновления (resume.js)", async () => {
   const ready = await until(W, "(() => { const v = document.querySelector('#movie_player video'); return v && v.readyState >= 1 && v.duration > 0 && v.duration; })()", 10000);
   must(ready, "медиа плеера стенда не загрузилось");
@@ -436,6 +457,13 @@ await step("повтор отрезка A–B (abloop.js)", async () => {
   const wraps = seen.filter((t, i) => i && t < seen[i - 1] - 1).length;
   must(!out.length, `вышло за отрезок: ${out.map((t) => t.toFixed(2)).join(", ")}`);
   must(wraps >= 1, `за 5 с ни разу не вернулось к началу (время: ${seen[0]?.toFixed(1)}…${seen.at(-1)?.toFixed(1)})`);
+  // Esc при открытом своём меню плеера (правый щелчок) закрывает только меню — повтор остаётся
+  await rightClick(W, V);
+  must(await until(W, ctxMenuOpen, 4000), "правый щелчок по плееру не открыл своё меню");
+  await press("Escape", "Escape", 27);
+  await sleep(300);
+  must(!(await evalIn(W, ctxMenuOpen)), "Esc не закрыл своё меню плеера");
+  must(await evalIn(W, "Boolean(document.getElementById('ytcs-abloop-marks')?.isConnected)"), "Esc при открытом меню плеера снял повтор A–B");
   // Esc — снять: ни плашки, ни отметок
   await press("Escape", "Escape", 27);
   const off = await until(W, "!document.getElementById('ytcs-abloop-marks')?.isConnected && !document.getElementById('ytcs-abloop-notice')?.shadowRoot.querySelector('.n.show')", 3000);

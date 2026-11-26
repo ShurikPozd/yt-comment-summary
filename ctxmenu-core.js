@@ -8,7 +8,9 @@
 //   - videoItems(ctx) / playerItems(ctx) — пункты меню карточки (ссылки) и плеера по состоянию;
 //   - place(...) — куда встать меню: не за краем окна, на чётных пикселях (ровные подписи на 150 %);
 //   - nav(key, i, n) — стрелки, Home/End по пунктам;
-//   - nativeWanted(...) — когда оставить обычное меню браузера.
+//   - nativeWanted(...) — когда оставить обычное меню браузера;
+//   - linkTarget(link, …) — меню ссылки на видео в тексте (название, «это видео», подборки — нет);
+//   - cardTime(id, clicked, main) — время для меню карточки (ссылка на момент внутри неё).
 (() => {
   if (globalThis.__ytcsCtxCore) return;
 
@@ -171,10 +173,38 @@
   }
 
   // обычное меню браузера: Shift+щелчок мышью, поле ввода, выделенный текст под указателем
-  // (клавиша меню и Shift+F10 — «с клавиатуры»: Shift там ради самого сочетания)
-  function nativeWanted({ shift = false, keyboard = false, editable = false, selected = false } = {}) {
-    return (shift && !keyboard) || editable || selected;
+  // (клавиша меню и Shift+F10 — «с клавиатуры»: Shift там ради самого сочетания);
+  // во весь экран развёрнут сам <video> — внутрь него своё меню не встанет (детей у <video> не рисуется)
+  function nativeWanted({ shift = false, keyboard = false, editable = false, selected = false, videoFs = false } = {}) {
+    return (shift && !keyboard) || editable || selected || videoFs;
   }
 
-  globalThis.__ytcsCtxCore = { ID_RE, parseT, fmtTime, parseLink, videoUrl, tidy, queueItems, videoItems, playerItems, place, nav, nativeWanted };
+  /**
+   * Ссылка на видео в тексте (описание, комментарии, заставки плеера) → данные меню или null.
+   * link — parseLink(); cur — id видео этой страницы; hasVideo — плеер на месте;
+   * inCard — ссылка внутри карточки, которая не видео (микс, плейлист, подборка): меню видео не даём.
+   * Название — только у видео этой страницы; у чужого текст ссылки («1:23», «тут») — не название:
+   * пусто, и фон сам подтянет настоящее (background.js, noTitle).
+   */
+  function linkTarget(link, { cur = "", hasVideo = false, inCard = false, pageTitle = "" } = {}) {
+    if (!link || inCard) return null;
+    const same = Boolean(cur) && link.id === cur;
+    return { id: link.id, short: link.short, t: link.t, here: same && hasVideo, title: same ? pageTitle : "" };
+  }
+
+  /**
+   * Время для меню карточки. Время в ссылке самой карточки — «продолжить с места» от YouTube:
+   * меню — с начала, как щелчок. А щёлкнули по ссылке на момент того же видео внутри карточки
+   * (главы в результатах поиска и т. п.) — её время.
+   * id — видео карточки; clickedHref — ссылка под щелчком (или ""); mainHref — главная ссылка карточки.
+   */
+  function cardTime(id, clickedHref, mainHref) {
+    const p = parseLink(clickedHref);
+    if (!p || p.id !== id || !p.t) return 0;
+    const m = parseLink(mainHref);
+    if (m && m.id === id && m.t === p.t) return 0;
+    return p.t;
+  }
+
+  globalThis.__ytcsCtxCore = { ID_RE, parseT, fmtTime, parseLink, videoUrl, tidy, queueItems, videoItems, playerItems, place, nav, nativeWanted, linkTarget, cardTime };
 })();

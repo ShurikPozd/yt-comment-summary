@@ -161,8 +161,9 @@
       if (e.isTrusted && !typing(e)) gestureAt = Date.now();
       if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || e.defaultPrevented) return;
       if (e.key === "Escape") {
-        // Esc закрывает сначала меню расширения и выходит из полноэкранного режима
-        if (!C.any(st) || typing(e) || busy() || document.fullscreenElement || document.querySelector(".ytcs-menu.open")) return;
+        // Esc закрывает сначала меню расширения (кнопки в плеере и по правому щелчку — ctxmenu.js)
+        // и выходит из полноэкранного режима
+        if (!C.any(st) || typing(e) || busy() || document.fullscreenElement || document.querySelector(".ytcs-menu.open") || globalThis.__ytcsCtxMenu?.isOpen?.()) return;
         if (clear()) {
           e.preventDefault();
           e.stopPropagation();

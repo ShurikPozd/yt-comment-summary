@@ -241,6 +241,9 @@
       v.pause();
       ed.root.querySelector("input").value = "";
       ed.root.querySelector(".msg").textContent = "";
+    } else if (Number.isFinite(at) && id === ed.id) {
+      // поле уже открыто, а позвали к другому месту («Заметка к этому месту» по таймкоду) — к нему
+      ed.t = Math.max(0, Math.floor(at));
     }
     ed.open = true;
     placeHost(host);
@@ -319,7 +322,8 @@
         let where = ourInput(e);
         // поле заметки открыто, а фокус увёл плеер (YouTube сам ставит его на себя при паузе):
         // печатное, Backspace, Enter и Esc — всё равно в поле, а не в клавиши плеера
-        if (!where && ed.open && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || /^(Enter|Escape|Backspace|Delete)$/.test(e.key))) {
+        // (но не при открытом меню по правому щелчку, ctxmenu.js: стрелки, Enter и Esc — его)
+        if (!where && ed.open && !globalThis.__ytcsCtxMenu?.isOpen?.() && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || /^(Enter|Escape|Backspace|Delete)$/.test(e.key))) {
           const inp = ed.root.querySelector("input");
           if (type === "keydown" && e.key.length === 1) {
             e.preventDefault();

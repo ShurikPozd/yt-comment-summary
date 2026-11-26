@@ -1115,8 +1115,11 @@
     if (!toastHost) {
       toastHost = document.createElement("div");
       toastHost.attachShadow({ mode: "open" });
-      document.documentElement.appendChild(toastHost);
     }
+    // во весь экран видно только то, что внутри развёрнутого элемента (у самого <video> детей не рисуется)
+    const fs = document.fullscreenElement;
+    const parent = fs && !(fs instanceof HTMLVideoElement) ? fs : document.documentElement;
+    if (toastHost.parentNode !== parent) parent.appendChild(toastHost);
     const root = toastHost.shadowRoot;
     root.innerHTML = `<style>
       .t { position: fixed; left: 24px; bottom: 24px; z-index: 2147483001; display: flex; align-items: center; gap: 14px;

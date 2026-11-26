@@ -2500,6 +2500,19 @@ ok(ri.ok && ri.data === 2 && sentActions[0].action === "ACTION_REMOVE_VIDEO" && 
   ok(M.nav("ArrowDown", -1, 5) === 0 && M.nav("ArrowDown", 4, 5) === 0 && M.nav("ArrowUp", 0, 5) === 4 && M.nav("ArrowUp", -1, 5) === 4, "стрелки — по кругу");
   ok(M.nav("Home", 3, 5) === 0 && M.nav("End", 0, 5) === 4 && M.nav("x", 1, 5) === -1 && M.nav("ArrowDown", 0, 0) === -1, "Home / End");
   ok(M.nativeWanted({ shift: true }) && !M.nativeWanted({ shift: true, keyboard: true }) && M.nativeWanted({ editable: true }) && M.nativeWanted({ selected: true }) && !M.nativeWanted({}), "меню браузера: Shift (не Shift+F10), поле, выделение");
+  ok(M.nativeWanted({ videoFs: true }) && M.nativeWanted({ videoFs: true, keyboard: true }), "во весь экран развёрнут сам <video> — меню браузера");
+  // ссылка на видео в тексте
+  const here = "dQw4w9WgXcQ";
+  const LT = (h, o) => M.linkTarget(M.parseLink(h), { cur: here, hasVideo: true, pageTitle: "Это видео", ...o });
+  ok(J(LT("/watch?v=abcdefghijk&t=83s")) === J({ id: "abcdefghijk", short: false, t: 83, here: false, title: "" }), "ссылка на другое видео: название не из текста ссылки — пусто (фон подтянет)");
+  ok(J(LT(`/watch?v=${here}&t=754s`)) === J({ id: here, short: false, t: 754, here: true, title: "Это видео" }), "таймкод этого видео: «здесь» и название страницы");
+  ok(LT(`/watch?v=${here}&t=754s`, { hasVideo: false }).here === false && LT("/watch?v=abcdefghijk", { cur: "" }).title === "", "без плеера — не «здесь»; не на /watch — без названия");
+  ok(LT("/watch?v=abcdefghijk&list=RDabcdefghijk&start_radio=1", { inCard: true }) === null && M.linkTarget(null, {}) === null, "ссылка в карточке-миксе или плейлисте — не меню видео");
+  // время для меню карточки
+  const cid = "abcdefghijk";
+  ok(M.cardTime(cid, `/watch?v=${cid}&t=120s`, `/watch?v=${cid}&t=120s`) === 0 && M.cardTime(cid, "", `/watch?v=${cid}&t=120s`) === 0, "карточка: «продолжить с места» YouTube — меню с начала");
+  ok(M.cardTime(cid, `/watch?v=${cid}&t=754s`, `/watch?v=${cid}&t=120s`) === 754 && M.cardTime(cid, `/watch?v=${cid}&t=90s`, `/watch?v=${cid}`) === 90, "ссылка на момент в карточке (главы) — её время");
+  ok(M.cardTime(cid, "/watch?v=zzzzzzzzzzz&t=90s", `/watch?v=${cid}`) === 0 && M.cardTime(cid, `/watch?v=${cid}`, `/watch?v=${cid}`) === 0 && M.cardTime(cid, "/@channel", "") === 0, "чужое видео, без времени, канал — 0");
 }
 
 console.log(`автопроверки: ${passed} прошло${failed ? `, ${failed} не прошло` : ""}`);

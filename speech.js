@@ -427,9 +427,9 @@
           }
           return;
         }
-        // окно открыто, фокус увёл плеер — Esc всё равно закрывает
+        // окно открыто, фокус увёл плеер — Esc всё равно закрывает (но сначала — меню по правому щелчку)
         if (!inside) {
-          if (type === "keydown" && ui.open && e.key === "Escape" && !typing(e)) {
+          if (type === "keydown" && ui.open && e.key === "Escape" && !typing(e) && !globalThis.__ytcsCtxMenu?.isOpen?.()) {
             e.preventDefault();
             e.stopPropagation();
             close();
